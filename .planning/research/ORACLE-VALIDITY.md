@@ -65,5 +65,15 @@ It is **structurally invalid (a guaranteed miss)** for the two families the real
 - Conformance proxy is only as good as the human-authored reference signature, must use normalized internal types (DISPLAY spoofs strings), and must stay strictly advisory.
 - Adversarial staleness: mtime-preserving/clock-skewed edits, or interface staleness in a *registered library's own build dir* outside the project `_build`. Only a fully wiped isolated `_build` + closure-hash pinning reliably catches #64. No fixture yet proves this or the FP guards.
 
+## Cross-check: the Lean/Mathlib ecosystem (2026-07-01, verified from primary sources)
+
+The Lean community has run the agent-dogfooding-an-ITP loop longer and at larger scale, and **independently converged on the same "compile ≠ true green" conclusion** — which both validates the triad and sharpens ORCL-02/03. Full writeup: `LEAN-COMPARISON.md`.
+
+- **`#print axioms <decl>` is the mature analog of ORCL-02.** It reports, kernel-level and transitively, every axiom a theorem depends on; `sorry` shows up as `sorryAx`. Mathlib's "green" = compiles **and** depends only on `propext`/`Classical.choice`/`Quot.sound` with no `sorryAx`; CI enforces "no sorry" and checks for unexpected axioms. This is exactly ORCL-02's "axiom whitelist-diff over the transitive closure", already proven at Mathlib scale.
+- **Lesson → recurse through type signatures.** Lean's own `collectAxioms` shipped a transitive-closure bug (`leanprover/lean4#8840`): it walked definition bodies but not axiom **type signatures**, under-reporting the closure. ORCL-02's closure walk must recurse fully. *(Folded into ORCL-02.)*
+- **Lesson → scan FFI/pragmas, not just postulates (audit-evasion class).** Lean's `native_decide`/`reduceBool` (via an `opaque`, not `axiom`), `@[csimp]` (#7463), and `@[implemented_by]` could smuggle unsoundness that **never registered in `#print axioms`**. Agda analog: `primTrustMe`, `--no-*` flags, and **`{-# COMPILE #-}`/builtin FFI**. ORCL-02 must scan these too. *(Folded into ORCL-02.)*
+- **Lesson → a consistency/negation probe (Kimina-Prover).** Kimina discards a lemma if its **negation** is also provable (logically inconsistent → vacuous). A cheap, mechanizable proxy for "proved a vacuous/wrong statement". *(Folded into ORCL-03 as an advisory hook; mechanized = AUTO-08.)*
+- **AI provers use the kernel as ground-truth reward + independent re-check.** DeepSeek-Prover (binary kernel reward), AlphaProof (explicit *statement validation* to prevent narrowing the original problem + a final independent verification), Kimina (error-grounded repair + negation check) — all three predicates of the triad appear in their pipelines. `lean4checker`/Lean4Lean is an **independent external re-verifier** of the kernel; Agda has no equivalent — a known long-term gap for a stronger ORCL-01 (not v1).
+
 ---
-*See `.planning/REQUIREMENTS.md` (ORCL-01/02/03, CAP-01/05, PROC-01/02, AUTO-07) and `.planning/ROADMAP.md` Phase 2 for how this was folded in.*
+*See `.planning/REQUIREMENTS.md` (ORCL-01/02/03, CAP-01/05, PROC-01/02, AUTO-07/08) and `.planning/ROADMAP.md` Phase 2 for how this was folded in. Lean comparison detail: `.planning/research/LEAN-COMPARISON.md`.*
