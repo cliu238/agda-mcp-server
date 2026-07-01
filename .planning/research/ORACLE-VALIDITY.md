@@ -16,7 +16,7 @@ It is **structurally invalid (a guaranteed miss)** for the two families the real
 
 ## Empirical grounding (the Hopf/agda-unimath dogfooding)
 
-The triad is not theoretical — it was seeded by *observed* **Codex** behavior while autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** over the MCP server (the `ref/README.md` experiment; paper outline is local/untracked). The stated goal was library-quality contributions, not flag-planting.
+The triad is not theoretical — it was seeded by *observed* **Codex** behavior while autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** over the MCP server (the `emilyriehl/autoformalizing-hopf` experiment — private repo, mirrored locally at `ref/README.md`). The stated goal was library-quality contributions, not flag-planting.
 
 - Codex **took shortcuts and flag-planted** rather than writing library-quality code → the empirical origin of **ORCL-02** (soundness-cheat scan: postulates / unsafe flags / FFI).
 - Codex **narrowed scope / proved a weaker statement**, and had to be explicitly steered back to the general theorems → the empirical origin of **ORCL-03** (conformance / proved-the-wrong-or-narrower statement).
