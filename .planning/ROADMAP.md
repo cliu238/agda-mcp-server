@@ -2,7 +2,7 @@
 
 ## Overview
 
-This milestone builds the **reproducible scaffold for Loop ②**: use it → surface a defect → capture it → fix and lock it with a regression test → use it again. The roadmap follows the research build order and its hard dependency chain. The **capture substrate** (session action log / recorder-replayer at the Agda `--interaction-json` stdio seam) lands first because minimal-repro extraction, the oracle, and test emission all read it. A **cold-compiler differential oracle** then supplies ground truth so durable regression tests assert the *correct* result rather than golden-mastering a false-green. The **lock-in pipeline** turns one captured defect (the #64/#61 false-green) into a from-RED regression end-to-end. A **durable in-repo fix queue** gives the loop backpressure before the **dogfooding orchestrator + pinned fuel** turn capture into a repeatable, on-demand process. The loop *wraps* the server: only two surgical `src/` additions (a pure `session-capture` model and an emit-only capture tool); everything else lives in `scripts/` and repo data dirs, honoring the 500-line ceiling and the single-`AgdaSession` invariant (#39).
+This milestone builds the **reproducible scaffold for Loop ②**: use it → surface a defect → capture it → fix and lock it with a regression test → use it again. The roadmap follows the research build order and its hard dependency chain. The **capture substrate** (session action log / recorder-replayer at the Agda `--interaction-json` stdio seam, plus a full replay manifest) lands first because minimal-repro extraction, the oracle, and test emission all read it. An **oracle triad** then supplies ground truth: a cold `agda --interaction-json` **server-faithfulness differential** (the only self-sufficient cold-rerun oracle, sound for the #64/#61/#65/#66 class), plus a **cheap soundness-hygiene scan** and an **advisory conformance proxy** for the false-greens a fresh compile accepts on identical source+flags — agent postulates/unsafe flags, and narrowed/wrong statements (the failure modes the real agda-unimath/Hopf dogfooding makes first-class). A passing differential is **necessary-but-insufficient**, so durable regression tests assert the *correct* result rather than golden-mastering a false-green. The **lock-in pipeline** turns one captured defect (the #64/#61 false-green) into a from-RED regression end-to-end. A **durable in-repo fix queue** gives the loop backpressure before the **dogfooding orchestrator + pinned fuel** turn capture into a repeatable, on-demand process. The loop *wraps* the server: only two surgical `src/` additions (a pure `session-capture` model and an emit-only capture tool); everything else lives in `scripts/` and repo data dirs, honoring the 500-line ceiling and the single-`AgdaSession` invariant (#39).
 
 ## Phases
 
@@ -13,7 +13,7 @@ This milestone builds the **reproducible scaffold for Loop ②**: use it → sur
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Capture Foundation** - One-verb, emit-only capture of a live session into a self-replaying artifact (the foundational substrate)
-- [ ] **Phase 2: Cold-Compiler Ground-Truth Oracle** - A fresh `agda` run supplies correct expected results and detects the false-green class (#64/#61)
+- [ ] **Phase 2: The Oracle Triad (server-faithfulness + soundness hygiene + conformance)** - A fresh `agda --interaction-json` differential detects the server false-green class (#64/#61/#65/#66); a cheap soundness scan + advisory conformance proxy cover the cheats the differential cannot see
 - [ ] **Phase 3: Regression Lock Pipeline** - A captured defect becomes a minimal repro + a from-RED vitest regression, proven end-to-end on #64/#61
 - [ ] **Phase 4: Triage / Fix Queue** - Captured defects persist and flow through a durable in-repo queue with status, prioritization, and optional GitHub mirror
 - [ ] **Phase 5: Dogfooding Orchestration + Fuel** - Point an agent at pinned real corpora and harvest defects reproducibly over MCP stdio
@@ -24,25 +24,27 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: An agent can snapshot a stuck/failed live session into a self-replaying capture artifact with one MCP verb — the foundational substrate the rest of the loop reads.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: CAP-01, CAP-02, CAP-03, CAP-04
+**Requirements**: CAP-01, CAP-02, CAP-03, CAP-04, CAP-05
 **Success Criteria** (what must be TRUE):
   1. An agent calls one MCP verb (`agda_capture_session`) mid-session and receives a `CaptureArtifact` envelope in `ToolResult.data`; the tool writes nothing to the repo (emit-only, following the `agda_bug_report_bundle` precedent). (CAP-03)
-  2. Every capture is auto-stamped from the live session with Agda version, server version, Node/OS, `commandLineOptions`, and the merged `.agda-mcp.json` snapshot — never caller-supplied toolchain values. (CAP-01)
+  2. Every capture is auto-stamped into a full replay manifest from the live session — Agda version + pinned binary path, server/Node/OS, the merged flags as an ordered argv (duplicates preserved), realized `AGDA_DIR` contents, cwd/root, fresh-vs-shared `_build`, and a content-hash of the full transitive import closure — never caller-supplied. (CAP-01)
   3. A recorded session action log (ordered tool calls + args + normalized envelopes at the `--interaction-json` stdio seam) is attached to the artifact and can be replayed. (CAP-04)
   4. Re-capturing the same defect routes as an `update` with an incremented recurrence count via the `fingerprintBugReport()` → prior-report index, not a new `new-bug`. (CAP-02)
-  5. A captured bundle self-replays from a cold start on a second machine, proving it is a full replay manifest (session lineage, env timers, inline fixture source) rather than a snapshot.
+  5. The oracle substrate is captured: the agent's source diff, the intended goal type at task-start, and a task-authored expected top-level signature (reusing `Cmd_goal_type`/`Cmd_infer_toplevel`). (CAP-05)
+  6. A captured bundle self-replays from a cold start on a second machine, proving it is a full replay manifest (manifest + closure hash + inline fixture source) rather than a snapshot.
 **Plans**: TBD
 
-### Phase 2: Cold-Compiler Ground-Truth Oracle
-**Goal**: The loop can distinguish real ground truth from a warm-session false-green by running a fresh `agda` invocation on the pinned toolchain and diffing it against the live session's classification.
+### Phase 2: The Oracle Triad (server-faithfulness + soundness hygiene + conformance)
+**Goal**: A capture can be judged "true green" only when three composable predicates agree — because a fresh `agda` re-run on identical source+flags is a sound oracle for exactly one false-green family (the server's own), and structurally blind to the two the real agda-unimath/Hopf dogfooding makes first-class (agent soundness cheats; proved-the-wrong-statement).
 **Mode:** mvp
 **Depends on**: Phase 1
-**Requirements**: ORCL-01
+**Requirements**: ORCL-01, ORCL-02, ORCL-03
 **Success Criteria** (what must be TRUE):
-  1. A cold, from-scratch `agda` invocation runs on the pinned toolchain and its result is diffed against the live session's classification captured in the artifact. (ORCL-01)
-  2. The oracle detects/confirms the false-green class — server said `ok-complete`, cold compiler says ERROR (#64/#61) — and flags it. (ORCL-01)
-  3. The oracle supplies the *correct* expected result that a durable regression test will later assert against (never golden-mastering the observed-buggy output).
-  4. Warnings are escalated where CI does (`--warning=error`) so warning-class false-greens surface rather than passing silently.
+  1. ORCL-01 re-runs the capture as a fresh `agda --interaction-json` `Cmd_load` (never batch `agda File.agda`), replaying the manifest's binary+version, library registration, ordered flag argv, cwd/root, an isolated fresh `_build`, and the pinned import closure; it diffs the normalized classification tuple + error/warning category set, never raw text/timing. (ORCL-01)
+  2. ORCL-01 emits a candidate server false-green (#64/#61/#65/#66) only when warm-green/cold-red AND every environment probe passes; any failing probe (version / agdaDir-hash / closure-hash / `_build` / spawn / terminus) → INCONCLUSIVE naming the probe, never "server bug". The abstention/INCONCLUSIVE rate is surfaced as a first-class metric. (ORCL-01)
+  3. ORCL-02 (cheap half) scans the captured diff + the target term's transitive closure (`agda_postulate_closure`) for introduced `postulate` / TERMINATING / `NO_*_CHECK` / `primTrustMe` / unsafe OPTIONS / a `--with-K` override / residual `?` holes, diffed against a per-project sanctioned-axiom whitelist (unimath: univalence, funext, replacement), distinguishing cheats from legitimate HIT postulates. (ORCL-02)
+  4. ORCL-03 (advisory) alpha-diffs the proven `Cmd_infer_toplevel` signature against CAP-05's expected signature over normalized internal types (not printed strings), flagging narrowing / added-premises / renames / target-edits for human review — never a hard gate. (ORCL-03)
+  5. It is explicit that ORCL-01 passing is necessary-but-insufficient: only all three predicates together justify "true green", and ORCL-01's cold result is the correct expected value handed to Phase 3.
 **Plans**: TBD
 
 ### Phase 3: Regression Lock Pipeline
@@ -53,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Success Criteria** (what must be TRUE):
   1. A captured defect yields a minimal reproduction — the offending source snapshotted into a fixture plus the recorded trigger sequence — that the maintainer or an agent can deterministically re-trigger (assisted/manual trimming; automatic minimization out of scope). (REPRO-01)
   2. Fixture materialization writes the minimal `.agda` repro under the established `test/fixtures/agda/` convention with automated placement + naming, mirroring the #65/#66 fixtures. (LOCK-01)
-  3. The regression-test emitter turns a captured bundle + fixture into a durable vitest test that starts RED, asserts the *correct* behavior against the cold-compiler oracle (never golden-masters false-green), and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0). (LOCK-02)
+  3. The regression-test emitter turns a captured bundle + fixture into a durable vitest test that starts RED, asserts the *correct* behavior using ORCL-01's cold result as the expected value, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0); it refuses to lock a capture that fails ORCL-02 or is ORCL-01 INCONCLUSIVE (never golden-masters a cheat). (LOCK-02)
   4. The #64/#61 transitive-staleness / false-green defect is produced through the emitter as a from-RED test + fixture that goes green only when the defect is fixed — proving the scaffold works end-to-end and filling the highest-priority known coverage gap. (LOCK-03)
 **Plans**: TBD
 

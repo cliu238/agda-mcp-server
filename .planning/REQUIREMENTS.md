@@ -9,14 +9,19 @@ The reproducible scaffold. Each requirement maps to a roadmap phase. "Actors" ar
 
 ### Capture (CAP)
 
-- [ ] **CAP-01**: A captured failure bundle is auto-stamped with the live session's toolchain (Agda version, server version, Node/OS, `commandLineOptions`, `.agda-mcp.json` snapshot) instead of caller-supplied values, so any capture is a complete replay manifest
+- [ ] **CAP-01**: A captured failure bundle is auto-stamped into a complete **replay manifest** from the live session — never caller-supplied: Agda version + pinned binary path, server version, Node/OS, the post-precedence **merged flags as an ordered argv vector with duplicates preserved** (not a set — repeated `-i`/`-l`/`--library-file` are order-significant), the realized `AGDA_DIR` contents (exact libraries + defaults files, so registration is *replayed* not re-derived), cwd/project root, whether the run used a fresh vs shared `_build`, and a **content-hash of the full transitive import closure** at the capture instant (so the oracle can pin to it and abort on drift)
 - [ ] **CAP-02**: A local fingerprint→prior-report dedup index routes a re-captured defect as `update` (with recurrence count) rather than a new `new-bug`, keying on the existing `fingerprintBugReport()` sha256
 - [ ] **CAP-03**: An agent can capture the current stuck/failed session into an on-disk bundle with one MCP verb (e.g. `agda_capture_failure`), emit-only (never writes into the repo tree itself — an out-of-band step persists it), following the `agda_bug_report_bundle` precedent
 - [ ] **CAP-04**: A session action log records the ordered tool calls + args + normalized envelopes for a session (via a recorder/replayer at the Agda `--interaction-json` stdio seam), giving a replayable trace that repro-extraction and test emission both read
+- [ ] **CAP-05**: Each capture also records the substrate the oracle triad reads — the agent's **source diff** (before/after, so the soundness scan has material), the **intended goal type** at task-start (`Cmd_goal_type`), and a **human/task-authored expected top-level signature** (the input the conformance proxy needs) — reusing existing `Cmd_goal_type`/`Cmd_infer_toplevel` plumbing
 
-### Ground-Truth Oracle (ORCL)
+### Oracle Triad (ORCL)
 
-- [ ] **ORCL-01**: A cold-compiler differential oracle runs a fresh `agda` invocation on the pinned toolchain and diffs its result against the live session's classification, detecting/confirming the false-green class (server said `ok-complete`, cold compiler says ERROR — #64/#61) and supplying the correct expected result
+A capture is **true green** only if all three predicates pass. Each catches a different false-green family with a different soundness / human-knowledge profile; a passing differential alone is **necessary but not sufficient** ("the server told the truth about what agda would say", *not* "the theorem is true").
+
+- [ ] **ORCL-01** (server-faithfulness differential — the *only* self-sufficient cold-rerun oracle): The captured load is re-run as a **fresh `agda --interaction-json` `Cmd_load`** (never batch `agda File.agda` — batch exits 42 on interaction holes and would false-red every legitimate ok-with-holes proof), reusing the manifest's exact binary+version, **replayed** library registration (not a live `createLibraryRegistration()`, which is non-deterministic), the ordered merged-flag argv, same cwd/root, an **isolated fresh `_build`**, and the content-hash-pinned import closure. It diffs the **normalized classification tuple** (`success`, goalCount, invisibleGoalCount, hasHoles, classification per `classifyLoadResult`) + error/warning category **set** — never raw text/wire order/paths. It emits a candidate **server false-green** (#64/#61/#65/#66) *only* when warm-green/cold-red **and every environment probe passes** (version-match, agdaDir-hash-match, closure-hash-match, `_build` fresh, spawn-ok, terminus-reached), supplying the cold result as the correct expected value for Phase 3; any failing probe → **INCONCLUSIVE** (naming the probe), never "server bug". Abstention/INCONCLUSIVE rate is a first-class metric
+- [ ] **ORCL-02** (soundness-hygiene scan — the *cheap half*, ships in v1): A token/AST scan over the captured **source diff and the target term's transitive dependency closure** (reusing `agda_postulate_closure`) flags introduced `postulate`, `{-# TERMINATING #-}`/`NON_TERMINATING`, `NO_POSITIVITY_CHECK`/`NO_UNIVERSE_CHECK`, `primTrustMe`, unsafe `OPTIONS` pragmas, a file-level `--with-K` overriding the library `--without-K`, and residual `?`/`{! !}` — compared against a per-project **sanctioned-axiom whitelist** (for agda-unimath: univalence, function-extensionality, replacement; distinguishing agent cheats from legitimate HIT postulates). Closure scope is required because a goal can be discharged via a pre-existing upstream postulate with no new token in the diff. (`primTrustMe` is the cheat; `primEraseEquality` is `--safe`-compatible and sound — *not* whitelisted.) The hardened-flag-baseline *hard half* is deferred (AUTO-07)
+- [ ] **ORCL-03** (conformance proxy — advisory, never a gate): The proven top-level signature (`Cmd_infer_toplevel`) is alpha-diffed against the captured expected signature (CAP-05) over **normalized internal types** (not printed strings — `DISPLAY` pragmas/pattern synonyms spoof syntactic diffs), flagging narrowing, added premises, renames, or target-signature edits for **human review**. Vacuous without CAP-05's expected signature (hence PROC-01's hard gate)
 
 ### Reproduction (REPRO)
 
@@ -25,7 +30,7 @@ The reproducible scaffold. Each requirement maps to a roadmap phase. "Actors" ar
 ### Regression Lock (LOCK)
 
 - [ ] **LOCK-01**: Fixture materialization writes the minimal `.agda` repro under the established `test/fixtures/agda/` convention with automated placement + naming (as the #65/#66 fixtures already demonstrate)
-- [ ] **LOCK-02**: A regression-test emitter turns a captured bundle + fixture into a durable `vitest` test that starts RED, asserts the *correct* behavior against the cold-compiler oracle (never golden-masters false-green behavior), and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0)
+- [ ] **LOCK-02**: A regression-test emitter turns a captured bundle + fixture into a durable `vitest` test that starts RED, asserts the *correct* behavior using **ORCL-01's cold result as the expected value**, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0). The emitter refuses to lock a capture that **fails ORCL-02** (never golden-masters a postulate/flag cheat as "correct") or is **ORCL-01 INCONCLUSIVE**
 - [ ] **LOCK-03**: The first real regression — the transitive-staleness / false-green defect (#64/#61) — is produced through the emitter as a from-RED test + fixture, both proving the scaffold works end-to-end and filling the highest-priority known coverage gap
 
 ### Triage / Fix Queue (QUEUE)
@@ -37,8 +42,8 @@ The reproducible scaffold. Each requirement maps to a roadmap phase. "Actors" ar
 
 ### Dogfooding Process (PROC)
 
-- [ ] **PROC-01**: A written dogfooding runbook + driver-prompt snippet makes the *process* reproducible — telling an agent when and how to invoke the capture verb while proving against real corpora, so "point Codex at stdlib and harvest defects" can be re-run on demand
-- [ ] **PROC-02**: A pinned fuel pointer set lists the source corpora (agda-stdlib, chosen OSS Agda projects, the maintainer's own math project) with pinned commits, so dogfooding runs are reproducible across time
+- [ ] **PROC-01**: A written dogfooding runbook + driver-prompt snippet makes the *process* reproducible — telling an agent when and how to invoke the capture verb while proving against real corpora, so "point Codex at stdlib and harvest defects" can be re-run on demand. **Declaring the target's expected top-level signature up front is a hard gate** (without it ORCL-03's conformance proxy is vacuous)
+- [ ] **PROC-02**: A pinned fuel pointer set lists the source corpora (agda-stdlib, chosen OSS Agda projects, the maintainer's own math project) with pinned commits, so dogfooding runs are reproducible across time. It is the home for the per-project **machine-readable policy** ORCL-02 reads: the sanctioned-axiom whitelist and the required/forbidden flag baseline (per corpus/regime)
 
 ## v2 Requirements
 
@@ -52,6 +57,7 @@ Deferred until the scaffold is proven. Tracked, not in the current roadmap.
 - **AUTO-04**: Knowledge accumulation over accumulated traces (corpus/patterns / "what fixes worked")
 - **AUTO-05**: Automatic / semi-automatic PR generation (needs a trustworthy oracle + human-gate track record)
 - **AUTO-06**: Unattended loop orchestration (run → capture → triage cron over pinned fuel)
+- **AUTO-07**: ORCL-02 *hard half* — a hardened flag-baseline re-check (force `--safe` only where the regime permits; `--warning=error` against a benign-warning whitelist; per-module `--without-K` required-flag diff; a forbidden-flag **and forbidden-combination** set auto-derived from the pinned binary's own `--safe` rejection set; force `--confluence-check` for sanctioned `--rewriting`), and upgrading `agda_check_postulates` from flag-ALL to whitelist-diff
 
 ### Product (separate north star)
 
@@ -84,7 +90,10 @@ Each requirement maps to exactly one phase.
 | CAP-02 | Phase 1 | Pending |
 | CAP-03 | Phase 1 | Pending |
 | CAP-04 | Phase 1 | Pending |
+| CAP-05 | Phase 1 | Pending |
 | ORCL-01 | Phase 2 | Pending |
+| ORCL-02 | Phase 2 | Pending |
+| ORCL-03 | Phase 2 | Pending |
 | REPRO-01 | Phase 3 | Pending |
 | LOCK-01 | Phase 3 | Pending |
 | LOCK-02 | Phase 3 | Pending |
@@ -97,10 +106,10 @@ Each requirement maps to exactly one phase.
 | PROC-02 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15 ✓
+- v1 requirements: 18 total
+- Mapped to phases: 18 ✓
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-01*
-*Last updated: 2026-07-01 after roadmap creation (traceability populated)*
+*Last updated: 2026-07-01 after oracle-validity research (ORCL split into a three-predicate triad; CAP-01 expanded to a full replay manifest; CAP-05 added for oracle substrate; PROC-01/02 gated on expected-signature + machine-readable policy)*
