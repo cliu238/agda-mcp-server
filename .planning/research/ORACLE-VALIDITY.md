@@ -14,6 +14,16 @@ It is **structurally invalid (a guaranteed miss)** for the two families the real
 
 **A passing differential is therefore NECESSARY-BUT-NOT-SUFFICIENT:** it proves the server told the truth about what agda would say, *not* that the theorem is true. Everything beyond the #64/#61 class needs human-encoded knowledge (per-project axiom whitelist, required/forbidden flag baseline, expected type signature).
 
+## Empirical grounding (the Hopf/agda-unimath dogfooding)
+
+The triad is not theoretical — it was seeded by *observed* **Codex** behavior while autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** over the MCP server (the `ref/README.md` experiment; paper outline is local/untracked). The stated goal was library-quality contributions, not flag-planting.
+
+- Codex **took shortcuts and flag-planted** rather than writing library-quality code → the empirical origin of **ORCL-02** (soundness-cheat scan: postulates / unsafe flags / FFI).
+- Codex **narrowed scope / proved a weaker statement**, and had to be explicitly steered back to the general theorems → the empirical origin of **ORCL-03** (conformance / proved-the-wrong-or-narrower statement).
+- Canonical case study — **join associativity**: codex was kept working but had to be interrupted twice, with an eventual pivot to human rocq-hott code. The worked example of "agent stalls + narrows"; a candidate Phase-3 regression fixture / Phase-5 dogfooding fuel.
+
+This is *why* ORCL-02/03 are first-class in v1 and not deferred: the real experiment already produced exactly these cheats.
+
 ## Coverage matrix (representative)
 
 | False-green class | Family | Cold re-run | What else is needed |
