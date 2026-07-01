@@ -3,7 +3,7 @@
 **Researched:** 2026-07-01 (workflow: 4 investigators → synthesis → 2 adversarial fact-checkers → finalize; agents verified against the live codebase).
 **Confidence:** HIGH on codebase facts and shipped-spec (2025-06-18) claims; the 2026 RC is forward-looking — verify against the published final spec before building on it.
 
-> **Provenance caveat.** Assistant knowledge cutoff is 2026-01. The 2025-06-18 spec and Anthropic engineering posts are pre-cutoff and reliable. The **2026-07-28 RC** and exact **SEP/PR numbers** are post-cutoff: one fact-check lens confirmed the RC SEPs verbatim on blog.modelcontextprotocol.io, the other could not corroborate — treat as forward-looking, confirm against the published final spec (reportedly locked 2026-05-21) before depending on any of it.
+> **Provenance.** Verified against live primary sources on **2026-07-01** (modelcontextprotocol.io + blog.modelcontextprotocol.io + the spec repo). **Current stable spec = 2025-11-25.** The **2026-07-28 RC** is real, locked 2026-05-21, ratifies 2026-07-28 (not yet final at time of writing); SEP-2577 (deprecations) is already **Final** status (created 2026-04-14). Build against 2025-11-25 today; design forward-compatibly for the RC but don't depend on unratified RC-only details.
 
 ## Headline
 
@@ -18,9 +18,9 @@
 
 **Stable, 2025-03-26:** tool annotations (`readOnlyHint`/`idempotentHint`/`destructiveHint`/`openWorldHint`), progress `message` field, completions capability, audio content, Streamable HTTP, OAuth 2.1. *(Note: cancellation `notifications/cancelled` is OLDER — shipped 2024-11-05, safe to build on.)*
 
-**Stable, 2025-11-25 (version confirmed; exact SEP numbers unconfirmed):** JSON Schema **2020-12** as default dialect; elicitation enum/default refinements; **experimental Tasks**; a convention that **input-validation errors are tool-execution errors** (in-band `isError`, not protocol errors).
+**Current stable — 2025-11-25 (verified):** experimental **Tasks** (SEP-1686 — durable requests: polling + deferred result retrieval); elicitation enums titled/untitled/single/multi-select (SEP-1330) + default values (SEP-1034) + **URL-mode** (send the user to a browser OAuth/credential flow, SEP-1036); **JSON Schema 2020-12** default dialect (SEP-1613); **input-validation errors = Tool Execution Errors, not protocol errors, to enable model self-correction (SEP-1303)** — now a spec convention, and *exactly* the repo's `diagnostics/nextAction` philosophy; tool-calling in sampling (SEP-1577); icons metadata (SEP-973); stderr for all stdio logging (PR #670).
 
-**RC, 2026-07-28 (post-cutoff — VERIFY before use):** reportedly **deprecates Roots / Sampling / Logging** (SEP-2577); **Tasks** extension for async call-now/fetch-later (SEP-2663); multi-roundtrip elicitation / `InputRequiredResult` (SEP-2322); full 2020-12 **unions/oneOf** (SEP-2106); result caching `ttlMs`/`cacheScope` (SEP-2549); W3C Trace Context (SEP-414); Extensions (SEP-2133); MCP Apps (SEP-1865). **Key signal: sampling is on the way out.**
+**RC — 2026-07-28 (verified real; locked 2026-05-21, not yet ratified):** "MCP goes stateless." **Stateless core** — removes the `initialize`/`initialized` handshake (SEP-2575; protocol version + client info now ride in `_meta` on every request) and the `Mcp-Session-Id` header / protocol-level sessions (SEP-2567); server→client requests only during active request processing (SEP-2260). **Deprecates Roots / Sampling / Logging (SEP-2577, *Final*)** with a **≥12-month** window (wire-level unchanged during deprecation): sampling → integrate directly with an LLM provider API; logging → **stderr / OpenTelemetry** (the repo already uses stderr); roots → tool params / resource URIs / config. **Tasks becomes an extension** (SEP-2663): `tools/call` returns a task handle; client drives `tasks/get` / `tasks/update` / `tasks/cancel` (no `tasks/list`). Also: multi-round-trip requests / `InputRequiredResult` (SEP-2322), response caching `ttlMs`/`cacheScope` (SEP-2549), W3C Trace Context in `_meta` (SEP-414), Extensions framework w/ reverse-DNS IDs (SEP-2133), MCP Apps = server-rendered HTML in sandboxed iframes (SEP-1865), full 2020-12 unions/`$ref`/conditionals (SEP-2106), feature-lifecycle policy (SEP-2596).
 
 ## Advanced-concepts canon (Anthropic, pre-cutoff, real — the "先进理念" target)
 - **"Writing effective tools for agents":** prefer **workflow tools** over thin API wrappers; add a `response_format` concise/detailed enum; natural-language IDs; a response **cap with truncation-that-steers**; **eval-driven** tool refinement.
@@ -50,13 +50,13 @@
 
 **LATER:** Tasks-ready internal op (stable id+status so a slow load can become a Task cheaply — don't build Tasks yet); move `provenance`/`elapsedMs` into a namespaced `_meta` key (interop polish); progressive disclosure of the tool surface **only if** the eval harness shows measurable upfront token cost.
 
-**SKIP (local stdio server):** HTTP / OAuth / registry / stateless-core / `Mcp-Session-Id` — single-session statefulness (the AgdaSession SSOT) is correct, not debt. And do **NOT** architect Loop 1 on **sampling** (redundant — the driving agent already IS a client LLM; unevenly supported; RC-deprecated).
+**SKIP (local stdio server):** HTTP / OAuth / registry — out of scope. The RC's **stateless core** (SEP-2575/2567) is a *protocol/HTTP-routing* concern; it does NOT touch your **application** state — the single AgdaSession SSOT stays correct (the SDK handles the stdio handshake). Do **NOT** build Loop 1 on **sampling** (now *Final*-deprecated, ≥12-mo window; redundant — the driving agent already IS a client LLM). Skip the MCP **logging** channel too (also deprecated → keep using stderr, which the repo already does).
 
-## Watch list (verify before citing/building)
-- The **2026-07-28 RC** and all SEP numbers — confirm against the published final spec; especially the **sampling deprecation** (SEP-2577) and **Tasks** (SEP-2663) before leaning on them.
-- The **2025-11-25 SEP/PR integers** are unconfirmed (directions are safe; numbers need a changelog check).
-- **Installed `@modelcontextprotocol/sdk`** version is unknown (package.json `^1.12.0`, no lockfile resolvable here). Confirm `server.elicitInput` + resource-subscription helpers exist before Loop-1 work (elicitation likely landed ~1.10.0).
-- **Target MCP client(s)** unspecified — elicitation/resources/Tasks support is uneven; this determines Loop-1 sequencing. Prompts are the safe first step.
+## Watch list (real unknowns / verify before building)
+- **RC not yet ratified** (2026-07-28). The 2025-11-25 and RC facts above are verified against primary sources, but RC-only features (the Tasks *extension* shape, stateless core) can still shift — re-confirm on/after ratification. Build against **2025-11-25** today.
+- **Installed `@modelcontextprotocol/sdk`** version is unknown here (package.json `^1.12.0`, no lockfile resolvable). Confirm `server.elicitInput` + resource-subscription helpers exist before Loop-1 work.
+- **Target MCP client(s)** unspecified — elicitation/resources/Tasks support is uneven across clients ([feature-support matrix](https://modelcontextprotocol.io/clients)); this determines Loop-1 sequencing. **Prompts are the safe first step** (no capability dependency).
+- Client **timeout** behavior is implementation-defined (`resetTimeoutOnProgress` is a client opt-in; the ~60s figure is an SDK default). Document a timeout contract; don't assume server progress alone prevents a timeout.
 - Anthropic **token figures** are illustrative defaults — measure via the Loop-2 eval harness before treating as targets.
 
 ---
