@@ -9,11 +9,16 @@ import { test, expect } from "vitest";
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ChildProcess } from "node:child_process";
 
 import { AgdaSession } from "../../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../../src/agda/session-capture/manifest-builder.js";
 import { hashImportClosure } from "../../../../src/agda/session-capture/import-closure-hash.js";
 import { getServerVersion } from "../../../../src/server-version.js";
+import {
+  resetFileBoundStateIfProcDied,
+  handleSessionProcessClose,
+} from "../../../../src/agda/session-process-lifecycle.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../../helpers/agda-version.js";
 
@@ -85,6 +90,66 @@ it("buildReplayManifest's mergedArgv is spawn-time -l flags then lastDispatchedL
     // Duplicates survive into the manifest field too — never
     // collapsed, per D-04 (server-stamped from the live session).
     expect(manifest.mergedArgv.filter((flag) => flag === "--flag")).toHaveLength(2);
+  } finally {
+    await session.destroy();
+  }
+});
+
+// ── Plan 02-01 Task 1: lastDispatchedLoadArgv staleness reset (WR-08) ──
+//
+// A stale mergedArgv must never leak into a replay manifest after a
+// strict reload, a mid-command process death, or an idle/spontaneous
+// process crash — see src/agda/session-process-lifecycle.ts and
+// src/agda/session.ts for the three reset call sites this pins.
+
+test("resetFileBoundStateIfProcDied resets lastDispatchedLoadArgv to [] for a dead proc (mid-command death path)", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    session.lastDispatchedLoadArgv = ["--stale-flag"];
+    const deadProc = {
+      exitCode: 1,
+      signalCode: null,
+      killed: false,
+    } as unknown as ChildProcess;
+
+    resetFileBoundStateIfProcDied(session, deadProc);
+
+    expect(session.lastDispatchedLoadArgv).toEqual([]);
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("handleSessionProcessClose resets lastDispatchedLoadArgv to [] (idle/spontaneous death path)", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    session.lastDispatchedLoadArgv = ["--stale-flag"];
+    const closingProc = {} as unknown as ChildProcess;
+    session.proc = closingProc; // identity guard passes: this IS the current proc
+
+    handleSessionProcessClose(session, closingProc);
+
+    expect(session.lastDispatchedLoadArgv).toEqual([]);
+    // Confirms this is genuinely the idle-death reset path, not a noop.
+    expect(session.currentFile).toBeNull();
+  } finally {
+    await session.destroy();
+  }
+});
+
+it("session.loadNoMetas() resets lastDispatchedLoadArgv to [] after a prior load() set it (strict-reload path)", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    await session.load("CompleteFixture.agda", { commandLineOptions: ["--flag", "--flag"] });
+    expect(session.lastDispatchedLoadArgv).toEqual(["--flag", "--flag"]);
+
+    // Cmd_load_no_metas dispatches no options list at all, so [] is
+    // the accurate value here, not a placeholder.
+    await session.loadNoMetas("CompleteFixture.agda");
+    expect(session.lastDispatchedLoadArgv).toEqual([]);
   } finally {
     await session.destroy();
   }
