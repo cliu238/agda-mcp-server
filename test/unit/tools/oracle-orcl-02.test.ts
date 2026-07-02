@@ -183,6 +183,20 @@ describe("loadOraclePolicy", () => {
   test("returns null (never throws) for an unknown policy key — D-03's no-policy mechanism", () => {
     expect(loadOraclePolicy("no-such-project-xyz")).toBeNull();
   });
+
+  test("CR-01: rejects a policy key with path-traversal segments instead of loading an out-of-directory file", () => {
+    // `../oracle-policy/agda-unimath` traverses out of and back into the
+    // policy directory, landing on the REAL agda-unimath.json — the
+    // vulnerable interpolation loaded it (non-null). Any key that is not
+    // a single bare filename segment must now degrade to null (D-03
+    // no-policy), never an out-of-directory file read.
+    expect(loadOraclePolicy("../oracle-policy/agda-unimath")).toBeNull();
+    expect(loadOraclePolicy("../../../etc/passwd")).toBeNull();
+    expect(loadOraclePolicy("..")).toBeNull();
+    expect(loadOraclePolicy(".")).toBeNull();
+    expect(loadOraclePolicy("foo/bar")).toBeNull();
+    expect(loadOraclePolicy("")).toBeNull();
+  });
 });
 
 // ── walkClosureFiles / scanClosure: transitive dependency closure ──

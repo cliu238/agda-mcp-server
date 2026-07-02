@@ -45,8 +45,28 @@ const oraclePolicySchema = z.object({
  * the zod schema all degrade to `null` — the caller (judgeOrcl02) reads
  * `null` as "no policy resolved" and routes to the honest `no-policy`
  * outcome (D-03), never a silent pass or a blanket fail.
+ *
+ * CR-01: `projectKey` is artifact/CLI-controlled — it comes from a
+ * scanned repo's `.agda-lib` `name:` field (`resolveDefaultPolicyKey`)
+ * or the `--policy` flag. `loadJsonData` resolves the path via
+ * `new URL(relativePath, baseUrl)`, which honors `../` segments, so a
+ * key like `../../../evil` (or `../oracle-policy/agda-unimath`) would
+ * escape `scripts/data/oracle-policy/` and load an attacker-planted
+ * policy that whitelists arbitrary axioms — turning a genuine cheat
+ * into a `clean` verdict. Require a single bare filename segment:
+ * allowlisted chars only, with at least one non-dot character so `.`,
+ * `..`, and any all-dot key are rejected. Anything else degrades to
+ * `null` (same honest `no-policy` route), never an out-of-directory
+ * file read.
  */
 export function loadOraclePolicy(projectKey) {
+  if (
+    typeof projectKey !== "string"
+    || !/^[A-Za-z0-9._-]+$/u.test(projectKey)
+    || !/[A-Za-z0-9_-]/u.test(projectKey)
+  ) {
+    return null;
+  }
   try {
     return loadJsonData(`../data/oracle-policy/${projectKey}.json`, oraclePolicySchema, import.meta.url);
   } catch {
