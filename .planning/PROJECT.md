@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 after initialization*
+*Last updated: 2026-07-02 — Phase 2 (Oracle Triad) complete: ORCL-01/02/03 shipped as `scripts/oracle/*.mjs` (server-faithfulness differential + soundness-hygiene scan + conformance proxy); a capture is "true green" only when ORCL-01 passes AND ORCL-02 is clean, ORCL-03 advisory. Phase 3 (Regression Lock Pipeline) is next.*
