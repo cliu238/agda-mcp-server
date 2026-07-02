@@ -81,7 +81,7 @@ Plans:
 
 **Wave 3** *(blocked on 02-03)*
 
-- [ ] 02-04-PLAN.md — ORCL-03 conformance proxy: alpha-diff comparison + cold Cmd_load/Cmd_infer_toplevel on a shared session
+- [x] 02-04-PLAN.md — ORCL-03 conformance proxy: alpha-diff comparison + cold Cmd_load/Cmd_infer_toplevel on a shared session
 
 **Wave 4** *(blocked on 02-02, 02-03, 02-04)*
 
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
-| 2. Cold-Compiler Ground-Truth Oracle | 3/5 | In Progress|  |
+| 2. Cold-Compiler Ground-Truth Oracle | 4/5 | In Progress|  |
 | 3. Regression Lock Pipeline | 0/TBD | Not started | - |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
