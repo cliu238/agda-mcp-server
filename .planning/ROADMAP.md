@@ -132,7 +132,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 03.1-01-PLAN.md — The fix: generalize the transport's terminus tracking (extract to load-terminus-tracker.ts to honor the 500-line ceiling), thread loadTerminusMode through session.ts/session-command-dispatch.ts, flip runLoadNoMetas to strict mode
+- [x] 03.1-01-PLAN.md — The fix: generalize the transport's terminus tracking (extract to load-terminus-tracker.ts to honor the 500-line ceiling), thread loadTerminusMode through session.ts/session-command-dispatch.ts, flip runLoadNoMetas to strict mode
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
