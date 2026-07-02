@@ -45,9 +45,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — CAP-01 full replay-manifest fidelity: ordered/duplicate-preserving argv, realized AGDA_DIR, build-freshness, import-closure hash + D-07 first-party source inlining
-- [ ] 01-03-PLAN.md — CAP-04 bounded ring-buffer recorder hooked at the MCP tool-call boundary, gated by AGDA_MCP_CAPTURE=1
-- [ ] 01-04-PLAN.md — CAP-05 oracle substrate: before/after source diff resolution (agent-supplied > git > unavailable), live intended goal type
+- [x] 01-02-PLAN.md — CAP-01 full replay-manifest fidelity: ordered/duplicate-preserving argv, realized AGDA_DIR, build-freshness, import-closure hash + D-07 first-party source inlining
+- [x] 01-03-PLAN.md — CAP-04 bounded ring-buffer recorder hooked at the MCP tool-call boundary, gated by AGDA_MCP_CAPTURE=1
+- [x] 01-04-PLAN.md — CAP-05 oracle substrate: before/after source diff resolution (agent-supplied > git > unavailable), live intended goal type
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -121,7 +121,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Capture Foundation | 1/5 | In Progress|  |
+| 1. Capture Foundation | 4/5 | In Progress|  |
 | 2. Cold-Compiler Ground-Truth Oracle | 0/TBD | Not started | - |
 | 3. Regression Lock Pipeline | 0/TBD | Not started | - |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
