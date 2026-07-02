@@ -236,6 +236,13 @@ test("agda_capture_session never collides on stagedPath for two same-session, sa
     expect(existsSync(data1.stagedPath)).toBe(true);
     expect(existsSync(data2.stagedPath)).toBe(true);
 
+    // WR-03: the staged filename carries a cross-process-unique UUID
+    // component, so two SEPARATE server processes (each with a counter
+    // freshly reset to 0) cannot clobber one another across restarts.
+    const uuidJson = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/u;
+    expect(data1.stagedPath).toMatch(uuidJson);
+    expect(data2.stagedPath).toMatch(uuidJson);
+
     // Proves the first artifact survived on disk (not just that a
     // file exists at both paths) - the second capture must not have
     // silently overwritten the first's data.

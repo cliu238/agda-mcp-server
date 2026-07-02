@@ -8,6 +8,7 @@
 // directory, and returns a lightweight CaptureReference in
 // ToolResult.data (D-09/P2) — never the full artifact.
 
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -42,12 +43,17 @@ import {
 } from "./tool-helpers.js";
 
 // Per-process monotonic sequence counter appended to every staged
-// capture filename. Two captures in the same session can share the
-// identical fingerprint/recurrence pair (the dedup index only
-// advances via the manual, out-of-band scripts/promote-capture.mjs)
-// - without this counter both would collide on the same stagedPath
-// and writeFileAtomic's rename would silently clobber the first
-// artifact (closes 01-VERIFICATION.md CR-03 BLOCKER).
+// capture filename for intra-process ordering. Two captures in the same
+// session can share the identical fingerprint/recurrence pair (the dedup
+// index only advances via the manual, out-of-band
+// scripts/promote-capture.mjs) - without this counter both would collide
+// on the same stagedPath and writeFileAtomic's rename would silently
+// clobber the first artifact (closes 01-VERIFICATION.md CR-03 BLOCKER).
+//
+// The counter alone is per-process and resets to 0 on every restart, so
+// two SEPARATE server processes that each hit the same fingerprint first
+// would still both compute `<fp>-<rec>-0.json` and clobber across runs
+// (WR-03). A randomUUID() suffix makes the filename cross-process unique.
 let stagedFileSequence = 0;
 
 const captureReferenceDataSchema = z.object({
@@ -172,7 +178,7 @@ export function registerCaptureSession(
         mkdirSync(captureDir, { recursive: true });
         const stagedPath = join(
           captureDir,
-          `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}.json`,
+          `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`,
         );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
 
