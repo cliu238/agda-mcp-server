@@ -20,6 +20,7 @@ import type { AgdaSession } from "../session.js";
 import { findAgdaBinary } from "../binary-discovery.js";
 import { getServerVersion } from "../../server-version.js";
 import { formatVersion } from "../agda-version.js";
+import { hashImportClosure, inlineFirstPartySources } from "./import-closure-hash.js";
 
 import type { ReplayManifest } from "./artifact-types.js";
 
@@ -136,6 +137,7 @@ function detectBuildFreshness(repoRoot: string): "fresh" | "shared" | "unknown" 
 
 export function buildReplayManifest(session: AgdaSession): ReplayManifest {
   const detectedVersion = session.getAgdaVersion();
+  const currentFile = session.currentFile;
 
   return {
     agdaVersion: detectedVersion ? formatVersion(detectedVersion) : null,
@@ -158,7 +160,14 @@ export function buildReplayManifest(session: AgdaSession): ReplayManifest {
     // second, divergent temp dir).
     agdaDirContents: readRealizedAgdaDir(session.libraryRegistration?.agdaDir ?? null),
     buildMode: detectBuildFreshness(session.repoRoot),
-    importClosureHash: null,
-    inlinedFirstPartySources: [],
+    // Never throw when nothing is loaded (D-01) — no currentFile means
+    // no closure to walk, so both fields fall back to their explicit
+    // empty values instead of calling into import-closure-hash.ts.
+    importClosureHash: currentFile === null
+      ? null
+      : hashImportClosure(session.repoRoot, currentFile, detectedVersion ?? undefined),
+    inlinedFirstPartySources: currentFile === null
+      ? []
+      : inlineFirstPartySources(session.repoRoot, currentFile, detectedVersion ?? undefined).sources,
   };
 }

@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { AgdaSession } from "../../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../../src/agda/session-capture/manifest-builder.js";
+import { hashImportClosure } from "../../../../src/agda/session-capture/import-closure-hash.js";
 import { getServerVersion } from "../../../../src/server-version.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../../helpers/agda-version.js";
@@ -38,9 +39,9 @@ test("buildReplayManifest stamps server-derived fields; mergedArgv is [] pre-loa
     // `_build` dir, so buildMode is "fresh" (nothing to share).
     expect(manifest.agdaDirContents).toBeNull();
     expect(manifest.buildMode).toBe("fresh");
-    // Task 3 (import-closure-hash.ts) fills these in for real when a
-    // file is loaded; with nothing loaded they stay at their explicit
-    // placeholders.
+    // No currentFile means no closure to walk (D-01: never throw when
+    // nothing is loaded) — importClosureHash/inlinedFirstPartySources
+    // fall back to their explicit empty values.
     expect(manifest.importClosureHash).toBeNull();
     expect(manifest.inlinedFirstPartySources).toEqual([]);
   } finally {
@@ -138,6 +139,26 @@ test("buildReplayManifest.buildMode is 'shared' when _build's newest file is old
 
   try {
     expect(buildReplayManifest(session).buildMode).toBe("shared");
+  } finally {
+    await session.destroy();
+  }
+});
+
+// ── Task 3: import-closure-hash wiring ───────────────────────────────
+
+it("buildReplayManifest.importClosureHash/inlinedFirstPartySources are populated once a file is loaded", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    await session.load("CompleteFixture.agda");
+
+    const manifest = buildReplayManifest(session);
+    expect(manifest.importClosureHash).toBe(
+      hashImportClosure(TEST_FIXTURE_PROJECT_ROOT, "CompleteFixture.agda", session.getAgdaVersion() ?? undefined),
+    );
+    expect(manifest.inlinedFirstPartySources).toContainEqual(
+      expect.objectContaining({ path: "CompleteFixture.agda" }),
+    );
   } finally {
     await session.destroy();
   }
