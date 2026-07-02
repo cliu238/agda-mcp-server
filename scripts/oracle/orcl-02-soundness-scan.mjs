@@ -78,58 +78,122 @@ export function loadOraclePolicy(projectKey) {
 // ── Scan vocabulary ─────────────────────────────────────────────────
 
 /**
- * Strip Agda's nesting `{- ... -}` block comments while preserving
- * `{-# ... #-}` pragma bodies verbatim. Mirrors the character-by-
- * character depth-counter technique in src/agda/import-graph.ts's
- * stripBlockComments (a third, oracle-local copy per D-05), but —
- * unlike that helper, which never needs pragma content because it
- * only hunts for `module`/`import` lines — this scanner's entire job
- * is to read pragma content, so a `{-#`-prefixed run is recognised as
- * a pragma and kept in the output rather than discarded. Newlines
- * inside a genuinely-discarded plain comment are preserved so
- * downstream line numbers still match the original source.
+ * Produce a scan-safe view of `source` for the postulate/pragma/hole
+ * regex passes below. Removes `--` line comments and plain `{- ... -}`
+ * block comments, masks `"..."` string and `'x'` character-literal
+ * interiors, and — unlike a generic comment stripper — preserves
+ * `{-# ... #-}` pragma bodies verbatim, since reading pragma content is
+ * this scanner's entire job. Newlines are preserved in every branch so
+ * the 1-based line numbers the callers report still line up with the
+ * original source.
+ *
+ * WR-01: the previous version stripped only block comments, so a bare
+ * `?` in a line comment or string literal (`-- is this right?`,
+ * `msg = "really?"`) was mis-flagged as a residual hole, and a
+ * commented-out `-- {-# TERMINATING #-}` / `-- {-# OPTIONS --with-K #-}`
+ * produced a phantom pragma finding. This mirrors the comment/string
+ * skipping src/agda/import-graph.ts (stripLineComment) and
+ * src/session/goal-positions.ts (skipStringLiteral / skipCharLiteral)
+ * already perform before their own scans.
  */
-function stripPlainBlockComments(source) {
-  let depth = 0;
+function stripCommentsAndStrings(source) {
   let out = "";
-  let runBuffer = "";
+  let depth = 0; // {- ... -} / {-# ... #-} nesting depth
+  let runBuffer = ""; // buffered block-comment/pragma run
   let runIsPragma = false;
+  let i = 0;
+  const n = source.length;
 
-  for (let i = 0; i < source.length; i++) {
+  while (i < n) {
     const ch = source[i];
     const next = source[i + 1];
 
-    if (depth === 0 && ch === "{" && next === "-") {
+    if (depth > 0) {
+      // Inside a block comment / pragma: only nesting `{-` / `-}` are
+      // special; `--`, `"`, `'` are ordinary comment text here.
+      if (ch === "{" && next === "-") {
+        depth += 1;
+        runBuffer += "{-";
+        i += 2;
+        continue;
+      }
+      if (ch === "-" && next === "}") {
+        depth -= 1;
+        runBuffer += "-}";
+        i += 2;
+        if (depth === 0) {
+          out += runIsPragma ? runBuffer : runBuffer.replace(/[^\n]/gu, "");
+          runBuffer = "";
+          runIsPragma = false;
+        }
+        continue;
+      }
+      runBuffer += ch;
+      i += 1;
+      continue;
+    }
+
+    // depth === 0: ordinary source text.
+    if (ch === "{" && next === "-") {
       depth = 1;
       runIsPragma = source[i + 2] === "#";
       runBuffer = "{-";
-      i += 1;
+      i += 2;
       continue;
     }
-    if (depth > 0 && ch === "{" && next === "-") {
-      depth += 1;
-      runBuffer += "{-";
-      i += 1;
+    if (ch === "-" && next === "-") {
+      // Line comment: drop through to end-of-line. The newline itself is
+      // emitted on the next iteration so line numbers are preserved.
+      i += 2;
+      while (i < n && source[i] !== "\n") i += 1;
       continue;
     }
-    if (depth > 0 && ch === "-" && next === "}") {
-      depth -= 1;
-      runBuffer += "-}";
+    if (ch === '"') {
+      // String literal: keep the delimiters, blank the interior (so a
+      // `?` or pragma-like token inside a string never matches),
+      // preserve newlines, and honor `\"` / `\\` escapes.
+      out += '"';
       i += 1;
-      if (depth === 0) {
-        out += runIsPragma ? runBuffer : runBuffer.replace(/[^\n]/gu, "");
-        runBuffer = "";
-        runIsPragma = false;
+      while (i < n && source[i] !== '"') {
+        if (source[i] === "\\" && i + 1 < n) {
+          out += source[i + 1] === "\n" ? "\n" : " ";
+          i += 2;
+          continue;
+        }
+        out += source[i] === "\n" ? "\n" : " ";
+        i += 1;
+      }
+      if (i < n) {
+        out += '"';
+        i += 1;
       }
       continue;
     }
-    if (depth === 0) {
+    if (ch === "'") {
+      // Character literal: `'x'` (3 chars) or `'\x'` (4 chars) — mask the
+      // interior. A lone `'` (e.g. a primed identifier like `foo'`) is
+      // NOT a char literal and is copied verbatim. Mirrors
+      // goal-positions.ts's skipCharLiteral.
+      if (source[i + 1] === "\\" && i + 3 < n && source[i + 3] === "'") {
+        out += "'  '";
+        i += 4;
+        continue;
+      }
+      if (i + 2 < n && source[i + 1] !== "'" && source[i + 2] === "'") {
+        out += "' '";
+        i += 3;
+        continue;
+      }
       out += ch;
+      i += 1;
       continue;
     }
-    runBuffer += ch;
+
+    out += ch;
+    i += 1;
   }
-  // Unterminated block comment/pragma at EOF: flush whatever was
+
+  // Unterminated block comment / pragma at EOF: flush whatever was
   // buffered so content never silently vanishes.
   if (runBuffer.length > 0) {
     out += runIsPragma ? runBuffer : runBuffer.replace(/[^\n]/gu, "");
@@ -163,7 +227,7 @@ const EXTENDED_HOLE_RE = /\{!/u;
  */
 export function scanPragmaVocabulary(source) {
   const findings = [];
-  const cleaned = stripPlainBlockComments(source);
+  const cleaned = stripCommentsAndStrings(source);
 
   for (const site of extractPostulateSites(cleaned)) {
     const names = site.declarations.length > 0 ? site.declarations : ["(anonymous)"];
@@ -206,9 +270,13 @@ export function scanPragmaVocabulary(source) {
  * pragmas. Never derives an absence (a silently-dropped required flag
  * is out of scope for v1 — AUTO-07 / RESEARCH.md Open Question 3);
  * only ever surfaces flags actually present in the file.
+ *
+ * WR-01: the source is run through `stripCommentsAndStrings` first
+ * (which keeps `{-# ... #-}` pragmas verbatim) so a commented-out
+ * `-- {-# OPTIONS --with-K #-}` no longer surfaces a phantom flag.
  */
 export function scanOptionsFlags(source) {
-  return parseOptionsPragmas(source);
+  return parseOptionsPragmas(stripCommentsAndStrings(source));
 }
 
 // ── Transitive closure walk ─────────────────────────────────────────

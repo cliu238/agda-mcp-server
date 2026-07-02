@@ -150,6 +150,44 @@ describe("scanPragmaVocabulary", () => {
     expect(holes.length).toBeGreaterThan(0);
     expect(holes[0].line).toBe(4);
   });
+
+  // ── WR-01: comment/string blindness regressions. Tokens that live
+  // ONLY inside `--` line comments, string literals, or a commented-out
+  // pragma must produce NO findings (they previously misfired). ──
+
+  test("WR-01: a bare ? inside a line comment or string literal is NOT flagged as a residual hole", () => {
+    const source = [
+      "module CommentsAndStrings where",
+      "-- is this right?",
+      "greeting : String",
+      'greeting = "really?"',
+    ].join("\n");
+    const holes = scanPragmaVocabulary(source).filter((f: { kind: string }) => f.kind === "residual-hole");
+    expect(holes).toHaveLength(0);
+  });
+
+  test("WR-01: a commented-out `-- {-# TERMINATING #-}` pragma is NOT flagged", () => {
+    const source = [
+      "module CommentedTerminating where",
+      "-- {-# TERMINATING #-}",
+      "loop : Set",
+      "loop = Set",
+    ].join("\n");
+    const terminating = scanPragmaVocabulary(source).filter((f: { kind: string }) => f.kind === "terminating");
+    expect(terminating).toHaveLength(0);
+  });
+
+  test("WR-01: a real pragma survives a trailing `-- ?` comment while the comment's ? is ignored", () => {
+    const source = [
+      "module RealPragmaPlusComment where",
+      "{-# TERMINATING #-}   -- why is this here?",
+      "loop : Set",
+      "loop = loop",
+    ].join("\n");
+    const findings = scanPragmaVocabulary(source);
+    expect(findings.filter((f: { kind: string }) => f.kind === "terminating")).toHaveLength(1);
+    expect(findings.filter((f: { kind: string }) => f.kind === "residual-hole")).toHaveLength(0);
+  });
 });
 
 // ── with-K override precondition: raw data the Task-2 closure+policy
@@ -165,6 +203,11 @@ describe("scanOptionsFlags: with-K override precondition data", () => {
     expect(withKFlags).toContain("--with-K");
     expect(libBaseFlags).toContain("--without-K");
     expect(policy?.requiredFlags).toContain("--without-K");
+  });
+
+  test("WR-01: a commented-out `-- {-# OPTIONS --with-K #-}` yields no flags", () => {
+    const source = ["-- {-# OPTIONS --with-K #-}", "module CommentedOptions where"].join("\n");
+    expect(scanOptionsFlags(source)).not.toContain("--with-K");
   });
 });
 
