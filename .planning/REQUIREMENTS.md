@@ -35,7 +35,7 @@ A capture is **true green** only if all three predicates pass. Each catches a di
 
 ### Loop-Surfaced Fix (FIX) — inserted Phase 03.1
 
-- [ ] **FIX-01**: The first loop-surfaced defect is fixed end-to-end and its Phase-3 flagship regression flips RED → locked — `runLoadNoMetas` gains a fail-closed terminus/completion guard (a `Cmd_load_no_metas`-appropriate variant that catches stream truncation without false-REDding a legitimately goal-less strict load), closing the `e38f90a` metas-vs-no_metas asymmetry — proving the loop's fix→stay-locked throughput, with no regression to the metas path
+- [x] **FIX-01**: The first loop-surfaced defect is fixed end-to-end and its Phase-3 flagship regression flips RED → locked — `runLoadNoMetas` gains a fail-closed terminus/completion guard (a `Cmd_load_no_metas`-appropriate variant that catches stream truncation without false-REDding a legitimately goal-less strict load), closing the `e38f90a` metas-vs-no_metas asymmetry — proving the loop's fix→stay-locked throughput, with no regression to the metas path
 
 ### Triage / Fix Queue (QUEUE)
 
@@ -103,7 +103,7 @@ Each requirement maps to exactly one phase.
 | LOCK-01 | Phase 3 | Complete |
 | LOCK-02 | Phase 3 | Complete |
 | LOCK-03 | Phase 3 | Complete |
-| FIX-01 | Phase 03.1 | Pending |
+| FIX-01 | Phase 03.1 | Complete |
 | QUEUE-01 | Phase 4 | Pending |
 | QUEUE-02 | Phase 4 | Pending |
 | QUEUE-03 | Phase 4 | Pending |
