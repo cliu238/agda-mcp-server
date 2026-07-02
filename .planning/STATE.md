@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-01)
 Phase: 01 (capture-foundation) — EXECUTING
 Plan: 1 of 5
 Status: Ready to execute
-Last activity: 2026-07-02 -- Phase 1 planning complete
+Last activity: 2026-07-02 - Completed quick task 260702-29k: Re-verify CHG v0.6.7 defect list against current main
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -84,6 +84,13 @@ None yet.
 - Design charter `.planning/DESIGN-PRINCIPLES.md` (context engineering + code execution) is now the lens for every tool/surface: high-signal-by-default + drill-in, return references not payloads, `nextAction` always, cap-and-steer, compose-in-code (scripts), server emits data / strategy in a Skill, hybrid + eval-driven. Guardrail: never compress away the `ok`/`classification`/false-green signal the oracle depends on. Apply in plan-phase for Phase 1 (capture outputs) and Phase 5 (orchestration).
 - Cross-checked against the Lean/Mathlib ecosystem (see `.planning/research/LEAN-COMPARISON.md`): `#print axioms` is the mature analog of ORCL-02's closure audit and independently confirms "compile ≠ true green". Its transitive-closure bug (Lean #8840) → ORCL-02 must recurse through **type signatures**, not just bodies. `native_decide`/`@[implemented_by]` leaks → ORCL-02 must scan **FFI (`COMPILE`)/pragmas**, not just postulates. Kimina's negation-discard → an ORCL-03 **consistency probe** (mechanize = AUTO-08). Lean REPL pickling / "keep proof state live" ≈ CAP-04 north-star; `lean_multi_attempt` ≈ a Loop① primitive for LOOP1-01.
 - No phase criterion may require v2+ work (knowledge accumulation, auto-PR, unattended orchestration, ORCL-02 hardened *hard half* = AUTO-07) — hold the scope line at every plan.
+- ✅ CHG v0.6.7 re-verification DONE (2026-07-02, `.planning/research/CHG-REVERIFY.md`): flagship #64/#61 false-green = **changed/provisionally-fixed** (no repro across 3 shapes incl. transitive signature-only; but `agdai-cache.ts` root-cause path untouched by the likely fix `e38f90a` — LOCK-03 fixture must probe the large-module timing + forceRecompile edges). `agda_auto` flag leak = **alive**; `agda_give` ok:true-wrapping-error = **alive** (highest agent risk); `agda_search_definitions` hardcoded `agda/` layout = **alive**. New minor candidate: `agda_proof_status` says "All goals solved." while `constraintsText` carries the error. → 3 live defects are Phase-4 queue ammo; LOCK-03 target needs the timing-edge fixture, not the naive repro.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260702-29k | Re-verify CHG v0.6.7 defect list against current main | 2026-07-02 | 6aa28e4 | [260702-29k-re-verify-chg-v0-6-7-defect-list-against](./quick/260702-29k-re-verify-chg-v0-6-7-defect-list-against/) |
 
 ## Deferred Items
 
