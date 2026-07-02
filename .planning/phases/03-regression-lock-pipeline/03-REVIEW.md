@@ -1,395 +1,235 @@
 ---
 phase: 03-regression-lock-pipeline
-reviewed: 2026-07-02T00:00:00Z
+reviewed: 2026-07-02T17:30:12Z
 depth: standard
-files_reviewed: 14
+iteration: 2
+files_reviewed: 9
 files_reviewed_list:
   - scripts/emit-regression.mjs
   - src/tools/register-capture-session.ts
-  - test/fixtures/agda/FixtureDeps/TransitiveStaleness/Dep.agda
-  - test/fixtures/agda/FixtureDeps/TransitiveStaleness/Dep.broken.agda
-  - test/fixtures/agda/FixtureDeps/TransitiveStaleness/Main.agda
-  - test/fixtures/capture-regression-matrix.json
-  - test/fixtures/capture-regression-matrix.ts
-  - test/helpers/capture-regression-runner.ts
   - test/integration/mcp/capture-regression.test.ts
-  - test/unit/fixtures/capture-regression-matrix.test.ts
-  - test/unit/tools/capture-regression-runner.test.ts
   - test/unit/tools/emit-regression.test.ts
   - test/unit/tools/register-capture-session.test.ts
+  - test/helpers/capture-regression-runner.ts
+  - test/fixtures/capture-regression-matrix.json
+  - test/fixtures/capture-regression-matrix.ts
   - vitest.config.ts
 findings:
-  critical: 2
-  warning: 3
-  info: 4
-  total: 9
-status: issues_found
+  critical: 0
+  warning: 0
+  info: 5
+  total: 5
+status: clean
 ---
 
-# Phase 3: Code Review Report
+# Phase 3: Code Review Report (Iteration 2 — fix verification)
 
-**Reviewed:** 2026-07-02T00:00:00Z
+**Reviewed:** 2026-07-02T17:30:12Z
 **Depth:** standard
-**Files Reviewed:** 14
-**Status:** issues_found
+**Files Reviewed:** 9
+**Status:** clean
 
 ## Summary
 
-Reviewed the Phase 3 regression-lock pipeline: the capture-staging filename fix
-(`register-capture-session.ts`), the zod-validated matrix contract, the shared
-MCP-boundary replay helper, the regression emitter (`emit-regression.mjs`), the
-generic `test.fails` replay runner, and the flagship #64/#61 fixture trio + first
-matrix entry.
+Re-review of the Phase 3 regression-lock pipeline after fixes for the 2 BLOCKER +
+3 WARNING findings from iteration 1. Every fix was verified with executable probes
+(via `tsx` importing the real `scripts/emit-regression.mjs` exports and the real
+`src/repo-root.ts` sandbox), the committed unit suites, and line-by-line diff
+inspection — not by reading alone.
 
-Two BLOCKERs were found and **empirically confirmed by running the code**, both in
-`scripts/emit-regression.mjs`:
+**All 5 prior findings are genuinely resolved.** The two BLOCKERs (CR-01 path
+traversal, CR-02 `--force` trap) were reproduced against the *fixed* code and no
+longer trigger: an in-repo-but-outside-`test/fixtures/agda/` escape is now skipped
+with the tracked target untouched, and `--force` on a `pass`/`skip` verdict now
+fails closed with a legible reason before any write. The three WARNINGs (WR-01
+rollback, WR-02 `test.fails` masking, WR-03 cross-process filename collision) are
+each fixed as claimed and carry new regression coverage (Tests F2, D2, and the
+UUID assertion respectively).
 
-1. **Path-containment is scoped to the wrong root.** `materializeFixtureFiles`
-   sandboxes artifact-derived write paths against the whole `repoRoot`, not
-   against the `test/fixtures/agda/` tree it documents as its boundary. A capture
-   artifact whose `inlinedFirstPartySources[].path` contains enough `../` segments
-   overwrites **arbitrary tracked files in the repo** (e.g. `src/index.ts`,
-   `.github/workflows/`, `package.json`) with attacker-controlled content. This is
-   precisely the tracked path-traversal bug class this phase was warned about, and
-   the higher-stakes variant (writes land in the tracked tree, not a tmpdir).
+No new Critical or Warning defects were introduced by the fixes. One low-severity
+INFO (IN-05) notes a narrow new interaction from the WR-01 fix broadening the
+`catch` scope past the matrix-commit point. The four INFO items from iteration 1
+(IN-01..IN-04) were intentionally left unfixed (`--all` not passed) and are carried
+forward here unchanged so this artifact stays the complete record.
 
-2. **The advertised `--force` flag is a non-functional trap** that crashes and
-   leaves orphaned writes: `judgeRefusal` lets `pass`/`skip` ORCL-01 outcomes
-   through under `--force`, but `composeEntry` then dereferences a non-existent
-   `coldTuple`, throwing `TypeError`.
+Because 0 Critical and 0 Warning findings remain, `status: clean` (Info-only is
+clean for gating).
 
-Three WARNINGs concern robustness: no rollback of fixture writes on the error path,
-a `test.fails` runner that cannot distinguish "defect reproduced" from "harness
-exploded", and a per-process staged-file counter that still collides across server
-processes. Four INFO items cover CLI input validation, comparator duplication,
-global `passWithNoTests`, and a fixture-content test-coverage gap.
+## Verification of Prior Findings
 
-The three `.agda` fixtures and the matrix JSON/loader are correct; no findings there.
+| ID | Prior severity | Verdict | How verified |
+|----|----------------|---------|--------------|
+| CR-01 | Critical | **Resolved** | Probe + Test F2 + inspection |
+| CR-02 | Critical | **Resolved** | Probe + Tests D/D2 + inspection |
+| WR-01 | Warning | **Resolved** | Diff inspection (probe blocked by Agda-gated `runOracle`) |
+| WR-02 | Warning | **Resolved** | Grep (no `.fails`) + collection run + inspection |
+| WR-03 | Warning | **Resolved** | Unit test (UUID regex) + inspection |
 
-## Critical Issues
+### CR-01 — path containment scoped to `test/fixtures/agda/` (RESOLVED)
 
-### CR-01: `materializeFixtureFiles` write sandbox is the whole repo, not `test/fixtures/agda/` — arbitrary in-repo file overwrite
+`scripts/emit-regression.mjs:128-151` `writeFixtureFile` now contains against the
+write base: `const fixturesRoot = join(repoRoot, "test/fixtures/agda")`, then
+`resolveFileWithinRoot(fixturesRoot, fixtureDir)`, then
+`resolveFileWithinRoot(fixtureBase, barePath)`. Sandbox root == write base, mirroring
+`orcl-01-differential.mjs`.
 
-**File:** `scripts/emit-regression.mjs:117-130` (`writeFixtureFile`), triggered from `scripts/emit-regression.mjs:194-204`
+Independent probe (throwaway repo root with a sentinel `src/index.ts`,
+`fixtureDir:"FixtureDeps/TransitiveStaleness"`, escaping
+`path:"../../../../../src/index.ts"`):
+- `src/index.ts` sentinel **unchanged** after materialization.
+- `writtenFiles` = `[<root>/test/fixtures/agda/FixtureDeps/TransitiveStaleness/Main.agda]` only.
+- Also verified skipped: an **absolute** artifact path, and an escape via a
+  **malicious `fixtureDir`** (`"../../src"`) — both leave the sentinel intact and
+  write nothing. These extra vectors (not in Test F2) confirm the containment is
+  general, not tailored to one shape.
 
-**Issue:**
-`writeFixtureFile` contains its write with:
+The reachable in-repo overwrite from iteration 1 is closed. Test F2
+(`test/unit/tools/emit-regression.test.ts:185-216`) encodes the exact regression.
 
-```js
-dest = resolveFileWithinRoot(repoRoot, join("test/fixtures/agda", fixtureDir, barePath));
-```
+### CR-02 — `--force` fails closed; `composeEntry` guards `coldTuple` (RESOLVED)
 
-`resolveFileWithinRoot(repoRoot, …)` only guarantees the result stays under
-`repoRoot` (`SERVER_REPO_ROOT`) — it does **not** guarantee it stays under
-`test/fixtures/agda/`. `barePath` is derived from
-`primaryArtifact.manifest.inlinedFirstPartySources[].path`, which is
-attacker/artifact-controlled and is **not** sanitized for `..` by
-`stripFixtureDirPrefix` (that helper only strips a leading `fixtureDir` prefix).
-A path with enough `../` segments therefore escapes `test/fixtures/agda/` while
-remaining inside the repo, and both the content (`source.content`) and the
-destination are artifact-controlled.
+`judgeRefusal` (`scripts/emit-regression.mjs:62-75`) now nests the `--force` branch:
+a non-`server-false-green-candidate` outcome with `coldTuple === undefined` returns
+a refusal even under `--force`. `composeEntry` (`:256-261`) throws a legible `Error`
+(not a `TypeError`) and reads through a local `cold` const.
 
-This was confirmed end-to-end by invoking the real export against a throwaway repo
-root:
+Independent probe:
+- `judgeRefusal({orcl01:{kind:"pass"}}, {force:true})` → non-null, message contains
+  `coldTuple`. Same for `{kind:"skip"}`.
+- `composeEntry(... verdict:{orcl01:{kind:"pass"}} ...)` → throws `Error` (verified
+  `!(e instanceof TypeError)`) matching `/no coldTuple to lock/`.
+- Sanity: a real `server-false-green-candidate` still returns `null` (lockable) and
+  `composeEntry` still builds the entry — the fix did not over-restrict the happy path.
 
-```
-primaryArtifact source path: "../../../../../src/index.ts"
-fixtureDir:                   "FixtureDeps/TransitiveStaleness"
-=> writtenFiles: ["<repoRoot>/src/index.ts"]   # escaped test/fixtures/agda
-=> <repoRoot>/src/index.ts now contains: "PWNED via capture artifact\n"
-```
+Note (not a defect): because only `server-false-green-candidate` ever carries a
+`coldTuple`, and that outcome never needed `--force`, `--force` is now effectively
+inert — it can only ever fail closed. This is the reviewer-recommended fail-closed
+behavior and the refusal message is self-explanatory, so it is acceptable; a future
+cleanup could drop the now-unreachable flag from CLI help.
 
-The function's own docstring claims it writes to
-`test/fixtures/agda/<fixtureDir>/<barePath>` and that "a `barePath` that escapes
-the sandbox is silently skipped" — the implementation violates both claims. Note
-the correct pattern already exists in the sibling oracle module
-(`scripts/oracle/orcl-01-differential.mjs:99`), where the sandbox root **is** the
-write base (`resolveFileWithinRoot(root, entry.path)` with `root` = the tmpdir).
-Here the sandbox root (`repoRoot`) and the write base (`repoRoot/test/fixtures/agda`)
-diverge — that gap is the bug.
+### WR-01 — rollback on any post-materialization throw (RESOLVED)
 
-Unit Test F (`test/unit/tools/emit-regression.test.ts:129-155`) gives false
-confidence: its traversal path `../../../../../PWNED.agda` with `fixtureDir: "."`
-over-shoots and lands **outside** the repo, where even the too-wide sandbox
-rejects it. It never exercises an escape that stays *inside* the repo but *outside*
-`test/fixtures/agda/`, which is exactly the reachable case.
+`scriptMain` hoists `let writtenFiles = []` to `:399` (catch scope), assigns it from
+`materialized.writtenFiles` at `:438`, and the outer `catch` at `:480` calls
+`rollbackWrittenFiles(writtenFiles)`. Diff `b2f79ce` is surgical and matches the
+iteration-1 recommendation exactly.
 
-**Fix:** Make the containment root equal the intended write base, and contain the
-untrusted `fixtureDir` too:
+Executable reproduction was not practical here: the only path that materializes
+files first runs `runOracle` (`scripts/oracle/run-oracle.mjs`), which spawns a cold
+Agda process; without Agda the run refuses at `judgeRefusal` *before* materialization
+(so `writtenFiles` stays `[]`). Verified instead by inspection — the three documented
+reachable throw sites (`composeEntry` zod/coldTuple failure, `replayCaptureRegressionEntry`
+failure, `writeMatrixEntry` duplicate-id) all now route through the rollback. See
+IN-05 for the one new edge this broadened `catch` introduces.
 
-```js
-function writeFixtureFile(repoRoot, fixtureDir, barePath, content) {
-  const fixturesRoot = join(repoRoot, "test/fixtures/agda");
-  let dest;
-  try {
-    // Contain fixtureDir within test/fixtures/agda, then barePath within that.
-    const fixtureBase = resolveFileWithinRoot(fixturesRoot, fixtureDir);
-    dest = resolveFileWithinRoot(fixtureBase, barePath);
-  } catch (err) {
-    if (err instanceof PathSandboxError) return null;
-    throw err;
-  }
-  mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, content, "utf8");
-  return dest;
-}
-```
+### WR-02 — plain `test`, no `test.fails` masking (RESOLVED)
 
-Add a regression test whose escaping path resolves inside the repo but outside
-`test/fixtures/agda/` (e.g. `path: "../../../../../src/index.ts"` with
-`fixtureDir: "FixtureDeps/TransitiveStaleness"`) and assert it is skipped and the
-in-repo target is untouched.
+`test/integration/mcp/capture-regression.test.ts:45-55` now uses a single plain `it`
+with `const expectMatch = entry.status !== "red"` and asserts
+`matchesExpected(observed, entry.expected)).toBe(expectMatch)`. A repo-wide grep for
+`it.fails`/`test.fails` finds only the explanatory comment at line 14 — no live
+`.fails` remains. A harness throw inside the body now propagates as a real failure
+(never absorbed as an "expected failure"), and a genuine fix flips the `red`
+assertion to force promotion. Collection verified: with Agda unavailable the file
+registers a `test.skip` task (not zero tasks), so the suite collects cleanly.
 
-### CR-02: `--force` lets `pass`/`skip` verdicts past `judgeRefusal`, then `composeEntry` crashes on the missing `coldTuple`
+### WR-03 — cross-process-unique staged filename (RESOLVED)
 
-**File:** `scripts/emit-regression.mjs:62-64` (`judgeRefusal`), `scripts/emit-regression.mjs:229-249` (`composeEntry`)
+`src/tools/register-capture-session.ts:179-182` appends `-${randomUUID()}` after the
+retained `${stagedFileSequence++}` counter. The counter still provides intra-process
+ordering; the UUID removes the cross-restart clobber. The unit test
+(`register-capture-session.test.ts:242-244`) asserts both staged paths match a
+canonical UUID regex, are distinct, and that both artifacts survive on disk with
+divergent `capturedAt`. Suite passes (18/18 across the two touched unit files).
 
-**Issue:**
-`judgeRefusal`'s fourth (overridable) gate is:
+## Regression / Non-Breakage Checks
 
-```js
-if (verdict.orcl01.kind !== "server-false-green-candidate" && options.force !== true) {
-  return `ORCL-01 outcome "${verdict.orcl01.kind}" has nothing meaningful to lock — pass --force to override`;
-}
-return null;
-```
+All four explicitly-requested non-breakage checks pass:
 
-So with `--force`, an ORCL-01 outcome of `pass` or `skip` returns `null` (allowed).
-But `composeEntry` unconditionally reads the cold tuple:
-
-```js
-expected: {
-  classification: verdict.orcl01.coldTuple.classification,   // coldTuple is undefined for pass/skip
-  ...
-}
-```
-
-Only `server-false-green-candidate` carries `coldTuple`/`coldCategories`
-(`scripts/oracle/orcl-01-differential.mjs:513-521`); `pass` is `{ kind: "pass" }`
-and `skip` is `{ kind: "skip", reason }`. Since `--force` **only** changes behavior
-for exactly the non-candidate outcomes, every outcome `--force` newly permits is one
-`composeEntry` cannot build. Confirmed by running the exports:
-
-```
-judgeRefusal({orcl01:{kind:"pass"}}, {force:true})  => null
-composeEntry(... verdict:{orcl01:{kind:"pass"}} ...) => TypeError: Cannot read properties of undefined (reading 'classification')
-judgeRefusal({orcl01:{kind:"skip"}}, {force:true})  => null
-composeEntry(... verdict:{orcl01:{kind:"skip"}} ...) => TypeError: Cannot read properties of undefined (reading 'classification')
-```
-
-Impact: the documented `--force` CLI flag can never succeed — it is dead/trap
-functionality. Worse, in `scriptMain` the crash occurs at step (c), *after* step
-(b) `materializeFixtureFiles` has already written fixture files into the tracked
-`test/fixtures/agda/` tree, and the outer `catch` (line 436) does **not** roll them
-back (see WR-01). A user invoking `--force` gets a `TypeError` and orphaned files.
-
-**Fix:** Reconcile the two functions. Either forbid `--force` from unlocking
-outcomes that lack a `coldTuple`, or have `composeEntry` guard the access. Minimal
-guard in `composeEntry`:
-
-```js
-export function composeEntry({ ..., verdict }) {
-  const cold = verdict.orcl01.coldTuple;
-  if (cold === undefined) {
-    throw new Error(
-      `composeEntry: ORCL-01 outcome "${verdict.orcl01.kind}" has no coldTuple to lock; ` +
-      `--force cannot fabricate an expected RED value.`,
-    );
-  }
-  const candidate = { /* … uses `cold.*` and verdict.orcl01.coldCategories … */ };
-  return captureRegressionEntrySchema.parse(candidate);
-}
-```
-
-Preferably reject this in `judgeRefusal`/`scriptMain` *before* any write occurs, so
-`--force` fails closed with a clear message and never materializes files.
-
-## Warnings
-
-### WR-01: `scriptMain`'s catch-all leaves orphaned fixture writes in the tracked tree
-
-**File:** `scripts/emit-regression.mjs:396-439`
-
-**Issue:** `writtenFiles` (returned by `materializeFixtureFiles`, line 396) is only
-rolled back on the two clean-refusal exits — the D-05 self-check match (line 411)
-and `--dry-run` (line 425). Any *throw* after materialization is caught by the
-outer handler (lines 436-439), which writes an error and sets `exitCode = 1` but
-performs **no** `rollbackWrittenFiles(writtenFiles)`. Reachable throw sites after
-the writes include: `composeEntry` zod-validation failure (missing `--id`,
-undefined `entryFile`, etc.), the CR-02 `--force` crash, a
-`replayCaptureRegressionEntry` failure (missing fixture, Agda spawn error), and
-`writeMatrixEntry`'s duplicate-`id` rejection (line 269). In every case the freshly
-written files remain under `test/fixtures/agda/`, ready to be accidentally
-`git add`-ed.
-
-**Fix:** Track `writtenFiles` in a scope visible to the `catch`, and roll back on
-any error before rethrowing/exiting:
-
-```js
-let writtenFiles = [];
-try {
-  ...
-  ({ mutation, entryFile, writtenFiles } = materializeFixtureFiles({ ... }));
-  ...
-} catch (err) {
-  rollbackWrittenFiles(writtenFiles);
-  process.stderr.write(`emit-regression failed: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exitCode = 1;
-}
-```
-
-### WR-02: `test.fails` runner cannot distinguish "defect reproduced" from "harness broken" — a broken harness stays green
-
-**File:** `test/integration/mcp/capture-regression.test.ts:40-44`
-
-**Issue:**
-
-```js
-const runEntry = entry.status === "red" ? it.fails : it;
-runEntry(`${entry.id}: …`, async () => {
-  const { observed } = await replayCaptureRegressionEntry(entry, FIXTURES_ROOT);
-  expect(matchesExpected(observed, entry.expected)).toBe(true);
-});
-```
-
-Under `it.fails`, the task passes whenever the body throws *or* the assertion
-fails. The intended failure is `expect(...).toBe(true)` being `false` (observed ≠
-expected, i.e. defect still live). But **any** exception inside the body counts
-identically as an "expected failure": if `replayCaptureRegressionEntry` throws (a
-missing fixture, an Agda spawn failure), or the tool returns a hard `tool-error`
-envelope whose `structuredContent.data` lacks the tuple fields (making
-`observed.classification === undefined`, so `matchesExpected` is `false`), the suite
-still goes green. The runner therefore cannot tell "the #64/#61 defect reproduced"
-from "the replay harness exploded," and — critically for the lock's whole purpose —
-if the harness is broken on the day the defect is fixed, the test will **not** flip
-to red to force promotion. This directly undercuts the phase's charter that the lock
-"fails loudly the moment the wrapped assertion starts unexpectedly passing."
-
-**Fix:** Run red entries as a *normal* test asserting the defect is still red, so
-infrastructure failures fail loudly and a genuine fix flips the assertion:
-
-```js
-const runEntry = it; // plain test for both red and locked
-runEntry(`${entry.id}: …`, async () => {
-  const { observed } = await replayCaptureRegressionEntry(entry, FIXTURES_ROOT);
-  const matched = matchesExpected(observed, entry.expected);
-  if (entry.status === "red") {
-    // Defect still live: observed must NOT match the cold/correct expected value.
-    // A harness throw propagates as a real failure (never masked as "expected fail").
-    expect(matched).toBe(false);
-  } else {
-    expect(matched).toBe(true);
-  }
-});
-```
-
-A fixed defect then makes `matched === true`, failing the `toBe(false)` assertion
-and forcing promotion to `locked` — the same trigger, but without conflating harness
-faults with the live-defect signal.
-
-### WR-03: staged-filename counter is per-process — captures collide and clobber across server restarts/processes
-
-**File:** `src/tools/register-capture-session.ts:51,173-177`
-
-**Issue:** `stagedFileSequence` is a module-level counter that starts at `0` in every
-server process:
-
-```js
-const stagedPath = join(captureDir, `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}.json`);
-await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
-```
-
-This closes the in-session CR-03 collision, but because `recurrence` only advances
-via the out-of-band `promote-capture.mjs` (per the comment at lines 44-50) and the
-counter resets to `0` on each process start, two **separate** server processes that
-each hit the same fingerprint first will both compute
-`<fingerprint>-<recurrence>-0.json`. `.agda-mcp/captures/` persists across runs, and
-`writeFileAtomic`'s `rename()` silently overwrites the earlier artifact — the second
-run clobbers the first. Sequential dogfooding runs against the same defect are the
-realistic trigger, so the "collision-proof" claim holds only within a single
-process. Losing a captured defect artifact undercuts the milestone's "every real
-proof session reliably converts into a stronger server" premise.
-
-**Fix:** Add a cross-process-unique component to the filename (the same
-`randomUUID()` primitive already imported by `safe-source-io.ts`), e.g.:
-
-```js
-import { randomUUID } from "node:crypto";
-...
-const stagedPath = join(
-  captureDir,
-  `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`,
-);
-```
-
-The monotonic counter can stay for intra-process ordering; the UUID removes the
-cross-process clobber.
+- **fixtureDir double-prepend NOT reintroduced.** Test G2 passes (asserts the
+  double-prepended `.../FixtureDeps/TransitiveStaleness/FixtureDeps/TransitiveStaleness/Main.agda`
+  does **not** exist; the single correct path does). Independent probe wrote the
+  single-level path only.
+- **D-05 self-check intact.** `scriptMain` step (d) (`:444-455`) still replays via
+  `replayCaptureRegressionEntry` + the shared `matchesExpected`, and rolls back +
+  refuses when the entry would already be GREEN. Unchanged by the fixes.
+- **Normalized-envelope assertion semantics unchanged.** WR-03 touched only the
+  staged filename; `register-capture-session.test.ts` envelope assertions (`ok`,
+  data-key set, `sessionClassification`, diagnostics) still pass.
+- **500-line `src/` ceiling not violated.** `register-capture-session.ts` is 221
+  lines. The only `src/` file over 500 is the pre-existing, CLAUDE.md-documented
+  outlier `src/session/agda-transport.ts` (535), which these fixes do not touch.
 
 ## Info
 
-### IN-01: global `passWithNoTests: true` can mask an accidentally-empty or mis-globbed run
+### IN-05 (new): WR-01 `catch` now spans the matrix commit — a post-commit throw would roll back live fixtures
+
+**File:** `scripts/emit-regression.mjs:470-483`
+
+**Issue:** The WR-01 fix broadened the outer `catch` to `rollbackWrittenFiles`, but
+`writeMatrixEntry` (step f, `:472`) and the trailing success
+`process.stdout.write("Locked …")` (`:473`) are both still inside the `try`. If that
+final `stdout.write` throws synchronously (e.g. `ENOSPC`/`EPIPE` on a synchronous
+stdout sink) *after* the matrix entry has been atomically persisted, the `catch`
+deletes the freshly-written fixture files — leaving the committed matrix entry
+pointing at now-missing fixtures. The window is narrow (stdout errors are usually
+delivered asynchronously and would not be caught here), so this is low-severity, but
+it is a genuine new interaction the broadened `catch` created.
+
+**Fix:** Gate rollback on a not-yet-committed flag, or move the commit out of the
+rollback-guarded region:
+```js
+    await writeMatrixEntry(entry, matrixJsonPath);
+    committed = true;               // declared with writtenFiles
+    process.stdout.write(`Locked ${entry.id} into ${matrixJsonPath}\n`);
+  } catch (err) {
+    if (!committed) rollbackWrittenFiles(writtenFiles);
+    ...
+  }
+```
+
+### IN-01 (carried over, intentionally deferred): global `passWithNoTests: true` can mask a mis-globbed run
 
 **File:** `vitest.config.ts:26`
 
-**Issue:** The flag is justified for the legitimately-empty-matrix case, but it is
-suite-global: a future test file that gates *all* its tasks behind a condition (as
-the matrix runner does when empty), or a mis-typed `vitest run <filter>` in CI,
-would now pass silently instead of erroring. The comment's "No other file currently
-reaches zero collected tasks" is a point-in-time assertion with no guard.
+**Issue:** Still suite-global. Justified for the legitimately-empty matrix, but a
+future all-gated file or a mis-typed CI filter would pass silently. Unchanged this
+iteration. **Fix:** scope the zero-test tolerance to the data-driven runner (register
+one sentinel task asserting the matrix parsed) and drop the global flag.
 
-**Fix:** Prefer scoping the zero-test tolerance to the data-driven runner by having
-it always register one sentinel task (e.g. a `test("matrix loaded", () => { … })`
-that just asserts the matrix parsed), then drop the global `passWithNoTests`. That
-keeps the empty-matrix run green while preserving "empty run = error" everywhere
-else.
+### IN-02 (carried over, intentionally deferred): emitter CLI does not validate required flags up front
 
-### IN-02: emitter CLI does not validate required flags up front; missing flags throw obscure errors after writes begin
+**File:** `scripts/emit-regression.mjs:400-415`
 
-**File:** `scripts/emit-regression.mjs:365-404`
+**Issue:** `--id`/`--fixture-dir`/`--tool` are still read via `flagValue` (undefined
+when absent) and flow unchecked into materialization/compose. A missing `--fixture-dir`
+still throws a raw `resolve(...undefined)` `TypeError` from inside
+`materializeFixtureFiles`; a missing `--id`/derived `entryFile` throws a raw zod error
+from `composeEntry`. (Now at least rolled back by the WR-01 fix, but still an obscure
+message.) **Fix:** validate presence immediately after parsing and emit the friendly
+usage string.
 
-**Issue:** `--id`, `--fixture-dir`, and `--tool` are read with `flagValue` (which
-returns `undefined` when absent) and flow unchecked into `materializeFixtureFiles` /
-`composeEntry`. Missing `--fixture-dir` throws a raw `TypeError: Path must be a
-string. Received undefined` from `join()` deep inside `materializeFixtureFiles`;
-missing `--id`/derived-`entryFile` throws a raw zod error from `composeEntry` — in
-the latter cases after fixture files may already be written (see WR-01).
+### IN-03 (carried over, intentionally deferred): match logic duplicated across the ORCL-01 boundary
 
-**Fix:** Validate presence of the required flags immediately after parsing (before
-`runOracle`/materialization) and emit the same friendly usage string already used
-for the missing positional arg.
+**File:** `scripts/emit-regression.mjs:321-329` vs `scripts/oracle/orcl-01-differential.mjs:505-508`
 
-### IN-03: match logic is implemented twice; the "single comparator" guarantee stops at ORCL-01's boundary
+**Issue:** `matchesExpected` is still a hand-copy of `runColdLoadAndDiff`'s
+`tupleMatches`/`categoriesMatch` logic; `orcl-01-differential.mjs` exports no shared
+field-list/comparator, so the "mirrors exactly" docstring is convention, not
+structure. **Fix:** export the field list + a small comparator from
+`orcl-01-differential.mjs` and have `matchesExpected` reuse it.
 
-**File:** `scripts/emit-regression.mjs:277-297` vs `scripts/oracle/orcl-01-differential.mjs:505-508`
+### IN-04 (carried over, intentionally deferred): G2/G3 assert filenames but not baseline-vs-primary content routing
 
-**Issue:** `matchesExpected` is correctly the single comparator shared by the
-emitter self-check and the Wave-3 runner. However its logic is a hand-copy of
-`runColdLoadAndDiff`'s `tupleMatches`/`categoriesMatch` (same fields, same
-same-length/same-index array rule). The docstring says it "Mirrors … exactly," but
-nothing enforces the mirror; if ORCL-01's tuple fields or category-compare rule
-change, the two silently drift.
+**File:** `test/unit/tools/emit-regression.test.ts` (G2 `:246-307`, G3 `:310-358`)
 
-**Fix:** Export the field list / a small `tupleMatches` + `categoriesMatch` helper
-from `orcl-01-differential.mjs` and have `matchesExpected` reuse it, so the mirror
-is structural rather than by-convention.
-
-### IN-04: G2/G3 tests assert filenames but not the baseline-vs-primary content routing
-
-**File:** `test/unit/tools/emit-regression.test.ts:184-297`
-
-**Issue:** `materializeFixtureFiles` routes the *baseline* (healthy/"before") content
-to `targetFile` (`Dep.agda`) and the *primary* (captured/"after") content to
-`sourceFile` (`Dep.broken.agda`) — the direction the false-green replay depends on
-(splice `sourceFile` over `targetFile`, reload, expect RED). Tests G2/G3 assert the
-`mutation` filenames and `entryFile` but never read back the *content* written to
-`Dep.agda` vs `Dep.broken.agda`, so a future swap of the two `writeFixtureFile`
-calls (line 194 vs 198) would leave both tests green while inverting the fixture
-semantics.
-
-**Fix:** In G2/G3 additionally assert
-`readFileSync(.../Dep.agda) === <baseline content>` and
-`readFileSync(.../Dep.broken.agda) === <primary content>` to lock the routing
-direction.
+**Issue:** G2/G3 read back `Main.agda`'s content and the `mutation` filenames, but
+never assert that `Dep.agda` holds the **baseline** ("before") content and
+`Dep.broken.agda` holds the **primary** ("after") payload. A future swap of the two
+`writeFixtureFile` calls (`:215` vs `:219`) would invert the fixture semantics while
+leaving both tests green. **Fix:** add
+`readFileSync(.../Dep.agda) === "original-broken"` and
+`readFileSync(.../Dep.broken.agda) === "healthy"` assertions to lock the routing.
 
 ## Structural Findings (fallow)
 
@@ -397,6 +237,6 @@ No structural pre-pass was provided for this review.
 
 ---
 
-_Reviewed: 2026-07-02T00:00:00Z_
+_Reviewed: 2026-07-02T17:30:12Z_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: standard (iteration 2)_
