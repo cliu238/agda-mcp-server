@@ -83,6 +83,78 @@ test("awaitGoalTerminus holds completion until the load goal-state terminus arri
   });
 });
 
+test("loadTerminusMode: strict widens the idle window until a DisplayInfo Error arrives", async () => {
+  // The Cmd_load_no_metas analog of the metas-mode test above. Strict
+  // mode has no positive success signal to await (D-02) — the ONLY
+  // thing that widens the window here is the as-yet-unseen sawLoadError,
+  // never InteractionPoints/AllGoalsWarnings (a clean strict load never
+  // emits those at all).
+  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
+    await withEnv("AGDA_MCP_LOAD_TERMINUS_IDLE_MS", "200", async () => {
+      const transport = new AgdaTransport();
+      const proc = {
+        stdin: {
+          write() {
+            // Status then highlighting arrive promptly...
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":false}}\n')), 0);
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"HighlightingInfo","payload":[]}\n')), 2);
+            // ...then a 45ms compute gap (>> the 5ms idle window) before
+            // the error. The widened window must bridge it.
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"DisplayInfo","info":{"kind":"Error","message":"type mismatch"}}\n')), 45);
+          },
+        },
+      };
+
+      const responses = await transport.sendCommand(
+        proc as unknown as ChildProcess,
+        'IOTCM "x" NonInteractive Direct (Cmd_load_no_metas)',
+        2000,
+        { loadTerminusMode: "strict" },
+      );
+
+      expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(true);
+    });
+  });
+});
+
+test("loadTerminusMode: strict resolves via the widened window when no further response ever arrives (D-02 guard)", async () => {
+  // A clean, hole-less strict load emits highlighting and then nothing
+  // further, ever — there is no positive terminus to await. This is the
+  // transport-level version of the D-02 false-RED guard: it proves the
+  // widened window itself treats silence as completion for the strict
+  // path (the full MCP-boundary matrix-entry guard is Plan 03.1-02's
+  // job).
+  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
+    await withEnv("AGDA_MCP_LOAD_TERMINUS_IDLE_MS", "150", async () => {
+      const transport = new AgdaTransport();
+      const proc = {
+        stdin: {
+          write() {
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":false}}\n')), 0);
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"HighlightingInfo","payload":[]}\n')), 2);
+            // ...and nothing further, ever.
+          },
+        },
+      };
+
+      const startedAt = Date.now();
+      const responses = await transport.sendCommand(
+        proc as unknown as ChildProcess,
+        'IOTCM "x" NonInteractive Direct (Cmd_load_no_metas)',
+        2000,
+        { loadTerminusMode: "strict" },
+      );
+
+      // Resolved only after the widened window elapsed (not the short
+      // 5ms window) — proof that silence alone, not a positive event,
+      // completed the strict load.
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
+      expect(responses.map((r) => r.kind)).toEqual(["Status", "HighlightingInfo"]);
+      expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(false);
+    });
+  });
+});
+
 test("without awaitGoalTerminus a non-load command resolves on the short idle window", async () => {
   // Same gap, but no terminus wait → resolves on the short window after
   // Status, leaving the late payload out. This is the fast path that
