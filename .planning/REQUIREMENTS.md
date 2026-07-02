@@ -33,6 +33,10 @@ A capture is **true green** only if all three predicates pass. Each catches a di
 - [x] **LOCK-02**: A regression-test emitter turns a captured bundle + fixture into a durable `vitest` test that starts RED, asserts the *correct* behavior using **ORCL-01's cold result as the expected value**, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0). The emitter refuses to lock a capture that **fails ORCL-02** (never golden-masters a postulate/flag cheat as "correct") or is **ORCL-01 INCONCLUSIVE**
 - [x] **LOCK-03**: The first real regression — the transitive-staleness / false-green defect (#64/#61) — is produced through the emitter as a from-RED test + fixture, both proving the scaffold works end-to-end and filling the highest-priority known coverage gap
 
+### Loop-Surfaced Fix (FIX) — inserted Phase 03.1
+
+- [ ] **FIX-01**: The first loop-surfaced defect is fixed end-to-end and its Phase-3 flagship regression flips RED → locked — `runLoadNoMetas` gains a fail-closed terminus/completion guard (a `Cmd_load_no_metas`-appropriate variant that catches stream truncation without false-REDding a legitimately goal-less strict load), closing the `e38f90a` metas-vs-no_metas asymmetry — proving the loop's fix→stay-locked throughput, with no regression to the metas path
+
 ### Triage / Fix Queue (QUEUE)
 
 - [ ] **QUEUE-01**: An in-repo flat-file fix queue (JSONL/markdown) is the single source of truth for captured defects, each with status (new/triaged/fixing/locked) and keyed by fingerprint; captured defects persist and flow rather than evaporating at session end
@@ -99,6 +103,7 @@ Each requirement maps to exactly one phase.
 | LOCK-01 | Phase 3 | Complete |
 | LOCK-02 | Phase 3 | Complete |
 | LOCK-03 | Phase 3 | Complete |
+| FIX-01 | Phase 03.1 | Pending |
 | QUEUE-01 | Phase 4 | Pending |
 | QUEUE-02 | Phase 4 | Pending |
 | QUEUE-03 | Phase 4 | Pending |

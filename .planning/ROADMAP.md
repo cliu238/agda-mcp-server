@@ -117,13 +117,17 @@ Plans:
 
 ### Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
-**Depends on:** Phase 3
-**Plans:** 3/3 plans complete
+**Goal**: The first loop-surfaced defect is closed end-to-end — `agda_load_no_metas` stops reporting a false `ok-complete` on a transitive-staleness truncation, and Phase 3's flagship regression flips from RED to locked — proving the capture → lock → **fix** → stay-locked loop throughput, not just its intake.
+**Depends on**: Phase 3
+**Requirements**: FIX-01
+**Success Criteria** (what must be TRUE):
 
-Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+  1. `runLoadNoMetas` (`src/agda/session-load-impl.ts`) gains a fail-closed terminus/completion guard: when the strict-load response stream ends before a terminal load event (the #65/#66 truncation mechanism), it reports a failure (a `load-incomplete-no-terminus`-equivalent), never a false `ok-complete`/`success:true` — closing the deliberate asymmetry `e38f90a` left between `runLoad` (guarded) and `runLoadNoMetas` (unguarded). (FIX-01)
+  2. The guard is a VARIANT appropriate to `Cmd_load_no_metas`, which legitimately emits no `InteractionPoints`/`AllGoalsWarnings` — the fix distinguishes "stream truncated before a terminal event" from "load legitimately completed with no goals", so it never false-REDs a genuinely-complete strict load (no naive `awaitGoalTerminus:true` copy that would break the fast path). (FIX-01)
+  3. The `issue-64-61-transitive-staleness` capture-regression matrix entry flips `status: "red"` → `status: "locked"`: the warm `agda_load_no_metas` reload under the pathological idle env now reports the cold-correct outcome, `matchesExpected(observed, expected)` becomes true, and `test/integration/mcp/capture-regression.test.ts` asserts it green (the lock closes). (FIX-01)
+  4. No regression: full suite stays green — the metas path (`agda_load`/`agda_typecheck`) is unchanged and still fails closed; small/fast strict loads still succeed; the change is minimal and confined to the load/completion-detection surface (`src/agda/session-load-impl.ts`, `src/session/command-completion.ts`, `src/session/agda-transport.ts` as needed), honoring the 500-line ceiling and command-builder SSOT. (FIX-01)
+
+**Plans**: TBD
 
 ### Phase 4: Triage / Fix Queue
 
