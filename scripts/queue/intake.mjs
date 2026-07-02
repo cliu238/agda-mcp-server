@@ -51,21 +51,33 @@ export function readQueueFile(queueJsonPath) {
  * brand-new entry when no existing element shares its `fingerprint`, or
  * replaces the existing element in place when one does (D-06's
  * graveyard guard — re-intake bumps, it never duplicates). On the
- * update path, `recurrence` is ALWAYS derived by bumping the existing
- * stored value by exactly 1 — the caller's own `entryData.recurrence`
- * is never trusted there. Every candidate is validated via
+ * update path, `recurrence` is by default derived by bumping the
+ * existing stored value by exactly 1 (re-intake of a recurring defect) —
+ * the caller's own `entryData.recurrence` is never trusted there. Pass
+ * `options.bumpRecurrence: false` for a metadata-only update that must
+ * NOT count as a recurrence (e.g. the mirror persisting a GitHub
+ * backlink, D-12) — it preserves the existing `recurrence` verbatim so
+ * a bookkeeping write never shifts QUEUE-02 priority or compounds
+ * through the dedup index. Every candidate is validated via
  * `fixQueueEntrySchema.parse` BEFORE anything is written; an invalid
  * candidate throws the zod error verbatim and the on-disk file is left
  * untouched. Returns the validated candidate entry.
  */
-export async function upsertQueueEntry(entryData, queueJsonPath) {
+export async function upsertQueueEntry(entryData, queueJsonPath, options = {}) {
+  const bumpRecurrence = options.bumpRecurrence !== false;
   const existing = readQueueFile(queueJsonPath);
   const existingIndex = existing.findIndex((entry) => entry.fingerprint === entryData.fingerprint);
 
   const candidate =
     existingIndex === -1
       ? entryData
-      : { ...existing[existingIndex], ...entryData, recurrence: existing[existingIndex].recurrence + 1 };
+      : {
+          ...existing[existingIndex],
+          ...entryData,
+          recurrence: bumpRecurrence
+            ? existing[existingIndex].recurrence + 1
+            : existing[existingIndex].recurrence,
+        };
 
   const validated = fixQueueEntrySchema.parse(candidate);
 

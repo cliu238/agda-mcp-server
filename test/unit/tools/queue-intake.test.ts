@@ -103,3 +103,25 @@ test("readQueueFile returns [] for an absent path and for malformed JSON", () =>
   writeFileSync(malformedPath, "{ not valid json", "utf8");
   expect(readQueueFile(malformedPath)).toEqual([]);
 });
+
+test("upsertQueueEntry with { bumpRecurrence: false } preserves recurrence (CR-01: metadata-only backlink write must not shift priority/dedup)", async () => {
+  const dir = makeTempDir("agda-mcp-queue-intake-");
+  const queueJsonPath = join(dir, "fix-queue.json");
+  const entry = baseEntry({ recurrence: 1 });
+  writeFileSync(queueJsonPath, JSON.stringify([entry]) + "\n", "utf8");
+
+  // Default (bump) path still bumps.
+  await upsertQueueEntry(baseEntry({ recurrence: 99, githubIssue: 7 }), queueJsonPath);
+  let onDisk = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(onDisk).toHaveLength(1);
+  expect(onDisk[0].recurrence).toBe(2);
+
+  // Metadata-only (backlink) path leaves recurrence untouched.
+  await upsertQueueEntry(baseEntry({ recurrence: 99, githubIssue: 42 }), queueJsonPath, {
+    bumpRecurrence: false,
+  });
+  onDisk = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(onDisk).toHaveLength(1);
+  expect(onDisk[0].recurrence).toBe(2);
+  expect(onDisk[0].githubIssue).toBe(42);
+});

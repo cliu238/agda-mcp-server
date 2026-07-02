@@ -236,7 +236,13 @@ export async function scriptMain(argv = process.argv.slice(2)) {
       !result.skipped &&
       (result.created === true || (result.updated === true && result.githubIssue !== entry.githubIssue))
     ) {
-      await upsertQueueEntry({ ...entry, githubIssue: result.githubIssue }, queueJsonPath);
+      // Backlink persistence is a metadata-only write — it must NOT
+      // bump recurrence (CR-01), or the first --execute would shift
+      // QUEUE-02 priority and compound through the dedup index for
+      // every eligible entry.
+      await upsertQueueEntry({ ...entry, githubIssue: result.githubIssue }, queueJsonPath, {
+        bumpRecurrence: false,
+      });
     }
 
     process.stdout.write(`${summarizeResult(entry, result)}\n`);

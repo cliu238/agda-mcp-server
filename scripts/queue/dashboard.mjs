@@ -42,7 +42,9 @@ const CLOSED_STATUSES = new Set(["locked", "rejected"]);
 /** Escapes a literal `|` so free-text fields (e.g. `title`) can never
  *  break the surrounding markdown table's column structure. */
 function escapeTableCell(value) {
-  return String(value).replaceAll("|", "\\|");
+  // Escape pipes AND collapse newlines to a space — a literal newline in
+  // a cell breaks the markdown table row this function exists to protect.
+  return String(value).replaceAll("|", "\\|").replace(/[\r\n]+/gu, " ");
 }
 
 function renderTableRow(entry) {

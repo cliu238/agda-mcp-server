@@ -44,7 +44,10 @@ export const DEFECT_KIND_WEIGHT = Object.freeze({
  * argument, never mutates either.
  */
 export function comparePriority(a, b) {
-  const bandDiff = DEFECT_KIND_WEIGHT[a.defectKind] - DEFECT_KIND_WEIGHT[b.defectKind];
+  // An unknown/unweighted defectKind sorts LAST (never NaN — a NaN
+  // comparator silently breaks Array.sort's total-order contract).
+  const weightOf = (kind) => DEFECT_KIND_WEIGHT[kind] ?? Number.MAX_SAFE_INTEGER;
+  const bandDiff = weightOf(a.defectKind) - weightOf(b.defectKind);
   if (bandDiff !== 0) {
     return bandDiff;
   }
