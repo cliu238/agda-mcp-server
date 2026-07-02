@@ -155,6 +155,12 @@ None - no external service configuration required. Requires a local `agda` binar
 - The interim `agda-unimath.json` policy file is a real, loadable artifact — Phase 5's PROC-02 has a concrete file to formalize/relocate rather than starting from nothing.
 - No blockers. The `--with-K`-override detection is intentionally narrow (v1 scope: only the one empirically-verified negated-flag pair) — a general flag-negation table is explicitly deferred to AUTO-07 (v2), consistent with STATE.md's scope-line guardrail.
 
+## Self-Check: PASSED
+
+All 8 created files verified present on disk; all 6 referenced commit
+hashes (`6341476`, `bc331b8`, `d0b42f0`, `0d5e387`, `37d8946`,
+`cad791e`) verified present in `git log --oneline --all`.
+
 ---
 *Phase: 02-the-oracle-triad-server-faithfulness-soundness-hygiene-confo*
 *Completed: 2026-07-02*
