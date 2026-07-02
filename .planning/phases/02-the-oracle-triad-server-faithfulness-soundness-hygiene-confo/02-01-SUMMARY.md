@@ -119,3 +119,8 @@ None - no external service configuration required.
 ---
 *Phase: 02-the-oracle-triad-server-faithfulness-soundness-hygiene-confo*
 *Completed: 2026-07-02*
+
+## Self-Check: PASSED
+
+- All 8 claimed files verified present on disk (6 plan files + SUMMARY.md + deferred-items.md).
+- All 3 commit hashes (`7533410`, `ab2f533`, `9907e54`) verified present in `git log --oneline --all`.
