@@ -32,7 +32,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Re-capturing the same defect routes as an `update` with an incremented recurrence count via the `fingerprintBugReport()` → prior-report index, not a new `new-bug`. (CAP-02)
   5. The oracle substrate is captured: the agent's source diff, the intended goal type at task-start, and a task-authored expected top-level signature (reusing `Cmd_goal_type`/`Cmd_infer_toplevel`). (CAP-05)
   6. A captured bundle self-replays from a cold start on a second machine, proving it is a full replay manifest (manifest + closure hash + inline fixture source) rather than a snapshot.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Capture-tool walking skeleton: full type contract, minimal manifest, CAP-02 dedup routing, emit-only agda_capture_session tool
+- [ ] 01-02-PLAN.md — CAP-01 full replay-manifest fidelity: ordered/duplicate-preserving argv, realized AGDA_DIR, build-freshness, import-closure hash + D-07 first-party source inlining
+- [ ] 01-03-PLAN.md — CAP-04 bounded ring-buffer recorder hooked at the MCP tool-call boundary, gated by AGDA_MCP_CAPTURE=1
+- [ ] 01-04-PLAN.md — CAP-05 oracle substrate: before/after source diff resolution (agent-supplied > git > unavailable), live intended goal type
+- [ ] 01-05-PLAN.md — Capstone integration: wires recorded actions + oracle substrate into the tool, dedup-index promotion script, cold-self-replay verification script (success criterion 6)
 
 ### Phase 2: The Oracle Triad (server-faithfulness + soundness hygiene + conformance)
 **Goal**: A capture can be judged "true green" only when three composable predicates agree — because a fresh `agda` re-run on identical source+flags is a sound oracle for exactly one false-green family (the server's own), and structurally blind to the two the real agda-unimath/Hopf dogfooding makes first-class (agent soundness cheats; proved-the-wrong-statement).
