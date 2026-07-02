@@ -5,7 +5,7 @@
       64,
       61
     ],
-    "status": "red",
+    "status": "locked",
     "tool": "agda_load_no_metas",
     "fixtureDir": "FixtureDeps/TransitiveStaleness",
     "entryFile": "Main.agda",
@@ -26,6 +26,29 @@
       "errorCategories": [
         "UnequalTerms"
       ]
+    }
+  },
+  {
+    "id": "guard-no-metas-clean-load-under-fault-injection",
+    "issue": [
+      64,
+      61
+    ],
+    "status": "locked",
+    "tool": "agda_load_no_metas",
+    "fixtureDir": "FixtureDeps/TransitiveStaleness",
+    "entryFile": "Main.agda",
+    "serverEnv": {
+      "AGDA_MCP_IDLE_COMPLETION_MS": "1",
+      "AGDA_MCP_POST_STATUS_IDLE_MS": "1"
+    },
+    "expected": {
+      "classification": "ok-complete",
+      "success": true,
+      "goalCount": 0,
+      "invisibleGoalCount": 0,
+      "hasHoles": false,
+      "errorCategories": []
     }
   }
 ]
