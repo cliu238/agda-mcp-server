@@ -54,12 +54,18 @@ export function configuredPostStatusIdleCompletionMs(): number {
 
 /**
  * Idle window for a metas `Cmd_load` that has not yet emitted its
- * goal-state terminus. Much larger than the normal window so it exceeds
+ * goal-state terminus, OR a strict `Cmd_load_no_metas` that has not yet
+ * emitted a load error. Much larger than the normal window so it exceeds
  * the compute gap a big module takes — after type-checking and after the
- * trailing `Status` — to normalise and serialise its goals. Applies only
- * while `awaitGoalTerminus` is set and the terminus is unseen, so a small
- * load (terminus arrives immediately) and every non-load command keep the
- * short window — no common-path latency.
+ * trailing `Status` — to normalise and serialise its goals (metas) or
+ * surface a delayed error (strict). The two paths are asymmetric: metas
+ * waits for a positive terminus (InteractionPoints + AllGoalsWarnings);
+ * strict has no positive success event to wait for at all — a clean
+ * strict load emits no trailing confirmation — so it waits out a silence
+ * instead, trusting the absence of `sawLoadError` once the window
+ * elapses. Applies only while `awaitGoalTerminus` is set and the terminus
+ * is unseen, so a small load (terminus arrives immediately) and every
+ * non-load command keep the short window — no common-path latency.
  */
 export function configuredGoalTerminusIdleMs(): number {
   return parsePositiveInt(process.env.AGDA_MCP_LOAD_TERMINUS_IDLE_MS, 2_000);

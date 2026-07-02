@@ -190,13 +190,18 @@ export async function runLoadNoMetas(
     return finalizeEarlyReturn(session, fileNotFound(absPath));
   }
 
-  // No awaitGoalTerminus / terminus guard here: Cmd_load_no_metas
-  // deliberately skips the metas display, so a clean strict load emits no
-  // InteractionPoints / AllGoalsWarnings at all (only highlighting +
-  // Status). It's outside the documented Cmd_load goal-state sequence, so
-  // "no terminus" is normal completion, not truncation.
+  // Cmd_load_no_metas now requests the strict terminus mode below — its
+  // only awaitable positive signal is failure (the same sawLoadError
+  // signal every hole/error/type-error shape reliably emits). A clean,
+  // hole-less strict load emits no trailing confirmation event at all —
+  // highlighting, then nothing further, ever, confirmed against real
+  // Agda 2.8.0 — so success is inferred from silence after the widened
+  // idle window (AGDA_MCP_LOAD_TERMINUS_IDLE_MS, the same tunable the
+  // metas path already uses) rather than from a positive event.
   const responses = await session.sendCommand(
     session.iotcmFor(absPath, command("Cmd_load_no_metas", quoted(absPath))),
+    undefined,
+    { loadTerminusMode: "strict" },
   );
   throwOnFatalProtocolStderr(responses);
   const parsed: ParsedLoadResult = parseLoadResponses(responses, { profilingEnabled: false });
