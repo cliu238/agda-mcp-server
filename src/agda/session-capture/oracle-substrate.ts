@@ -15,6 +15,11 @@ import { execFileSync } from "node:child_process";
 import { relative } from "node:path";
 
 import type { AgdaSession } from "../session.js";
+import { readAgdaSourceFile } from "../../session/safe-source-io.js";
+import { modeGoalCommand, quoted } from "../../protocol/command-builder.js";
+import { decodeGoalDisplayResponses } from "../../protocol/responses/goal-display.js";
+
+import type { OracleSubstrate } from "./artifact-types.js";
 
 /**
  * Resolve the before-source diff baseline per D-04's plan-phase
@@ -57,4 +62,62 @@ export function resolveBeforeSource(
     // than propagating a shell/process error to the caller.
     return { beforeSource: null, beforeSourceOrigin: "unavailable" };
   }
+}
+
+/**
+ * Assemble the full CAP-05 oracle substrate. Composes:
+ * - `beforeSource`/`beforeSourceOrigin` via `resolveBeforeSource`.
+ * - `afterSource`: current on-disk content of `session.currentFile`,
+ *   read via the hardened `readAgdaSourceFile` (O_NOFOLLOW +
+ *   size-capped), `null` on any read failure or when nothing is
+ *   loaded.
+ * - `expectedSignature`: pure pass-through of `input.expectedSignature`
+ *   (D-02) — never fetched live, only the agent/task can author it.
+ * - `intendedGoalType`: a live Cmd_goal_type query against the first
+ *   open goal, built via the same `command-builder.ts` invocation
+ *   shape `goal-operations.ts` already uses. Skipped entirely when
+ *   there is no loaded file or no open goals; wrapped in try/catch so
+ *   a stuck/dead Agda process never fails the capture itself.
+ */
+export async function buildOracleSubstrate(
+  session: AgdaSession,
+  input: { expectedSignature?: string; beforeSource?: string } = {},
+): Promise<OracleSubstrate> {
+  const { beforeSource, beforeSourceOrigin } = resolveBeforeSource(
+    session,
+    input.beforeSource,
+  );
+
+  let afterSource: string | null = null;
+  if (session.currentFile) {
+    try {
+      afterSource = await readAgdaSourceFile(session.currentFile);
+    } catch {
+      afterSource = null;
+    }
+  }
+
+  let intendedGoalType: string | null = null;
+  if (session.currentFile && session.goalIds.length > 0) {
+    try {
+      const goalId = session.goalIds[0];
+      const responses = await session.sendCommand(
+        session.iotcm(
+          modeGoalCommand("Cmd_goal_type", "Normalised", goalId, quoted("")),
+        ),
+      );
+      const decoded = decodeGoalDisplayResponses(responses);
+      intendedGoalType = decoded.goalType || null;
+    } catch {
+      intendedGoalType = null;
+    }
+  }
+
+  return {
+    beforeSource,
+    beforeSourceOrigin,
+    afterSource,
+    intendedGoalType,
+    expectedSignature: input.expectedSignature ?? null,
+  };
 }

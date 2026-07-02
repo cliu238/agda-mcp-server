@@ -14,7 +14,17 @@ import { join } from "node:path";
 import { test, expect, afterEach } from "vitest";
 
 import { AgdaSession } from "../../../../src/agda-process.js";
-import { resolveBeforeSource } from "../../../../src/agda/session-capture/oracle-substrate.js";
+import {
+  resolveBeforeSource,
+  buildOracleSubstrate,
+} from "../../../../src/agda/session-capture/oracle-substrate.js";
+import { TEST_FIXTURE_PROJECT_ROOT } from "../../../helpers/repo-root.js";
+import { detectAgdaVersion } from "../../../helpers/agda-version.js";
+
+const agdaVersion = detectAgdaVersion();
+const agdaAvailable = agdaVersion !== undefined;
+const it =
+  agdaAvailable && process.env.RUN_AGDA_INTEGRATION === "1" ? test : test.skip;
 
 let tempDirs: string[] = [];
 
@@ -119,4 +129,67 @@ test("resolveBeforeSource imports execFileSync (never execSync) from node:child_
     /import\s*\{\s*execFileSync\s*\}\s*from\s*"node:child_process"/u,
   );
   expect(source).not.toMatch(/\bexecSync\b/u);
+});
+
+// ── Task 2: buildOracleSubstrate ─────────────────────────────────
+
+test("buildOracleSubstrate: no loaded file, still returns a full substrate without a live command attempt", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  try {
+    const substrate = await buildOracleSubstrate(session, {
+      expectedSignature: "Nat -> Nat",
+    });
+    expect(substrate).toEqual({
+      intendedGoalType: null,
+      expectedSignature: "Nat -> Nat",
+      beforeSource: null,
+      beforeSourceOrigin: "unavailable",
+      afterSource: null,
+    });
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("buildOracleSubstrate: afterSource reflects current on-disk content when a file is loaded", async () => {
+  const dir = makeTempDir();
+  const filePath = join(dir, "OnDisk.agda");
+  writeFileSync(filePath, "module OnDisk where\n");
+
+  const session = new AgdaSession(dir);
+  session.currentFile = filePath;
+  try {
+    const substrate = await buildOracleSubstrate(session, {});
+    expect(substrate.afterSource).toBe("module OnDisk where\n");
+    // No goals loaded (goalIds stays empty without a real load()), so
+    // no live Cmd_goal_type attempt is made — intendedGoalType stays null.
+    expect(substrate.intendedGoalType).toBeNull();
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("buildOracleSubstrate: afterSource is null when nothing is loaded", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  try {
+    const substrate = await buildOracleSubstrate(session, {});
+    expect(substrate.afterSource).toBeNull();
+  } finally {
+    await session.destroy();
+  }
+});
+
+it("buildOracleSubstrate: intendedGoalType is a non-empty string for a real loaded file with an open goal", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  try {
+    const loadResult = await session.load("AbstractHoleMultiple.agda");
+    expect(loadResult.goals.length).toBeGreaterThan(0);
+    expect(session.goalIds.length).toBeGreaterThan(0);
+
+    const substrate = await buildOracleSubstrate(session, {});
+    expect(typeof substrate.intendedGoalType).toBe("string");
+    expect(substrate.intendedGoalType).not.toBe("");
+  } finally {
+    await session.destroy();
+  }
 });
