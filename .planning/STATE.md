@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 context gathered
-last_updated: "2026-07-02T07:37:24.142Z"
-last_activity: 2026-07-02 -- Phase 02 planning complete
+last_updated: "2026-07-02T07:39:53.897Z"
+last_activity: 2026-07-02 -- Phase 02 execution started
 progress:
   total_phases: 6
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-01)
 
 **Core value:** Every real proof session reliably converts into a stronger server — the closed loop (use it → surface a defect → capture it → fix and lock it with a regression test → use it again) must work reproducibly by hand.
-**Current focus:** Phase 01 — capture-foundation
+**Current focus:** Phase 02 — The Oracle Triad (server-faithfulness + soundness hygiene + conformance)
 
 ## Current Position
 
-Phase: 01 (capture-foundation) — EXECUTING
+Phase: 02 (The Oracle Triad (server-faithfulness + soundness hygiene + conformance)) — EXECUTING
 Plan: 1 of 5
-Status: Ready to execute
-Last activity: 2026-07-02 -- Phase 02 planning complete
+Status: Executing Phase 02
+Last activity: 2026-07-02 -- Phase 02 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

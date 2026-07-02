@@ -72,8 +72,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — ORCL-01 foundation: WR-08 replay-fidelity fix + shared disposable cold-Agda-session lifecycle + 7 environment probes
-- [ ] 02-02-PLAN.md — ORCL-02 soundness-hygiene scan: policy file, widened pragma/FFI scan vocabulary, transitive closure walk, whitelist-diff
+- [x] 02-01-PLAN.md — ORCL-01 foundation: WR-08 replay-fidelity fix + shared disposable cold-Agda-session lifecycle + 7 environment probes
+- [x] 02-02-PLAN.md — ORCL-02 soundness-hygiene scan: policy file, widened pragma/FFI scan vocabulary, transitive closure walk, whitelist-diff
 
 **Wave 2** *(blocked on 02-01)*
 
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
-| 2. Cold-Compiler Ground-Truth Oracle | 0/5 | Not started | - |
+| 2. Cold-Compiler Ground-Truth Oracle | 2/5 | In Progress|  |
 | 3. Regression Lock Pipeline | 0/TBD | Not started | - |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
