@@ -99,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 — Phase 2 (Oracle Triad) complete: ORCL-01/02/03 shipped as `scripts/oracle/*.mjs` (server-faithfulness differential + soundness-hygiene scan + conformance proxy); a capture is "true green" only when ORCL-01 passes AND ORCL-02 is clean, ORCL-03 advisory. Phase 3 (Regression Lock Pipeline) is next.*
+*Last updated: 2026-07-02 — Phase 3 (Regression Lock Pipeline) complete: the emitter (`scripts/emit-regression.mjs`) turns a real capture + ORCL-01 cold result into a durable vitest regression asserting the normalized envelope, refusing to lock ORCL-02-failing/INCONCLUSIVE captures. Proven end-to-end on the #64/#61 transitive-staleness false-green — captured live on the `agda_load_no_metas` path (the `e38f90a` fix only covered the metas path), landed as the first matrix entry (`status: "red"`), src/ left untouched. The actual `runLoadNoMetas` transport fix is Phase 03.1. Loop ②'s use→surface→capture→lock chain now works end-to-end. (Prior: Phase 2 shipped the ORCL-01/02/03 oracle triad.)*
