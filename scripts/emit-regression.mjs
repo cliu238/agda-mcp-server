@@ -393,6 +393,10 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     return;
   }
 
+  // Hoisted so the outer catch can roll back any fixture files already
+  // materialized when a later step throws (WR-01). Empty until step (b),
+  // so rollback is a no-op for earlier throws (e.g. runOracle failing).
+  let writtenFiles = [];
   try {
     const baselinePath = flagValue(argv, "--baseline");
     const id = flagValue(argv, "--id");
@@ -425,12 +429,14 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     const baselineArtifact = baselinePath ? JSON.parse(readFileSync(baselinePath, "utf8")) : undefined;
 
     // (b) Materialize fixture files + derive bare entryFile/mutation.
-    const { mutation, entryFile, writtenFiles } = materializeFixtureFiles({
+    const materialized = materializeFixtureFiles({
       primaryArtifact,
       baselineArtifact,
       fixtureDir,
       repoRoot: SERVER_REPO_ROOT,
     });
+    writtenFiles = materialized.writtenFiles;
+    const { mutation, entryFile } = materialized;
 
     // (c) Compose + validate the matrix entry.
     const entry = composeEntry({ id, issue, tool, fixtureDir, entryFile, mutation, serverEnv, verdict });
@@ -466,6 +472,12 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     await writeMatrixEntry(entry, matrixJsonPath);
     process.stdout.write(`Locked ${entry.id} into ${matrixJsonPath}\n`);
   } catch (err) {
+    // Any throw after step (b) leaves freshly-written fixtures in the
+    // tracked tree — roll them back so a failed emit never orphans files
+    // ready to be accidentally git-add-ed (WR-01). Reachable throw sites:
+    // composeEntry zod/coldTuple failure, replay failure, writeMatrixEntry
+    // duplicate-id rejection.
+    rollbackWrittenFiles(writtenFiles);
     process.stderr.write(`emit-regression failed: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   }
