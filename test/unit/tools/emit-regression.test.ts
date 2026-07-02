@@ -10,7 +10,7 @@
 // spawn required for any test in this file.
 
 import { afterEach, expect, test } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -152,6 +152,42 @@ test("materializeFixtureFiles: a deeply '..'-escaping inlinedFirstPartySources p
   );
   expect(existsSync(join(repoRoot, "PWNED.agda"))).toBe(false);
   expect(writtenFiles).toEqual([join(repoRoot, "test/fixtures/agda/Good.agda")]);
+});
+
+// Test F2 (CR-01 regression): an escaping path that resolves INSIDE the
+// repo but OUTSIDE test/fixtures/agda/ — the reachable arbitrary-in-repo
+// overwrite Test F's over-shooting path never exercised. Must be skipped.
+test("materializeFixtureFiles: a '..'-path resolving inside the repo but outside test/fixtures/agda/ is skipped, leaving the in-repo target untouched", () => {
+  const repoRoot = makeTempDir("agda-mcp-emit-regression-inrepo-escape-");
+  const targetPath = join(repoRoot, "src/index.ts");
+  mkdirSync(join(repoRoot, "src"), { recursive: true });
+  writeFileSync(targetPath, "// SENTINEL — must not be overwritten\n", "utf8");
+
+  const primaryArtifact = {
+    manifest: {
+      inlinedFirstPartySources: [
+        { path: "Main.agda", content: "module FixtureDeps.TransitiveStaleness.Main where\n" },
+        // From test/fixtures/agda/FixtureDeps/TransitiveStaleness this
+        // resolves to <repoRoot>/src/index.ts — inside repoRoot, outside
+        // the fixtures tree. The old repoRoot-scoped sandbox let this
+        // through; the fixtureBase-scoped sandbox rejects it.
+        { path: "../../../../../src/index.ts", content: "PWNED via capture artifact\n" },
+      ],
+    },
+    recordedActions: [],
+  };
+
+  const { writtenFiles } = materializeFixtureFiles({
+    primaryArtifact,
+    baselineArtifact: undefined,
+    fixtureDir: "FixtureDeps/TransitiveStaleness",
+    repoRoot,
+  });
+
+  expect(readFileSync(targetPath, "utf8")).toBe("// SENTINEL — must not be overwritten\n");
+  expect(writtenFiles).toEqual([
+    join(repoRoot, "test/fixtures/agda/FixtureDeps/TransitiveStaleness/Main.agda"),
+  ]);
 });
 
 // Test G

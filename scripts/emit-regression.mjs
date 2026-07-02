@@ -115,9 +115,19 @@ function insertBrokenSuffix(barePath) {
  * write this function performs.
  */
 function writeFixtureFile(repoRoot, fixtureDir, barePath, content) {
+  // The sandbox root MUST equal the intended write base
+  // (test/fixtures/agda/), not the whole repoRoot — otherwise a
+  // `..`-laden artifact-controlled path escapes the fixtures tree while
+  // staying inside the repo and overwrites arbitrary tracked files
+  // (CR-01). Contain the untrusted fixtureDir within test/fixtures/agda
+  // first, then contain barePath within that fixture base. Mirrors the
+  // sibling oracle module's correct pattern (sandbox root == write base,
+  // orcl-01-differential.mjs).
+  const fixturesRoot = join(repoRoot, "test/fixtures/agda");
   let dest;
   try {
-    dest = resolveFileWithinRoot(repoRoot, join("test/fixtures/agda", fixtureDir, barePath));
+    const fixtureBase = resolveFileWithinRoot(fixturesRoot, fixtureDir);
+    dest = resolveFileWithinRoot(fixtureBase, barePath);
   } catch (err) {
     if (err instanceof PathSandboxError) {
       return null;
