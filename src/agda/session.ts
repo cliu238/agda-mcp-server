@@ -92,6 +92,20 @@ export class AgdaSession {
   lastClassification: string | null = null;
   lastLoadedAt: number | null = null;
   lastInvisibleGoalCount = 0;
+  /**
+   * The pre-dedup, ordered `Cmd_load` flag list from the most recent
+   * `load()` call: project-file flags, then env-var flags (via
+   * `effectiveProjectFlags`), then per-call `commandLineOptions`, in
+   * that order, with duplicates preserved. This is intentionally
+   * NOT the same as what actually reaches `Cmd_load` — that value is
+   * deduplicated (last-wins) by `mergeCommandLineOptions`. This field
+   * exists solely so `session-capture/manifest-builder.ts` can stamp
+   * a replay manifest's `mergedArgv` from the true, undeduped argv
+   * (CAP-01 / D-04: server-stamped from the live session, never
+   * re-derived or caller-supplied). Same "non-private, mutated by
+   * sibling helpers" convention as the load-history fields above.
+   */
+  lastDispatchedLoadArgv: string[] = [];
   // The fields below are intentionally non-`private`: they are
   // mutated by free helpers in `session-process-lifecycle.ts` and
   // `session-load-impl.ts`, same module-internal convention used for
@@ -276,6 +290,13 @@ export class AgdaSession {
     options?: { profileOptions?: string[]; commandLineOptions?: string[] },
   ): Promise<LoadResult> {
     const projectConfig = loadProjectConfig(this.repoRoot);
+    // Undeduped, ordered snapshot for the capture manifest (CAP-01) —
+    // captured BEFORE mergeCommandLineOptions dedups below, and does
+    // not influence what is actually sent to Cmd_load.
+    this.lastDispatchedLoadArgv = [
+      ...effectiveProjectFlags(projectConfig),
+      ...(options?.commandLineOptions ?? []),
+    ];
     const merged = mergeCommandLineOptions(
       effectiveProjectFlags(projectConfig),
       options?.commandLineOptions,
