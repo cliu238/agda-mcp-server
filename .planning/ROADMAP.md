@@ -100,7 +100,20 @@ Plans:
   3. The regression-test emitter turns a captured bundle + fixture into a durable vitest test that starts RED, asserts the *correct* behavior using ORCL-01's cold result as the expected value, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0); it refuses to lock a capture that fails ORCL-02 or is ORCL-01 INCONCLUSIVE (never golden-masters a cheat). (LOCK-02)
   4. The #64/#61 transitive-staleness / false-green defect is produced through the emitter as a from-RED test + fixture that goes green only when the defect is fixed — proving the scaffold works end-to-end and filling the highest-priority known coverage gap. (LOCK-03)
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Foundation: close the Phase-1 capture-staging collision (BLOCKER) + define the capture-regression matrix contract (D-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Shared replay mechanics helper + the regression-test emitter (refusal gate, baseline-diff materialization, RED self-check, CLI)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — Generic capture-regression replay runner + the #64/#61 flagship end-to-end proof (real capture -> emit -> RED)
 
 ### Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (INSERTED)
 
@@ -151,6 +164,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
-| 3. Regression Lock Pipeline | 0/TBD | Not started | - |
+| 3. Regression Lock Pipeline | 0/3 | Not started | - |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
