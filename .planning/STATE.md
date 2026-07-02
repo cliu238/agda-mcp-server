@@ -4,10 +4,10 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-07-02T05:23:33.174Z"
-last_activity: 2026-07-02 -- Phase 01 execution started
+last_updated: "2026-07-02T05:40:27.617Z"
+last_activity: 2026-07-02 -- Phase 1 planning complete
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 0
   total_plans: 7
   completed_plans: 5
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-07-01)
 
 Phase: 01 (capture-foundation) — EXECUTING
 Plan: 1 of 5
-Status: Executing Phase 01
-Last activity: 2026-07-02 -- Phase 01 execution started
+Status: Ready to execute
+Last activity: 2026-07-02 -- Phase 1 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,6 +54,10 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 03.1 inserted after Phase 3: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (sequenced by 03-CONTEXT D-09) (URGENT)
 
 ### Decisions
 
