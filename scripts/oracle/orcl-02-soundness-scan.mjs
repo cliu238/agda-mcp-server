@@ -18,10 +18,16 @@
 // `.js` specifiers against the underlying `.ts` sources) rather than
 // duplicated, per this project's SSOT convention.
 
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 
 import { loadJsonData } from "../../src/json-data.js";
 import { extractPostulateSites, parseOptionsPragmas } from "../../src/agda/source-parsers.js";
+import { buildImportGraph, computeImpact } from "../../src/agda/import-graph.js";
+import { parseAgdaLibraryName } from "../../src/agda/library-registration.js";
+import { parseAgdaVersion } from "../../src/agda/agda-version.js";
+import { isMainModule } from "../test-with-sentinel.mjs";
 
 // ── Policy loading ──────────────────────────────────────────────────
 
@@ -182,4 +188,272 @@ export function scanPragmaVocabulary(source) {
  */
 export function scanOptionsFlags(source) {
   return parseOptionsPragmas(source);
+}
+
+// ── Transitive closure walk ─────────────────────────────────────────
+
+/**
+ * Every file in `filePath`'s full transitive dependency closure
+ * (direct + transitive dependencies) plus the file itself, as
+ * project-root-relative paths that exist on disk. Mirrors
+ * `agda_postulate_closure`'s exact composition
+ * (src/tools/agent-ux/project-tools.ts) — buildImportGraph +
+ * computeImpact do the real work (full BFS, already correct, not
+ * rewritten here); this just assembles the dep set the same way.
+ * T-02-02-02: never accepts an externally-supplied absolute path
+ * beyond what the graph itself resolves.
+ */
+export function walkClosureFiles(repoRoot, filePath, agdaVersion) {
+  const graph = buildImportGraph(repoRoot, agdaVersion);
+  const absPath = isAbsolute(filePath) ? filePath : resolve(repoRoot, filePath);
+  const relPath = relative(repoRoot, absPath);
+  const impact = computeImpact(graph, repoRoot, absPath);
+
+  const deps = new Set([relPath]);
+  if (impact) {
+    for (const dep of impact.directDependencies) deps.add(dep);
+    for (const dep of impact.transitiveDependencies) deps.add(dep);
+  }
+
+  return [...deps].filter((dep) => existsSync(resolve(repoRoot, dep))).sort();
+}
+
+/** Line number (1-based) of the first line containing `flag`, or 1 if not found. */
+function findFlagLine(source, flag) {
+  const lines = source.split(/\r?\n/u);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(flag)) return i + 1;
+  }
+  return 1;
+}
+
+/**
+ * Scan `filePath`'s full transitive closure for the pragma/FFI/hole
+ * vocabulary plus a project-required-flag override. `policy` (or
+ * `null`) gates the ONE concrete override shape this v1 scan detects:
+ * a file declaring `--with-K` while the project policy requires
+ * `--without-K` (RESEARCH.md's empirically-verified LibBase/
+ * WithKOverride pair — Agda's own co-infective option checking does
+ * NOT catch this direction). Detecting a silently-DROPPED required
+ * flag, or a general negated-flag table, is AUTO-07 (v2) — out of
+ * scope here per RESEARCH.md Open Question 3.
+ *
+ * Returns `{ file, line, kind, detail }[]` tagged with each finding's
+ * source-relative `file` path.
+ */
+export function scanClosure(repoRoot, filePath, agdaVersion, policy) {
+  const files = walkClosureFiles(repoRoot, filePath, agdaVersion);
+  const findings = [];
+
+  for (const dep of files) {
+    const abs = resolve(repoRoot, dep);
+    // Per-file try/catch so an unreadable dependency (permissions /
+    // deleted between existsSync and read) doesn't abort the closure
+    // scan, matching agda_postulate_closure's own resilience.
+    let source;
+    try {
+      source = readFileSync(abs, "utf8");
+    } catch {
+      continue;
+    }
+
+    for (const finding of scanPragmaVocabulary(source)) {
+      findings.push({ file: dep, ...finding });
+    }
+
+    if (policy && policy.requiredFlags.includes("--without-K")) {
+      const flags = scanOptionsFlags(source);
+      if (flags.includes("--with-K")) {
+        findings.push({
+          file: dep,
+          line: findFlagLine(source, "--with-K"),
+          kind: "with-k-override",
+          detail: "--with-K overrides this project's required --without-K",
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+// ── Whitelist diff (D-08 gate) ──────────────────────────────────────
+
+/**
+ * Mark each finding `sanctioned: true | false` against `policy` (or
+ * unconditionally `false` when `policy` is `null` — D-03: the caller
+ * still routes to `no-policy`, never a silent pass, regardless of this
+ * field). Only two finding kinds are EVER eligible for `sanctioned:
+ * true`:
+ *   - `postulate`: sanctioned iff its declaration name (case-
+ *     sensitive, carried in `detail`) is in `policy.sanctionedAxioms`.
+ *   - `residual-hole`: sanctioned iff `warmClassification` is exactly
+ *     `"ok-with-holes"` — the legitimate in-progress scaffold-hole
+ *     workflow (D-08). Any other classification, including
+ *     `"ok-complete"` (claimed-complete) or `null`/absent, does NOT
+ *     excuse a residual hole — a hole in a capture claiming
+ *     completeness is a genuine cheat signal.
+ * Every OTHER kind (terminating / no-positivity-check /
+ * no-universe-check / prim-trust-me / ffi-compile / with-k-override)
+ * is ALWAYS `sanctioned: false` — these are never legitimate whitelist
+ * entries and are never excused by an in-progress classification.
+ */
+export function diffAgainstWhitelist(findings, policy, warmClassification) {
+  return findings.map((finding) => {
+    if (policy === null) {
+      return { ...finding, sanctioned: false };
+    }
+    if (finding.kind === "postulate") {
+      return { ...finding, sanctioned: policy.sanctionedAxioms.includes(finding.detail) };
+    }
+    if (finding.kind === "residual-hole") {
+      return { ...finding, sanctioned: warmClassification === "ok-with-holes" };
+    }
+    return { ...finding, sanctioned: false };
+  });
+}
+
+// ── Policy-key resolution ───────────────────────────────────────────
+
+/**
+ * Default policyKey: the `name:` field of the FIRST readable
+ * `.agda-lib` file directly under `repoRoot`, or `null` if none is
+ * found. This is a best-effort filesystem probe, not the replayed
+ * library registration (T-02-02-02's mitigation is about file reads,
+ * not about reproducing ORCL-01's non-deterministic live registration
+ * — see 02-CONTEXT.md's canonical-refs note on library-registration.ts).
+ */
+function resolveDefaultPolicyKey(repoRoot) {
+  if (!repoRoot || !existsSync(repoRoot)) return null;
+  let entries;
+  try {
+    entries = readdirSync(repoRoot, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".agda-lib")) continue;
+    try {
+      const contents = readFileSync(resolve(repoRoot, entry.name), "utf8");
+      const name = parseAgdaLibraryName(contents);
+      if (name) return name;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/** Parse a manifest-recorded Agda version string, defaulting to `undefined` (never throws). */
+function safeParseAgdaVersion(raw) {
+  if (typeof raw !== "string") return undefined;
+  try {
+    return parseAgdaVersion(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve the last load-family (`agda_load`/`agda_typecheck`-family)
+ * recorded action, extracting BOTH the scan target file and the warm
+ * completeness classification (D-08's cross-predicate signal) from the
+ * SAME scan, mirroring the approach Plan 02-03 also uses.
+ */
+function findLastLoadFamilyAction(recordedActions) {
+  for (let i = recordedActions.length - 1; i >= 0; i--) {
+    const action = recordedActions[i];
+    if (typeof action?.tool === "string" && /^agda_(load|typecheck)/.test(action.tool)) {
+      return {
+        targetFile: action.normalizedResponse?.data?.file ?? null,
+        warmClassification: action.normalizedResponse?.data?.classification ?? null,
+      };
+    }
+  }
+  return { targetFile: null, warmClassification: null };
+}
+
+// ── judgeOrcl02: the standalone-runnable ORCL-02 predicate ─────────
+
+/**
+ * Judge a staged CaptureArtifact against ORCL-02. Reads the artifact,
+ * resolves the last load-family recorded action's target file + warm
+ * classification, walks the target's full transitive closure for the
+ * pragma/FFI/hole vocabulary (+ the --with-K-override check), diffs
+ * against a per-project sanctioned-axiom whitelist, and composes the
+ * final outcome:
+ *   - `no-target`: no load-family recorded action to determine a scan
+ *     target. Nothing to scan is not evidence of a cheat — the CLI
+ *     treats this the same as `clean` for exit-code purposes, but the
+ *     JSON output preserves the distinction.
+ *   - `no-policy`: no policy resolved AND at least one finding exists
+ *     (D-03) — carries ALL findings for human review, never a silent
+ *     pass and never a blanket fail.
+ *   - `clean`: every finding (if any) is sanctioned, or there are no
+ *     findings at all.
+ *   - `cheat-flagged`: at least one unsanctioned finding exists AND a
+ *     policy was found.
+ */
+export async function judgeOrcl02(artifactPath, options = {}) {
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  const repoRoot = artifact?.manifest?.repoRoot;
+  const agdaVersion = safeParseAgdaVersion(artifact?.manifest?.agdaVersion);
+  const recordedActions = Array.isArray(artifact?.recordedActions) ? artifact.recordedActions : [];
+
+  const { targetFile, warmClassification } = findLastLoadFamilyAction(recordedActions);
+  if (!targetFile) {
+    return { kind: "no-target", reason: "no load-family recorded action to determine a scan target" };
+  }
+
+  const policyKey = options.policyKey !== undefined ? options.policyKey : resolveDefaultPolicyKey(repoRoot);
+  const policy = policyKey === null ? null : loadOraclePolicy(policyKey);
+
+  const rawFindings = scanClosure(repoRoot, targetFile, agdaVersion, policy);
+  const findings = diffAgainstWhitelist(rawFindings, policy, warmClassification);
+
+  if (policy === null && findings.length > 0) {
+    return { kind: "no-policy", findings };
+  }
+  if (findings.every((finding) => finding.sanctioned)) {
+    return { kind: "clean", findings };
+  }
+  return { kind: "cheat-flagged", findings };
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────
+
+const EXIT_CODE_BY_KIND = {
+  clean: 0,
+  "no-target": 0,
+  "cheat-flagged": 1,
+  "no-policy": 2,
+};
+
+export async function scriptMain(argv = process.argv.slice(2)) {
+  const artifactPath = argv[0];
+  if (!artifactPath) {
+    process.stderr.write(
+      "Usage: node scripts/oracle/orcl-02-soundness-scan.mjs <path-to-artifact.json> [--policy <key>]\n",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const policyFlagIndex = argv.indexOf("--policy");
+  const policyKey = policyFlagIndex !== -1 ? argv[policyFlagIndex + 1] : undefined;
+
+  try {
+    const outcome = await judgeOrcl02(artifactPath, policyKey !== undefined ? { policyKey } : {});
+    process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+    process.exitCode = EXIT_CODE_BY_KIND[outcome.kind] ?? 0;
+  } catch (err) {
+    process.stderr.write(
+      `orcl-02-soundness-scan failed: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exitCode = 1;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
+  await scriptMain();
 }
