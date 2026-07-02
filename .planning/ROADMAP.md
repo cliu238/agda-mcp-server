@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: The Oracle Triad (server-faithfulness + soundness hygiene + conformance)** - A fresh `agda --interaction-json` differential detects the server false-green class (#64/#61/#65/#66); a cheap soundness scan + advisory conformance proxy cover the cheats the differential cannot see (completed 2026-07-02)
 - [x] **Phase 3: Regression Lock Pipeline** - A captured defect becomes a minimal repro + a from-RED vitest regression, proven end-to-end on #64/#61 (completed 2026-07-02)
 - [x] **Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green** (INSERTED) - `runLoadNoMetas` gains a strict terminus guard; the flagship regression flips RED → locked under real Agda, closing the loop's first fix→stay-locked cycle (completed 2026-07-02)
-- [ ] **Phase 4: Triage / Fix Queue** - Captured defects persist and flow through a durable in-repo queue with status, prioritization, and optional GitHub mirror
+- [x] **Phase 4: Triage / Fix Queue** - Captured defects persist and flow through a durable in-repo queue with status, prioritization, and optional GitHub mirror (completed 2026-07-02)
 - [ ] **Phase 5: Dogfooding Orchestration + Fuel** - Point an agent at pinned real corpora and harvest defects reproducibly over MCP stdio
 
 ## Phase Details
@@ -167,7 +167,7 @@ Plans:
 
 **Wave 3** *(blocked on 04-01, 04-03 completion)*
 
-- [ ] 04-05-PLAN.md — QUEUE-02 priority scoring + D-03 regenerated dashboard (close-rate + WIP-limit advisory)
+- [x] 04-05-PLAN.md — QUEUE-02 priority scoring + D-03 regenerated dashboard (close-rate + WIP-limit advisory)
 
 ### Phase 5: Dogfooding Orchestration + Fuel
 
@@ -194,5 +194,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
-| 4. Triage / Fix Queue | 4/5 | In Progress|  |
+| 4. Triage / Fix Queue | 5/5 | Complete   | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
