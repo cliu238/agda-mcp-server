@@ -127,7 +127,16 @@ Plans:
   3. The `issue-64-61-transitive-staleness` capture-regression matrix entry flips `status: "red"` → `status: "locked"`: the warm `agda_load_no_metas` reload under the pathological idle env now reports the cold-correct outcome, `matchesExpected(observed, expected)` becomes true, and `test/integration/mcp/capture-regression.test.ts` asserts it green (the lock closes). (FIX-01)
   4. No regression: full suite stays green — the metas path (`agda_load`/`agda_typecheck`) is unchanged and still fails closed; small/fast strict loads still succeed; the change is minimal and confined to the load/completion-detection surface (`src/agda/session-load-impl.ts`, `src/session/command-completion.ts`, `src/session/agda-transport.ts` as needed), honoring the 500-line ceiling and command-builder SSOT. (FIX-01)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03.1-01-PLAN.md — The fix: generalize the transport's terminus tracking (extract to load-terminus-tracker.ts to honor the 500-line ceiling), thread loadTerminusMode through session.ts/session-command-dispatch.ts, flip runLoadNoMetas to strict mode
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03.1-02-PLAN.md — The proof: flip the flagship lock to green, add the D-05 goal-less-load guard entry, and run the full no-regression sweep against real Agda
 
 ### Phase 4: Triage / Fix Queue
 
