@@ -19,9 +19,10 @@
 // duplicated, per this project's SSOT convention.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { z } from "zod";
 
+import { PathSandboxError, resolveFileWithinRoot } from "../../src/repo-root.js";
 import { loadJsonData } from "../../src/json-data.js";
 import { extractPostulateSites, parseOptionsPragmas } from "../../src/agda/source-parsers.js";
 import { buildImportGraph, computeImpact } from "../../src/agda/import-graph.js";
@@ -220,12 +221,28 @@ export function scanOptionsFlags(source) {
  * (src/tools/agent-ux/project-tools.ts) — buildImportGraph +
  * computeImpact do the real work (full BFS, already correct, not
  * rewritten here); this just assembles the dep set the same way.
- * T-02-02-02: never accepts an externally-supplied absolute path
- * beyond what the graph itself resolves.
+ *
+ * CR-02: `filePath` originates from a capture artifact's `data.file`
+ * (untrusted — the oracle judges captures that may be adversarial or
+ * malformed). The target is contained within `repoRoot` via
+ * `resolveFileWithinRoot` before it ever seeds the dependency set, and
+ * every retained dep is re-checked, so an absolute or `..`-escaping
+ * target yields an empty closure (nothing safely scannable) rather than
+ * seeding a path outside the root — mirroring how ORCL-01
+ * (runColdLoadAndDiff) and ORCL-03 (judgeOrcl03) gate their own target.
+ * This makes the T-02-02-02 guarantee real: never surfaces a path
+ * outside `repoRoot`.
  */
 export function walkClosureFiles(repoRoot, filePath, agdaVersion) {
   const graph = buildImportGraph(repoRoot, agdaVersion);
-  const absPath = isAbsolute(filePath) ? filePath : resolve(repoRoot, filePath);
+
+  let absPath;
+  try {
+    absPath = resolveFileWithinRoot(repoRoot, filePath);
+  } catch (err) {
+    if (err instanceof PathSandboxError) return [];
+    throw err;
+  }
   const relPath = relative(repoRoot, absPath);
   const impact = computeImpact(graph, repoRoot, absPath);
 
@@ -235,7 +252,22 @@ export function walkClosureFiles(repoRoot, filePath, agdaVersion) {
     for (const dep of impact.transitiveDependencies) deps.add(dep);
   }
 
-  return [...deps].filter((dep) => existsSync(resolve(repoRoot, dep))).sort();
+  // Every retained dep must exist AND resolve within repoRoot. The seed
+  // is contained above and graph-derived deps are root-relative by
+  // construction, but re-checking each keeps a future graph change from
+  // silently reintroducing an escape.
+  return [...deps]
+    .filter((dep) => {
+      let depAbs;
+      try {
+        depAbs = resolveFileWithinRoot(repoRoot, dep);
+      } catch (err) {
+        if (err instanceof PathSandboxError) return false;
+        throw err;
+      }
+      return existsSync(depAbs);
+    })
+    .sort();
 }
 
 /** Line number (1-based) of the first line containing `flag`, or 1 if not found. */
@@ -262,11 +294,33 @@ function findFlagLine(source, flag) {
  * source-relative `file` path.
  */
 export function scanClosure(repoRoot, filePath, agdaVersion, policy) {
+  // CR-02: contain the artifact-controlled target before walking or
+  // reading anything, mirroring ORCL-01/ORCL-03. An escaping target
+  // means nothing is safely scannable — return no findings rather than
+  // reading a file outside repoRoot and leaking its lines into the
+  // verdict. `walkClosureFiles` re-applies the same containment, so this
+  // is defense-in-depth, not the sole guard.
+  try {
+    resolveFileWithinRoot(repoRoot, filePath);
+  } catch (err) {
+    if (err instanceof PathSandboxError) return [];
+    throw err;
+  }
+
   const files = walkClosureFiles(repoRoot, filePath, agdaVersion);
   const findings = [];
 
   for (const dep of files) {
-    const abs = resolve(repoRoot, dep);
+    // Never resolve/read a dep outside repoRoot (walkClosureFiles
+    // already filters these, but re-containing here keeps scanClosure
+    // safe on its own terms).
+    let abs;
+    try {
+      abs = resolveFileWithinRoot(repoRoot, dep);
+    } catch (err) {
+      if (err instanceof PathSandboxError) continue;
+      throw err;
+    }
     // Per-file try/catch so an unreadable dependency (permissions /
     // deleted between existsSync and read) doesn't abort the closure
     // scan, matching agda_postulate_closure's own resilience.

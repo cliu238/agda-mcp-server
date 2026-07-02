@@ -217,6 +217,18 @@ describe("walkClosureFiles + scanClosure", () => {
     expect(postulateFinding).toBeDefined();
     expect(postulateFinding.file).toBe("Upstream.agda");
   });
+
+  test("CR-02: an absolute or ..-escaping target file is contained, never read from outside repoRoot", () => {
+    const dir = mkdtempSync(join(tmpdir(), "orcl-02-escape-"));
+    // A capture whose data.file is an absolute path outside the repo
+    // root: the vulnerable code seeded the closure with it and read it;
+    // now the closure is empty (nothing safely scannable).
+    expect(walkClosureFiles(dir, "/etc/hosts", undefined)).toEqual([]);
+    expect(scanClosure(dir, "/etc/hosts", undefined, null)).toEqual([]);
+    // A `..`-climbing relative target is likewise contained.
+    expect(walkClosureFiles(dir, "../../../../../../etc/hosts", undefined)).toEqual([]);
+    expect(scanClosure(dir, "../../../../../../etc/hosts", undefined, null)).toEqual([]);
+  });
 });
 
 // ── diffAgainstWhitelist: sanctioned-axiom / D-08 residual-hole gate ──
