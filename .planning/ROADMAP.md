@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Capture Foundation** - One-verb, emit-only capture of a live session into a self-replaying artifact (the foundational substrate) (completed 2026-07-02)
 - [x] **Phase 2: The Oracle Triad (server-faithfulness + soundness hygiene + conformance)** - A fresh `agda --interaction-json` differential detects the server false-green class (#64/#61/#65/#66); a cheap soundness scan + advisory conformance proxy cover the cheats the differential cannot see (completed 2026-07-02)
-- [ ] **Phase 3: Regression Lock Pipeline** - A captured defect becomes a minimal repro + a from-RED vitest regression, proven end-to-end on #64/#61
+- [x] **Phase 3: Regression Lock Pipeline** - A captured defect becomes a minimal repro + a from-RED vitest regression, proven end-to-end on #64/#61 (completed 2026-07-02)
 - [ ] **Phase 4: Triage / Fix Queue** - Captured defects persist and flow through a durable in-repo queue with status, prioritization, and optional GitHub mirror
 - [ ] **Phase 5: Dogfooding Orchestration + Fuel** - Point an agent at pinned real corpora and harvest defects reproducibly over MCP stdio
 
@@ -113,7 +113,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-PLAN.md — Generic capture-regression replay runner + the #64/#61 flagship end-to-end proof (real capture -> emit -> RED)
+- [x] 03-03-PLAN.md — Generic capture-regression replay runner + the #64/#61 flagship end-to-end proof (real capture -> emit -> RED)
 
 ### Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (INSERTED)
 
@@ -164,6 +164,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
-| 3. Regression Lock Pipeline | 2/3 | In Progress|  |
+| 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
