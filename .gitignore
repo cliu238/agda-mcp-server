@@ -26,6 +26,9 @@ temp/
 *.tgz
 .cache/
 
+# Captured session artifacts (emit-only, out-of-repo)
+.agda-mcp/
+
 # Environment and local config
 .env
 .env.*
