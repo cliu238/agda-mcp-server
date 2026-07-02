@@ -25,7 +25,10 @@ import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
 import { resetRecordedActions } from "../../../src/agda/session-capture/recorded-transport.js";
 import { clearToolManifest } from "../../../src/tools/manifest.js";
 import { registerStructuredTool } from "../../../src/tools/tool-registration.js";
-import { makeToolResult, okEnvelope } from "../../../src/tools/tool-envelope.js";
+import {
+  makeToolResult,
+  okEnvelope,
+} from "../../../src/tools/tool-envelope.js";
 
 function makeCapturingServer() {
   const registrations = new Map<string, { callback: (args: any) => any }>();
@@ -139,7 +142,9 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
       category: "analysis",
       outputDataSchema: z.object({}),
       callback: async () =>
-        makeToolResult(okEnvelope({ tool: "prior_tool_one", summary: "ok", data: {} })),
+        makeToolResult(
+          okEnvelope({ tool: "prior_tool_one", summary: "ok", data: {} }),
+        ),
     });
     registerStructuredTool({
       server: server as unknown as McpServer,
@@ -148,7 +153,9 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
       category: "analysis",
       outputDataSchema: z.object({}),
       callback: async () =>
-        makeToolResult(okEnvelope({ tool: "prior_tool_two", summary: "ok", data: {} })),
+        makeToolResult(
+          okEnvelope({ tool: "prior_tool_two", summary: "ok", data: {} }),
+        ),
     });
 
     await server.get("prior_tool_one")!.callback({});
@@ -175,7 +182,9 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
 
     const staged = JSON.parse(readFileSync(data.stagedPath, "utf8"));
     expect(staged.recordedActions.length).toBeGreaterThan(0);
-    const toolNames = staged.recordedActions.map((a: { tool: string }) => a.tool);
+    const toolNames = staged.recordedActions.map(
+      (a: { tool: string }) => a.tool,
+    );
     expect(toolNames).toContain("prior_tool_one");
     expect(toolNames).toContain("prior_tool_two");
 

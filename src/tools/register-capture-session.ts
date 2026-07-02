@@ -21,8 +21,14 @@ import {
   readDedupIndex,
   routeDedup,
 } from "../agda/session-capture/session-capture.js";
-import type { CaptureArtifact, CaptureReference } from "../agda/session-capture/session-capture.js";
-import { drainRecordedActions, resetRecordedActions } from "../agda/session-capture/recorded-transport.js";
+import type {
+  CaptureArtifact,
+  CaptureReference,
+} from "../agda/session-capture/session-capture.js";
+import {
+  drainRecordedActions,
+  resetRecordedActions,
+} from "../agda/session-capture/recorded-transport.js";
 import { buildOracleSubstrate } from "../agda/session-capture/oracle-substrate.js";
 import { writeFileAtomic } from "../session/safe-source-io.js";
 
@@ -59,15 +65,24 @@ export function registerCaptureSession(
     category: "reporting",
     requiresLoadedSession: false,
     inputSchema: {
-      note: z.string().optional().describe(
-        "Optional free-text note about why this session is being captured",
-      ),
-      expectedSignature: z.string().optional().describe(
-        "Task-authored expected top-level signature - optional, but ORCL-03 conformance is vacuous without it (D-02)",
-      ),
-      beforeSource: z.string().optional().describe(
-        "Source text before the agent's edits, for the diff substrate - falls back to git HEAD when omitted and the file is tracked (D-04)",
-      ),
+      note: z
+        .string()
+        .optional()
+        .describe(
+          "Optional free-text note about why this session is being captured",
+        ),
+      expectedSignature: z
+        .string()
+        .optional()
+        .describe(
+          "Task-authored expected top-level signature - optional, but ORCL-03 conformance is vacuous without it (D-02)",
+        ),
+      beforeSource: z
+        .string()
+        .optional()
+        .describe(
+          "Source text before the agent's edits, for the diff substrate - falls back to git HEAD when omitted and the file is tracked (D-04)",
+        ),
     },
     outputDataSchema: captureReferenceDataSchema,
     callback: async (inputs: {
@@ -146,7 +161,10 @@ export function registerCaptureSession(
 
         const captureDir = join(repoRoot, ".agda-mcp", "captures");
         mkdirSync(captureDir, { recursive: true });
-        const stagedPath = join(captureDir, `${dedup.fingerprint}-${dedup.recurrence}.json`);
+        const stagedPath = join(
+          captureDir,
+          `${dedup.fingerprint}-${dedup.recurrence}.json`,
+        );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
 
         const data: CaptureReference = {

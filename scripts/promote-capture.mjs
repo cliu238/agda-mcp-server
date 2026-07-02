@@ -59,7 +59,11 @@ export function promoteCapture(artifactPath) {
   const fingerprint = dedup?.fingerprint;
   const kind = dedup?.kind;
   const recurrence = dedup?.recurrence;
-  if (typeof fingerprint !== "string" || typeof kind !== "string" || typeof recurrence !== "number") {
+  if (
+    typeof fingerprint !== "string" ||
+    typeof kind !== "string" ||
+    typeof recurrence !== "number"
+  ) {
     throw new Error(
       `Artifact at ${artifactPath} is missing a well-formed dedup.{fingerprint,kind,recurrence}`,
     );
@@ -93,13 +97,16 @@ export function promoteCapture(artifactPath) {
 export function scriptMain(argv = process.argv.slice(2)) {
   const artifactPath = argv[0];
   if (!artifactPath) {
-    process.stderr.write("Usage: node scripts/promote-capture.mjs <path-to-staged-artifact.json>\n");
+    process.stderr.write(
+      "Usage: node scripts/promote-capture.mjs <path-to-staged-artifact.json>\n",
+    );
     process.exitCode = 1;
     return;
   }
 
   try {
-    const { fingerprint, kind, recurrence, indexPath } = promoteCapture(artifactPath);
+    const { fingerprint, kind, recurrence, indexPath } =
+      promoteCapture(artifactPath);
     process.stdout.write(
       `Promoted ${fingerprint} (${kind}, recurrence ${recurrence}) into ${indexPath}\n`,
     );
