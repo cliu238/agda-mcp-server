@@ -23,14 +23,19 @@ import { TEST_FIXTURE_PROJECT_ROOT } from "../../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../../helpers/agda-version.js";
 
 test("buildReplayManifest stamps server-derived fields; mergedArgv is [] pre-load", async () => {
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  // Hermetic session root: the shared fixtures root accumulates a
+  // gitignored `_build/` whenever real-Agda tests run, which would
+  // flip detectBuildFreshness to "shared" and break the pre-load
+  // "fresh" contract this test pins.
+  const tempRoot = mkdtempSync(join(tmpdir(), "manifest-builder-preload-"));
+  const session = new AgdaSession(tempRoot);
 
   try {
     const manifest = buildReplayManifest(session);
 
     expect(manifest.serverVersion).toBe(getServerVersion());
     expect(manifest.os).toMatch(/^\w+-\w+$/u);
-    expect(manifest.repoRoot).toBe(TEST_FIXTURE_PROJECT_ROOT);
+    expect(manifest.repoRoot).toBe(tempRoot);
     expect(manifest.agdaVersion).toBeNull();
 
     // Before any load(), lastDispatchedLoadArgv is [] and no
@@ -40,8 +45,8 @@ test("buildReplayManifest stamps server-derived fields; mergedArgv is [] pre-loa
     expect(manifest.mergedArgv).toEqual([]);
 
     // No libraryRegistration exists pre-ensureProcess(), so
-    // agdaDirContents is null. TEST_FIXTURE_PROJECT_ROOT has no
-    // `_build` dir, so buildMode is "fresh" (nothing to share).
+    // agdaDirContents is null. tempRoot has no `_build` dir, so
+    // buildMode is "fresh" (nothing to share).
     expect(manifest.agdaDirContents).toBeNull();
     expect(manifest.buildMode).toBe("fresh");
     // No currentFile means no closure to walk (D-01: never throw when
