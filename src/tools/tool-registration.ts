@@ -14,6 +14,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { AgdaSession } from "../agda-process.js";
+import { recordAction } from "../agda/session-capture/recorded-transport.js";
 import type { ToolCategory } from "./manifest.js";
 import { registerManifestEntry } from "./manifest.js";
 
@@ -186,6 +187,29 @@ export function registerStructuredTool(args: {
       if (structuredContent && typeof structuredContent === "object" && structuredContent.elapsedMs === undefined) {
         structuredContent.elapsedMs = elapsed;
       }
+    }
+    // CAP-04: feed the bounded ring-buffer recorder. `recordAction`
+    // internally no-ops unless AGDA_MCP_CAPTURE=1 (see
+    // recorded-transport.ts), so this call is unconditional here —
+    // no capture-specific env-var logic lives in the hot tool-
+    // registration path. The `structuredContent` local above is
+    // block-scoped to the prior `if`, so it is read again rather than
+    // hoisted, keeping the elapsedMs-stamping logic untouched.
+    if (
+      result &&
+      typeof result === "object" &&
+      "structuredContent" in result
+    ) {
+      const structuredContent = (result as any).structuredContent;
+      recordAction({
+        tool: args.name,
+        args: toolArgs,
+        timestamp: startMs,
+        normalizedResponse:
+          structuredContent && typeof structuredContent === "object"
+            ? structuredContent
+            : undefined,
+      });
     }
     return result;
   };

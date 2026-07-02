@@ -6,6 +6,8 @@
 // D-05/D-06), read-only drain (only resetRecordedActions clears).
 
 import { test, expect, beforeEach, afterEach } from "vitest";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 import {
   recordAction,
@@ -14,6 +16,21 @@ import {
   MAX_RECORDED_ACTIONS,
   type RecordedActionCapacityOverride,
 } from "../../../../src/agda/session-capture/recorded-transport.js";
+import { clearToolManifest } from "../../../../src/tools/manifest.js";
+import { registerStructuredTool } from "../../../../src/tools/tool-registration.js";
+import { makeToolResult, okEnvelope } from "../../../../src/tools/tool-envelope.js";
+
+function makeCapturingServer() {
+  const registrations = new Map<string, { callback: (args: any) => any }>();
+  return {
+    registerTool(name: string, _spec: unknown, callback: (args: any) => any) {
+      registrations.set(name, { callback });
+    },
+    get(name: string) {
+      return registrations.get(name);
+    },
+  };
+}
 
 let originalEnv: string | undefined;
 
@@ -127,4 +144,35 @@ test("drainRecordedActions does not clear the buffer — calling it twice return
   const second = drainRecordedActions();
   expect(first).toEqual(second);
   expect(second.actions).toHaveLength(2);
+});
+
+// ── Hooked into registerStructuredTool's timedCallback ─────────────────
+
+test("every registerStructuredTool call feeds the recorder when AGDA_MCP_CAPTURE=1", async () => {
+  resetRecordedActions();
+  process.env.AGDA_MCP_CAPTURE = "1";
+  clearToolManifest();
+  const server = makeCapturingServer();
+  registerStructuredTool({
+    server: server as unknown as McpServer,
+    name: "test_tool",
+    description: "test",
+    category: "analysis",
+    outputDataSchema: z.object({}),
+    callback: async () =>
+      makeToolResult(
+        okEnvelope({ tool: "test_tool", summary: "ok", data: {} }),
+      ),
+  });
+
+  await server.get("test_tool")!.callback({ exampleArg: 1 });
+  await server.get("test_tool")!.callback({ exampleArg: 1 });
+
+  const drained = drainRecordedActions();
+  expect(drained.actions).toHaveLength(2);
+  for (const action of drained.actions) {
+    expect(action.tool).toBe("test_tool");
+    expect(action.args).toEqual({ exampleArg: 1 });
+  }
+  resetRecordedActions();
 });
