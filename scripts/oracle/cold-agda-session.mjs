@@ -71,15 +71,35 @@ import { parseAgdaVersion, compareVersions } from "../../src/agda/agda-version.j
  * @param {number} [options.hardTimeoutMs] - Optional per-call hard
  *   cap (ms). When omitted, a `sendCommand()` call runs to completion
  *   with no upper bound (D-04: the oracle is offline batch).
+ * @param {string[]} [options.extraSpawnArgs] - Extra argv appended
+ *   after `--interaction-json` (e.g. `["-l", "some-library"]`).
+ *   Mirrors `agda-process-spawn.ts`'s `[..."--interaction-json",
+ *   ...registration.agdaArgs]` shape — library registration (`-l`)
+ *   is a SPAWN-time-only concern in the live server; Plan 02-03
+ *   empirically confirmed that replaying a "-l NAME" pair via
+ *   `Cmd_load`'s own per-call option list instead produces a spurious
+ *   library-resolution error attributed to the wrong logical command
+ *   (observed against a nix-packaged Agda binary whose wrapper
+ *   hardcodes `--library-file=<nix-store path>`, but the underlying
+ *   spawn-time-vs-command-time distinction is a general Agda protocol
+ *   property, not a nix-specific one). Defaults to `[]` — fully
+ *   backward compatible with every existing caller.
  * @returns {{
  *   sendCommand: (iotcm: string) => Promise<{ responses: unknown[], timedOut: boolean, stderr: string }>,
  *   kill: () => void,
  * }}
  */
-export function spawnColdAgdaSession({ agdaBin, cwd, env, idleMs = 2000, hardTimeoutMs } = {}) {
+export function spawnColdAgdaSession({
+  agdaBin,
+  cwd,
+  env,
+  idleMs = 2000,
+  hardTimeoutMs,
+  extraSpawnArgs = [],
+} = {}) {
   let proc;
   try {
-    proc = spawn(agdaBin, ["--interaction-json"], {
+    proc = spawn(agdaBin, ["--interaction-json", ...extraSpawnArgs], {
       cwd,
       env,
       stdio: ["pipe", "pipe", "pipe"],
