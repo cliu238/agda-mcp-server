@@ -1,0 +1,355 @@
+// MIT License — see LICENSE
+//
+// QUEUE-01's real seed cargo (Plan 04-03): the flagship #64/#61 defect
+// (already `locked`, D-08's manual-first status-transition linkage to
+// capture-regression-matrix.json), the 4 defects
+// `.planning/research/CHG-REVERIFY.md` re-verified against current
+// main (3 alive + 1 minor), and the 8 turn-key UX-report specs from
+// the private Codex-Homotopy-Group corpus (measured on v0.6.7, not yet
+// re-verified) — entered as `needsReverify: true` (D-05: re-verification
+// is a future triage action performed FROM INSIDE the queue, never a
+// precondition for entry). Overlapping root causes are cross-linked via
+// `relatedFingerprint` rather than double-entered (RESEARCH.md Open
+// Question 1).
+//
+// Every field value below is fixed/pre-computed by the plan — this
+// script transcribes them verbatim and upserts each through
+// scripts/queue/intake.mjs's upsertQueueEntry (D-06's graveyard guard:
+// re-seeding bumps recurrence in place, it never duplicates).
+//
+// Run with: npx tsx scripts/queue/seed-initial-cargo.mjs
+// (NOT plain `node` — this script's src/ + test/ imports use
+// .js-suffixed specifiers pointing at sibling .ts files; Node's native
+// TS type-stripping does not rewrite .js -> .ts, so plain node fails
+// with ERR_MODULE_NOT_FOUND on the first such import. tsx resolves this
+// correctly — see scripts/queue/intake.mjs's header for the same note.)
+//
+// IMPORTANT: this script IS idempotent (re-running bumps recurrence
+// rather than duplicating rows) but must NOT be run for real a second
+// time against the committed test/fixtures/fix-queue.json — a second
+// real run would bump every entry's recurrence to 2, diverging from
+// the recurrence:1 values this plan's tests assert against.
+// Idempotency is proven once, during this plan's execution, by calling
+// scriptMain() against a scratch copy of the file — never by re-running
+// this script for real against the tracked file.
+
+import { join } from "node:path";
+
+import { isMainModule } from "../test-with-sentinel.mjs";
+
+import { upsertQueueEntry } from "./intake.mjs";
+import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
+
+export const SEED_ENTRIES = [
+  // Entry 1 (flagship #64/#61) — locked, linked to
+  // capture-regression-matrix.json's issue-64-61-transitive-staleness
+  // entry (D-08). relatedFingerprint -> Entry 13 (RT8), same family.
+  {
+    fingerprint: "e6f0c1169032b9d5",
+    status: "locked",
+    defectKind: "false-green",
+    triageClass: "proof-obligation",
+    triageConfidence: 0.72,
+    recurrence: 1,
+    title: "Transitive dependency staleness reports false ok-complete (flagship #64/#61)",
+    summary:
+      "agda_load_no_metas reported ok-complete after a dependency file changed underneath an already-loaded session; fresh agda correctly rejected with UnequalTerms. Fixed by the strict terminus guard (Phase 3.1); capture-regression-matrix entry issue-64-61-transitive-staleness is locked.",
+    affectedTool: "agda_load_no_metas",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: "issue-64-61-transitive-staleness",
+    issue: [64, 61],
+    relatedFingerprint: ["3306edf4c2d01c53"],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: "2026-07-02T00:00:00.000Z",
+    notes:
+      "Backfilled: matches capture-regression-matrix.json's issue-64-61-transitive-staleness entry (status locked by Phase 3.1). createdAt/closedAt are approximate (Phase 3.1 completion date) since no per-entry historical capture timestamp was tracked before this queue existed (D-02: git history remains the authoritative audit trail).",
+  },
+  // Entry 2 (agda_auto flag leak) — CHG-REVERIFY.md Defect 2, alive.
+  // MANUAL-MERGE CANDIDATE (fingerprint parity does not hold for a
+  // future live re-capture — see notes). relatedFingerprint -> Entry 9
+  // (RT4), same root cause.
+  {
+    fingerprint: "5abecc959e43fef3",
+    status: "triaged",
+    defectKind: "false-green",
+    triageClass: "mechanical-import",
+    triageConfidence: 0.87,
+    recurrence: 1,
+    title: "agda_auto concatenates unescaped CLI-flag-shaped hints into the Agsy search payload",
+    summary:
+      "hints/excludeHints values are concatenated verbatim into the Agsy CLI search-flag string with zero escaping; a flag-shaped hint (e.g. \"-t 999999\") is sent as literal Agsy flags, and the resulting ok:true/hasSolution:true response's solution text is actually Agda's own rejection of the injected flag — the same 'ok wrapping an Agda rejection' shape as the agda_give entry (Entry 3), hence the matching defectKind.",
+    affectedTool: "agda_auto",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    relatedFingerprint: ["004d161b839ce725"],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: .planning/research/CHG-REVERIFY.md Defect 2, re-verified alive 2026-07-02 against current main. buildAutoSearchPayload() (src/agda/refactor-helpers.ts) needs escaping/validation of hints/excludeHints. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_auto is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup.",
+  },
+  // Entry 3 (agda_give ok:true-wraps-error) — CHG-REVERIFY.md Defect 3,
+  // alive. Also a MANUAL-MERGE CANDIDATE, same fingerprint-parity caveat
+  // as Entry 2.
+  {
+    fingerprint: "bfcba437f5426fd6",
+    status: "triaged",
+    defectKind: "false-green",
+    triageClass: "proof-obligation",
+    triageConfidence: 0.72,
+    recurrence: 1,
+    title: "agda_give reports ok:true while data.result carries Agda's own rejection text",
+    summary:
+      "Giving an ill-typed expression into a goal returns top-level ok:true/classification:ok while data.result embeds Agda's own rejection text verbatim and data.replacementText is null (the give was not applied). CHG-REVERIFY.md calls this the single highest-risk pattern for an agent silently committing a broken proof step.",
+    affectedTool: "agda_give",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: .planning/research/CHG-REVERIFY.md Defect 3, re-verified alive 2026-07-02 against current main. session.goal.give() (src/agda/goal-operations.ts) should distinguish a rejected give from a real success. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_give is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup.",
+  },
+  // Entry 4 (agda_search_definitions hardcoded layout) —
+  // CHG-REVERIFY.md Defect 4, alive.
+  {
+    fingerprint: "eb7439cb3ed9d6b9",
+    status: "triaged",
+    defectKind: "missing-feature",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "agda_search_definitions hardcodes an agda/ layout, dead on src/-layout projects",
+    summary:
+      "agda_search_definitions hardcodes its search root to <PROJECT_ROOT>/agda/ (or agda/<tier>); an identical query against a src/-layout project (agda-unimath's real layout) returns ok:false/classification:not-found even though the target symbol exists.",
+    affectedTool: "agda_search_definitions",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: .planning/research/CHG-REVERIFY.md Defect 4, re-verified alive 2026-07-02 against current main. Not an Agda compiler error (triageClass null, not applicable) - a server-side path-resolution bug in src/tools/file/search-definitions.ts.",
+  },
+  // Entry 5 (agda_proof_status mislabeling) — CHG-REVERIFY.md Defect
+  // 1's related sub-finding (minor).
+  {
+    fingerprint: "fdc90bfde12fb938",
+    status: "triaged",
+    defectKind: "wrong-result",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: 'agda_proof_status says "All goals solved" while constraintsText carries a real error',
+    summary:
+      "After a stale reload surfaces a real type error in data.constraintsText (hasConstraints:true), data.text's human-readable summary still ends with the literal line \"All goals solved.\", contradicting the tool's own structured fields.",
+    affectedTool: "agda_proof_status",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: .planning/research/CHG-REVERIFY.md Defect 1's related sub-finding, re-verified 2026-07-02. A labeling/presentation bug in the server's own summary text, not a raw Agda error (triageClass null, not applicable).",
+  },
+  // Entry 6 (RT1) — turn-key UX-report spec, needs re-verification.
+  {
+    fingerprint: "03f7c711c0209369",
+    status: "new",
+    needsReverify: true,
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT1: a visible hole must never yield fileComplete:true",
+    summary:
+      "A file with at least one visible interaction hole ({!!}) is reported with fileComplete:true (v0.6.7 measurement, not yet re-verified against current main).",
+    affectedTool: "agda_load",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT1 (turn-key regression spec, v0.6.7 measurement). Re-verify against current main before promoting past new.",
+  },
+  // Entry 7 (RT2)
+  {
+    fingerprint: "e5f6de1fa365b887",
+    status: "new",
+    needsReverify: true,
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT2: a not-in-scope query must return ok:false/NotInScope, never a bare success",
+    summary:
+      "A query referencing an out-of-scope identifier returns a bare successful envelope instead of ok:false with a structured NotInScope classification (v0.6.7 measurement).",
+    affectedTool: "agda_query",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT2 (v0.6.7 measurement). affectedTool is best-inferred (query-family) - confirm the exact tool during re-verification.",
+  },
+  // Entry 8 (RT3)
+  {
+    fingerprint: "eaea6321183bdf7b",
+    status: "new",
+    needsReverify: true,
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: 'RT3: a failing context-check must never say "no checked term" inside a success result',
+    summary:
+      "A failing context/type-check is reported inside an ok:true result whose text says \"no checked term\", rather than as a failure (v0.6.7 measurement).",
+    affectedTool: "agda_context",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT3 (v0.6.7 measurement). affectedTool is best-inferred - confirm the exact tool during re-verification.",
+  },
+  // Entry 9 (RT4, relates to Entry 2 — same agda_auto flag-leak root
+  // cause, retained separately as its own future regression-test
+  // target per D-06's anti-duplication intent).
+  {
+    fingerprint: "004d161b839ce725",
+    status: "new",
+    needsReverify: true,
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT4: agda_auto must not treat CLI-flag-shaped hints as a term or report a diagnostic as a solution",
+    summary:
+      "Same root cause as the re-verified agda_auto flag-leak entry (see relatedFingerprint): CLI-flag-shaped hint text is concatenated unescaped into the Agsy search payload and a diagnostic/rejection can be reported as hasSolution:true — matching Entry 2's false-green defectKind, not wrong-result.",
+    affectedTool: "agda_auto",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    relatedFingerprint: ["5abecc959e43fef3"],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT4. Cross-references the re-verified-alive agda_auto entry - do not double-count on the dashboard; this spec is retained separately as its own future regression-test target.",
+  },
+  // Entry 10 (RT5)
+  {
+    fingerprint: "a0ae86c7deb9754e",
+    status: "new",
+    needsReverify: true,
+    defectKind: "wrong-result",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT5: a mutation tool that fails to reload must return partial/failure with post-reload diagnostics",
+    summary:
+      "A mutation tool whose post-write reload fails reports success rather than a partial/failure result carrying the post-reload diagnostics (v0.6.7 measurement).",
+    affectedTool: "agda_apply_edit",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT5 (v0.6.7 measurement). affectedTool is best-inferred (mutation-tool family) - confirm the exact tool during re-verification.",
+  },
+  // Entry 11 (RT6, relates to Entry 5 — same agda_proof_status
+  // mislabeling sub-case; the broader five-state-conflation ask
+  // remains its own tracked item).
+  {
+    fingerprint: "ad2b6d31f58f1759",
+    status: "new",
+    needsReverify: true,
+    defectKind: "missing-feature",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT6: agda_load must distinguish visible goals/hidden metas/constraints/source holes/file-completeness",
+    summary:
+      "agda_load's response conflates these five states into one signal; the no-goals-but-constraints-hold-an-error sub-case is the same labeling issue tracked by the agda_proof_status entry (see relatedFingerprint).",
+    affectedTool: "agda_load",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    relatedFingerprint: ["fdc90bfde12fb938"],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT6 (v0.6.7 measurement). Cross-references the agda_proof_status mislabeling entry for its sub-case; the broader five-state-conflation ask remains its own tracked item.",
+  },
+  // Entry 12 (RT7)
+  {
+    fingerprint: "b6821f42952c6ff8",
+    status: "new",
+    needsReverify: true,
+    defectKind: "missing-feature",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT7: a timeout must identify whether Agda exited, is still running, or produced no protocol response",
+    summary:
+      "On a command timeout, the response does not distinguish whether the underlying Agda process exited, is still running, or simply produced no protocol response in the window (v0.6.7 measurement).",
+    affectedTool: "agda_load",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT7 (v0.6.7 measurement). affectedTool is best-inferred (most timeout-prone command family) - confirm the exact tool during re-verification.",
+  },
+  // Entry 13 (RT8, relates to Entry 1 — same flagship transitive-
+  // staleness false-green family).
+  {
+    fingerprint: "3306edf4c2d01c53",
+    status: "new",
+    needsReverify: true,
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "RT8: a stale reload must report the previous+new classification together with the reason",
+    summary:
+      "Same family as the re-verified flagship transitive-staleness false-green (see relatedFingerprint): re-verify whether agda_load_no_metas and related tools in this family still lack a combined previous+new classification report.",
+    affectedTool: "agda_load_no_metas",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: null,
+    relatedFingerprint: ["e6f0c1169032b9d5"],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    closedAt: null,
+    notes:
+      "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT8. Cross-references the flagship entry - current-main agda_load already attaches a session-regression diagnostic with previousClassification; re-verify whether this spec's ask is already satisfied or still gapped for agda_load_no_metas specifically.",
+  },
+];
+
+// ── CLI ──────────────────────────────────────────────────────────────
+
+/**
+ * Upsert every SEED_ENTRIES row, in order, into the queue file at
+ * `queueJsonPath` (defaulting to the real, committed
+ * test/fixtures/fix-queue.json under SERVER_REPO_ROOT). Each call
+ * funnels through upsertQueueEntry's append-new-or-bump-in-place
+ * primitive (D-06) — calling this twice against the SAME file bumps
+ * every entry's recurrence rather than duplicating rows.
+ */
+export async function scriptMain(queueJsonPath = join(SERVER_REPO_ROOT, "test/fixtures/fix-queue.json")) {
+  for (const entry of SEED_ENTRIES) {
+    const result = await upsertQueueEntry(entry, queueJsonPath);
+    process.stdout.write(
+      `Upserted ${result.fingerprint} (${result.status}, recurrence ${result.recurrence}) into ${queueJsonPath}\n`,
+    );
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
+  await scriptMain();
+}
