@@ -80,6 +80,12 @@
     "requiresLiveAgda": false
   },
   {
+    "tool": "agda_capture_session",
+    "suite": "test/unit/tools/register-capture-session.test.ts",
+    "scenario": "capture session emit-only reference and dedup routing",
+    "requiresLiveAgda": false
+  },
+  {
     "tool": "agda_case_split",
     "suite": "test/integration/mcp/mcp-end-to-end-parity.test.ts",
     "scenario": "case split",
