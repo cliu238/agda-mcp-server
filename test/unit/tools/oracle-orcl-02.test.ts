@@ -1,14 +1,65 @@
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
-import { loadOraclePolicy, scanOptionsFlags, scanPragmaVocabulary } from "../../../scripts/oracle/orcl-02-soundness-scan.mjs";
+import {
+  diffAgainstWhitelist,
+  judgeOrcl02,
+  loadOraclePolicy,
+  scanClosure,
+  scanOptionsFlags,
+  scanPragmaVocabulary,
+  walkClosureFiles,
+} from "../../../scripts/oracle/orcl-02-soundness-scan.mjs";
 
 const FIXTURES_DIR = join(process.cwd(), "test", "fixtures", "agda");
 
 function readFixture(name: string): string {
   return readFileSync(join(FIXTURES_DIR, name), "utf8");
+}
+
+/** A synthetic single-action CaptureArtifact JSON, minimal shape sufficient for judgeOrcl02 to resolve a target. */
+function writeCaptureArtifact(
+  dir: string,
+  loadedFile: string,
+  classification: string,
+): string {
+  const artifactPath = join(dir, "capture.json");
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      manifest: { repoRoot: dir, agdaVersion: null },
+      recordedActions: [
+        {
+          tool: "agda_load",
+          args: {},
+          timestamp: 0,
+          normalizedResponse: { data: { file: loadedFile, classification } },
+        },
+      ],
+    }),
+    "utf8",
+  );
+  return artifactPath;
+}
+
+/** Downstream.agda `open import`s Upstream.agda, which postulates `postulateName`. */
+function buildClosureFixture(postulateName: string): { dir: string; artifactPath: string } {
+  const dir = mkdtempSync(join(tmpdir(), "orcl-02-closure-"));
+  writeFileSync(
+    join(dir, "Upstream.agda"),
+    `module Upstream where\n\npostulate\n  ${postulateName} : Set\n`,
+    "utf8",
+  );
+  writeFileSync(
+    join(dir, "Downstream.agda"),
+    "module Downstream where\n\nopen import Upstream\n",
+    "utf8",
+  );
+  const artifactPath = writeCaptureArtifact(dir, "Downstream.agda", "ok-complete");
+  return { dir, artifactPath };
 }
 
 // ── scanPragmaVocabulary: widened pragma/FFI/hole scan vocabulary ──
@@ -78,5 +129,123 @@ describe("loadOraclePolicy", () => {
 
   test("returns null (never throws) for an unknown policy key — D-03's no-policy mechanism", () => {
     expect(loadOraclePolicy("no-such-project-xyz")).toBeNull();
+  });
+});
+
+// ── walkClosureFiles / scanClosure: transitive dependency closure ──
+
+describe("walkClosureFiles + scanClosure", () => {
+  test("the closure includes an upstream dependency, not just the target file", () => {
+    const { dir } = buildClosureFixture("upstreamAxiom");
+    const files = walkClosureFiles(dir, "Downstream.agda", undefined);
+    expect(files).toEqual(expect.arrayContaining(["Downstream.agda", "Upstream.agda"]));
+  });
+
+  test("scanClosure finds the postulate declared in the upstream file, tagged with its own path", () => {
+    const { dir } = buildClosureFixture("upstreamAxiom");
+    const findings = scanClosure(dir, "Downstream.agda", undefined, null);
+    const postulateFinding = findings.find(
+      (f: { kind: string; detail: string }) => f.kind === "postulate" && f.detail === "upstreamAxiom",
+    );
+    expect(postulateFinding).toBeDefined();
+    expect(postulateFinding.file).toBe("Upstream.agda");
+  });
+});
+
+// ── diffAgainstWhitelist: sanctioned-axiom / D-08 residual-hole gate ──
+
+describe("diffAgainstWhitelist", () => {
+  test("marks every finding unsanctioned when policy is null (D-03: caller routes to no-policy)", () => {
+    const findings = [{ file: "Upstream.agda", line: 3, kind: "postulate", detail: "upstreamAxiom" }];
+    const diffed = diffAgainstWhitelist(findings, null, null);
+    expect(diffed[0].sanctioned).toBe(false);
+  });
+
+  test("a residual-hole finding is sanctioned iff the warm classification is ok-with-holes (D-08)", () => {
+    const finding = { file: "HoleOnly.agda", line: 3, kind: "residual-hole", detail: "?" };
+    const policy = loadOraclePolicy("agda-unimath");
+    const excused = diffAgainstWhitelist([finding], policy, "ok-with-holes");
+    const notExcused = diffAgainstWhitelist([finding], policy, "ok-complete");
+    const noClassification = diffAgainstWhitelist([finding], policy, null);
+    expect(excused[0].sanctioned).toBe(true);
+    expect(notExcused[0].sanctioned).toBe(false);
+    expect(noClassification[0].sanctioned).toBe(false);
+  });
+});
+
+// ── judgeOrcl02: the standalone-runnable ORCL-02 predicate ──
+
+describe("judgeOrcl02", () => {
+  test("Test 1: no-policy — the closure walk catches a postulate declared in an upstream dependency", async () => {
+    const { artifactPath } = buildClosureFixture("upstreamAxiom");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: null });
+    expect(outcome.kind).toBe("no-policy");
+    const postulateFindings = outcome.findings.filter((f: { kind: string }) => f.kind === "postulate");
+    expect(postulateFindings.some((f: { detail: string }) => f.detail === "upstreamAxiom")).toBe(true);
+  });
+
+  test("Test 2: clean — a postulate whose name IS in the policy's sanctionedAxioms", async () => {
+    const { artifactPath } = buildClosureFixture("univalence");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "agda-unimath" });
+    expect(outcome.kind).toBe("clean");
+  });
+
+  test("Test 3: cheat-flagged — a postulate whose name is NOT in the policy's sanctionedAxioms", async () => {
+    const { artifactPath } = buildClosureFixture("notWhitelistedAxiom");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "agda-unimath" });
+    expect(outcome.kind).toBe("cheat-flagged");
+    const finding = outcome.findings.find(
+      (f: { kind: string; detail: string }) => f.kind === "postulate" && f.detail === "notWhitelistedAxiom",
+    );
+    expect(finding?.sanctioned).toBe(false);
+  });
+
+  test("Test 4: cheat-flagged — LibBase/WithKOverride --with-K override, regardless of sanctionedAxioms", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "orcl-02-withk-"));
+    writeFileSync(join(dir, "LibBase.agda"), readFixture("LibBase.agda"), "utf8");
+    writeFileSync(join(dir, "WithKOverride.agda"), readFixture("WithKOverride.agda"), "utf8");
+    const artifactPath = writeCaptureArtifact(dir, "WithKOverride.agda", "ok-complete");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "agda-unimath" });
+    expect(outcome.kind).toBe("cheat-flagged");
+    const finding = outcome.findings.find((f: { kind: string }) => f.kind === "with-k-override");
+    expect(finding).toBeDefined();
+    expect(finding.sanctioned).toBe(false);
+  });
+
+  test("Test 5 (D-08 gate): a residual hole is NOT a cheat when the warm classification is ok-with-holes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "orcl-02-hole-"));
+    writeFileSync(join(dir, "HoleOnly.agda"), "module HoleOnly where\n\nholeOnly : Set\nholeOnly = ?\n", "utf8");
+    const artifactPath = writeCaptureArtifact(dir, "HoleOnly.agda", "ok-with-holes");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "agda-unimath" });
+    expect(outcome.kind).toBe("clean");
+  });
+
+  test("Test 6 (D-08 gate, contrast): the SAME residual hole IS a cheat when the warm classification is ok-complete", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "orcl-02-hole-"));
+    writeFileSync(join(dir, "HoleOnly.agda"), "module HoleOnly where\n\nholeOnly : Set\nholeOnly = ?\n", "utf8");
+    const artifactPath = writeCaptureArtifact(dir, "HoleOnly.agda", "ok-complete");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "agda-unimath" });
+    expect(outcome.kind).toBe("cheat-flagged");
+    const finding = outcome.findings.find((f: { kind: string }) => f.kind === "residual-hole");
+    expect(finding?.sanctioned).toBe(false);
+  });
+
+  test("judgeOrcl02 returns no-target when there is no load-family recorded action", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "orcl-02-notarget-"));
+    const artifactPath = join(dir, "capture.json");
+    writeFileSync(
+      artifactPath,
+      JSON.stringify({ manifest: { repoRoot: dir, agdaVersion: null }, recordedActions: [] }),
+      "utf8",
+    );
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: null });
+    expect(outcome.kind).toBe("no-target");
+  });
+
+  test("derives the policy key from the project's .agda-lib name field when options.policyKey is omitted", async () => {
+    const { dir, artifactPath } = buildClosureFixture("univalence");
+    writeFileSync(join(dir, "project.agda-lib"), "name: agda-unimath\ndepend:\ninclude: .\n", "utf8");
+    const outcome = await judgeOrcl02(artifactPath, {});
+    expect(outcome.kind).toBe("clean");
   });
 });
