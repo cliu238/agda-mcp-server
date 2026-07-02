@@ -6,6 +6,9 @@
 // must not require a live process.
 
 import { test, expect } from "vitest";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { AgdaSession } from "../../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../../src/agda/session-capture/manifest-builder.js";
@@ -30,10 +33,14 @@ test("buildReplayManifest stamps server-derived fields; mergedArgv is [] pre-loa
     expect(session.lastDispatchedLoadArgv).toEqual([]);
     expect(manifest.mergedArgv).toEqual([]);
 
-    // 01-02 tasks 2/3 fill these in for real when a file is loaded;
-    // with nothing loaded they stay at their explicit placeholders.
+    // No libraryRegistration exists pre-ensureProcess(), so
+    // agdaDirContents is null. TEST_FIXTURE_PROJECT_ROOT has no
+    // `_build` dir, so buildMode is "fresh" (nothing to share).
     expect(manifest.agdaDirContents).toBeNull();
-    expect(manifest.buildMode).toBe("unknown");
+    expect(manifest.buildMode).toBe("fresh");
+    // Task 3 (import-closure-hash.ts) fills these in for real when a
+    // file is loaded; with nothing loaded they stay at their explicit
+    // placeholders.
     expect(manifest.importClosureHash).toBeNull();
     expect(manifest.inlinedFirstPartySources).toEqual([]);
   } finally {
@@ -77,6 +84,60 @@ it("buildReplayManifest's mergedArgv is spawn-time -l flags then lastDispatchedL
     // Duplicates survive into the manifest field too — never
     // collapsed, per D-04 (server-stamped from the live session).
     expect(manifest.mergedArgv.filter((flag) => flag === "--flag")).toHaveLength(2);
+  } finally {
+    await session.destroy();
+  }
+});
+
+// ── Task 2: realized AGDA_DIR contents + build freshness ────────────
+
+test("buildReplayManifest.agdaDirContents reads the live session's realized AGDA_DIR, never re-derives it", async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), "agda-mcp-manifest-repo-"));
+  const agdaDir = mkdtempSync(join(tmpdir(), "agda-mcp-manifest-agdadir-"));
+  writeFileSync(join(agdaDir, "libraries"), "/some/path/foo.agda-lib\n", "utf8");
+  writeFileSync(join(agdaDir, "defaults"), "foo\n", "utf8");
+
+  const session = new AgdaSession(repoRoot);
+  // Manually realize libraryRegistration (never call
+  // createLibraryRegistration() again from the test either — the
+  // whole point is reading the live session's already-realized dir).
+  session.libraryRegistration = { agdaArgs: [], agdaDir, cleanup() {} };
+
+  try {
+    const manifest = buildReplayManifest(session);
+    expect(manifest.agdaDirContents).toEqual({
+      libraries: ["/some/path/foo.agda-lib"],
+      defaults: ["foo"],
+    });
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("buildReplayManifest.buildMode is 'fresh' when repoRoot has no _build dir", async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), "agda-mcp-manifest-repo-"));
+  const session = new AgdaSession(repoRoot);
+
+  try {
+    expect(buildReplayManifest(session).buildMode).toBe("fresh");
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("buildReplayManifest.buildMode is 'shared' when _build's newest file is older than 5 minutes", async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), "agda-mcp-manifest-repo-"));
+  const buildDir = join(repoRoot, "_build");
+  mkdirSync(buildDir);
+  const staleFile = join(buildDir, "Stale.agdai");
+  writeFileSync(staleFile, "stale-interface-file", "utf8");
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  utimesSync(staleFile, tenMinutesAgo, tenMinutesAgo);
+
+  const session = new AgdaSession(repoRoot);
+
+  try {
+    expect(buildReplayManifest(session).buildMode).toBe("shared");
   } finally {
     await session.destroy();
   }
