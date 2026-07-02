@@ -162,8 +162,8 @@ Plans:
 
 **Wave 2** *(blocked on 04-01 completion)*
 
-- [ ] 04-03-PLAN.md — QUEUE-01 seed data: the real 13-entry cargo (flagship + CHG-REVERIFY confirmed + CHG needs-reverify specs)
-- [ ] 04-04-PLAN.md — QUEUE-04 GitHub mirror: dry-run-default, idempotent one-way upsert via execFileSync
+- [x] 04-03-PLAN.md — QUEUE-01 seed data: the real 13-entry cargo (flagship + CHG-REVERIFY confirmed + CHG needs-reverify specs)
+- [x] 04-04-PLAN.md — QUEUE-04 GitHub mirror: dry-run-default, idempotent one-way upsert via execFileSync
 
 **Wave 3** *(blocked on 04-01, 04-03 completion)*
 
@@ -194,5 +194,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
-| 4. Triage / Fix Queue | 2/5 | In Progress|  |
+| 4. Triage / Fix Queue | 4/5 | In Progress|  |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
