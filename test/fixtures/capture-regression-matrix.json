@@ -1,1 +1,31 @@
-[]
+[
+  {
+    "id": "issue-64-61-transitive-staleness",
+    "issue": [
+      64,
+      61
+    ],
+    "status": "red",
+    "tool": "agda_load_no_metas",
+    "fixtureDir": "FixtureDeps/TransitiveStaleness",
+    "entryFile": "Main.agda",
+    "mutation": {
+      "targetFile": "Dep.agda",
+      "sourceFile": "Dep.broken.agda"
+    },
+    "serverEnv": {
+      "AGDA_MCP_IDLE_COMPLETION_MS": "1",
+      "AGDA_MCP_POST_STATUS_IDLE_MS": "1"
+    },
+    "expected": {
+      "classification": "type-error",
+      "success": false,
+      "goalCount": 0,
+      "invisibleGoalCount": 0,
+      "hasHoles": false,
+      "errorCategories": [
+        "UnequalTerms"
+      ]
+    }
+  }
+]
