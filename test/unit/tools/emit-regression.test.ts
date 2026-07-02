@@ -10,12 +10,18 @@
 // spawn required for any test in this file.
 
 import { afterEach, expect, test } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
-import { judgeRefusal, materializeFixtureFiles } from "../../../scripts/emit-regression.mjs";
+import {
+  composeEntry,
+  judgeRefusal,
+  materializeFixtureFiles,
+  matchesExpected,
+  writeMatrixEntry,
+} from "../../../scripts/emit-regression.mjs";
 
 let tempDirs: string[] = [];
 
@@ -288,4 +294,153 @@ test("materializeFixtureFiles: already-BARE captured paths pass through stripFix
   ).toBe("module FixtureDeps.TransitiveStaleness.Main where\n");
   expect(mutation).toEqual({ targetFile: "Dep.agda", sourceFile: "Dep.broken.agda" });
   expect(entryFile).toBe("Main.agda");
+});
+
+// ── composeEntry / writeMatrixEntry / matchesExpected (Task 3) ───────
+
+// Test H
+test("composeEntry: copies verdict.orcl01.coldTuple/coldCategories into expected verbatim; always sets status 'red'", () => {
+  const verdict = {
+    orcl01: {
+      kind: "server-false-green-candidate",
+      warmTuple: {
+        success: true,
+        goalCount: 0,
+        invisibleGoalCount: 0,
+        hasHoles: false,
+        classification: "ok-complete",
+      },
+      coldTuple: {
+        success: false,
+        goalCount: 0,
+        invisibleGoalCount: 0,
+        hasHoles: false,
+        classification: "type-error",
+      },
+      warmCategories: [],
+      coldCategories: ["UnequalTerms"],
+    },
+    orcl02: { kind: "clean", findings: [] },
+    orcl03: { kind: "vacuous-no-expected-signature" },
+  };
+
+  const entry = composeEntry({
+    id: "test-compose",
+    issue: [64, 61],
+    tool: "agda_load_no_metas",
+    fixtureDir: "FixtureDeps/TransitiveStaleness",
+    entryFile: "Main.agda",
+    mutation: { targetFile: "Dep.agda", sourceFile: "Dep.broken.agda" },
+    serverEnv: undefined,
+    verdict,
+  });
+
+  expect(entry.status).toBe("red");
+  expect(entry.id).toBe("test-compose");
+  expect(entry.issue).toEqual([64, 61]);
+  expect(entry.expected).toEqual({
+    classification: "type-error",
+    success: false,
+    goalCount: 0,
+    invisibleGoalCount: 0,
+    hasHoles: false,
+    errorCategories: ["UnequalTerms"],
+  });
+});
+
+// Test I
+test("writeMatrixEntry: refuses (throws) when the target matrix already contains an entry with the same id", async () => {
+  const dir = makeTempDir("agda-mcp-emit-regression-write-matrix-dup-");
+  const matrixPath = join(dir, "matrix.json");
+  const existingEntry = {
+    id: "dup-id",
+    issue: [1],
+    status: "red",
+    tool: "agda_load",
+    fixtureDir: "Foo",
+    entryFile: "Foo.agda",
+    expected: {
+      classification: "ok-complete",
+      success: true,
+      goalCount: 0,
+      invisibleGoalCount: 0,
+      hasHoles: false,
+      errorCategories: [],
+    },
+  };
+  writeFileSync(matrixPath, JSON.stringify([existingEntry], null, 2), "utf8");
+
+  const duplicateEntry = { ...existingEntry, tool: "agda_load_no_metas" };
+
+  await expect(writeMatrixEntry(duplicateEntry, matrixPath)).rejects.toThrow(/dup-id/);
+});
+
+// Test J
+test("writeMatrixEntry: appends to a pre-existing non-empty matrix file without disturbing the existing entry", async () => {
+  const dir = makeTempDir("agda-mcp-emit-regression-write-matrix-append-");
+  const matrixPath = join(dir, "matrix.json");
+  const existingEntry = {
+    id: "existing-id",
+    issue: [1],
+    status: "locked",
+    tool: "agda_load",
+    fixtureDir: "Foo",
+    entryFile: "Foo.agda",
+    expected: {
+      classification: "ok-complete",
+      success: true,
+      goalCount: 0,
+      invisibleGoalCount: 0,
+      hasHoles: false,
+      errorCategories: [],
+    },
+  };
+  writeFileSync(matrixPath, JSON.stringify([existingEntry], null, 2), "utf8");
+
+  const newEntry = {
+    id: "new-id",
+    issue: [2],
+    status: "red",
+    tool: "agda_load_no_metas",
+    fixtureDir: "Bar",
+    entryFile: "Bar.agda",
+    expected: {
+      classification: "type-error",
+      success: false,
+      goalCount: 0,
+      invisibleGoalCount: 0,
+      hasHoles: false,
+      errorCategories: ["X"],
+    },
+  };
+
+  await writeMatrixEntry(newEntry, matrixPath);
+
+  const written = JSON.parse(readFileSync(matrixPath, "utf8"));
+  expect(written).toHaveLength(2);
+  expect(written[0]).toEqual(existingEntry);
+  expect(written[1]).toEqual(newEntry);
+});
+
+// Test K
+test("matchesExpected: true only when every scalar field AND the errorCategories array (same length/order) match", () => {
+  const expected = {
+    classification: "type-error",
+    success: false,
+    goalCount: 0,
+    invisibleGoalCount: 0,
+    hasHoles: false,
+    errorCategories: ["UnequalTerms", "SafeFlagPostulate"],
+  };
+
+  expect(matchesExpected({ ...expected }, expected)).toBe(true);
+  expect(matchesExpected({ ...expected, classification: "ok-complete" }, expected)).toBe(false);
+  expect(matchesExpected({ ...expected, success: true }, expected)).toBe(false);
+  expect(matchesExpected({ ...expected, goalCount: 1 }, expected)).toBe(false);
+  expect(matchesExpected({ ...expected, invisibleGoalCount: 1 }, expected)).toBe(false);
+  expect(matchesExpected({ ...expected, hasHoles: true }, expected)).toBe(false);
+  expect(
+    matchesExpected({ ...expected, errorCategories: ["SafeFlagPostulate", "UnequalTerms"] }, expected),
+  ).toBe(false);
+  expect(matchesExpected({ ...expected, errorCategories: ["UnequalTerms"] }, expected)).toBe(false);
 });
