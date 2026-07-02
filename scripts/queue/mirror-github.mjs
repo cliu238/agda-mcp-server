@@ -98,7 +98,10 @@ export function buildMirrorPayload(entry) {
  * payload (let alone the whole entry). Reading only `payload`'s own
  * fields means a future unwhitelisted field added to FixQueueEntry can
  * never leak into a rendered issue body just because this function
- * forgot to exclude it.
+ * forgot to exclude it. Deliberately avoids markdown code-span
+ * backticks (bold labels only) so the rendered body never itself
+ * contains a shell metacharacter, keeping every gh argv element plain
+ * text end to end.
  */
 function renderIssueBody(payload) {
   return [
@@ -106,7 +109,7 @@ function renderIssueBody(payload) {
     "",
     payload.summary,
     "",
-    `**Fingerprint:** \`${payload.fingerprint}\``,
+    `**Fingerprint:** ${payload.fingerprint}`,
     `**Defect Kind:** ${payload.defectKind}`,
     `**Triage Class:** ${payload.triageClass ?? "(none)"}`,
     `**Status:** ${payload.status}`,
