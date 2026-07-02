@@ -59,8 +59,19 @@ export function judgeRefusal(verdict, options = {}) {
   if (verdict.orcl02.kind === "no-policy" && verdict.orcl02.findings.length > 0) {
     return "ORCL-02 has no whitelist policy AND non-empty findings — cannot distinguish cheat from sanctioned axiom";
   }
-  if (verdict.orcl01.kind !== "server-false-green-candidate" && options.force !== true) {
-    return `ORCL-01 outcome "${verdict.orcl01.kind}" has nothing meaningful to lock — pass --force to override`;
+  if (verdict.orcl01.kind !== "server-false-green-candidate") {
+    if (options.force !== true) {
+      return `ORCL-01 outcome "${verdict.orcl01.kind}" has nothing meaningful to lock — pass --force to override`;
+    }
+    // --force was given, but only a server-false-green-candidate carries
+    // a coldTuple/coldCategories (the expected RED value composeEntry
+    // locks against). Every outcome --force newly permits here (pass /
+    // skip) has none, so --force can never actually produce an entry —
+    // fail closed with a clear reason BEFORE any fixture write, rather
+    // than materializing files and then crashing in composeEntry (CR-02).
+    if (verdict.orcl01.coldTuple === undefined) {
+      return `ORCL-01 outcome "${verdict.orcl01.kind}" has no cold differential (coldTuple) to lock — --force cannot fabricate an expected RED value`;
+    }
   }
   return null;
 }
@@ -237,6 +248,17 @@ export function materializeFixtureFiles({ primaryArtifact, baselineArtifact, fix
  * than producing an entry no consumer can trust.
  */
 export function composeEntry({ id, issue, tool, fixtureDir, entryFile, mutation, serverEnv, verdict }) {
+  // Defensive guard: only a server-false-green-candidate carries a
+  // coldTuple. judgeRefusal already fails closed before reaching here,
+  // but throw a clear Error (not a raw `undefined.classification`
+  // TypeError) so any future caller path that skips the gate still fails
+  // loudly and legibly (CR-02).
+  const cold = verdict.orcl01.coldTuple;
+  if (cold === undefined) {
+    throw new Error(
+      `composeEntry: ORCL-01 outcome "${verdict.orcl01.kind}" has no coldTuple to lock; --force cannot fabricate an expected RED value.`,
+    );
+  }
   const candidate = {
     id,
     issue,
@@ -247,11 +269,11 @@ export function composeEntry({ id, issue, tool, fixtureDir, entryFile, mutation,
     mutation,
     serverEnv,
     expected: {
-      classification: verdict.orcl01.coldTuple.classification,
-      success: verdict.orcl01.coldTuple.success,
-      goalCount: verdict.orcl01.coldTuple.goalCount,
-      invisibleGoalCount: verdict.orcl01.coldTuple.invisibleGoalCount,
-      hasHoles: verdict.orcl01.coldTuple.hasHoles,
+      classification: cold.classification,
+      success: cold.success,
+      goalCount: cold.goalCount,
+      invisibleGoalCount: cold.invisibleGoalCount,
+      hasHoles: cold.hasHoles,
       errorCategories: verdict.orcl01.coldCategories,
     },
   };

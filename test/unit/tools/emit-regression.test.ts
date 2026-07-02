@@ -88,15 +88,40 @@ test("judgeRefusal: non-null when ORCL-02 is no-policy with non-empty findings",
   expect(judgeRefusal(verdict)).not.toBeNull();
 });
 
-// Test D
-test("judgeRefusal: non-null when ORCL-01 has nothing meaningful to lock and --force is not set; null when forced", () => {
+// Test D (CR-02): --force must fail closed on an outcome with no
+// coldTuple rather than admit a pass/skip that composeEntry cannot build.
+test("judgeRefusal: non-null when ORCL-01 has nothing to lock — and STILL non-null under --force because pass/skip carry no coldTuple (CR-02)", () => {
   const verdict = {
     orcl01: { kind: "pass" },
     orcl02: { kind: "clean", findings: [] },
     orcl03: { kind: "vacuous-no-expected-signature" },
   };
   expect(judgeRefusal(verdict)).not.toBeNull();
-  expect(judgeRefusal(verdict, { force: true })).toBeNull();
+  const forced = judgeRefusal(verdict, { force: true });
+  expect(forced).not.toBeNull();
+  expect(forced).toContain("coldTuple");
+});
+
+// Test D2 (CR-02): composeEntry throws a clear Error, not a raw
+// undefined-deref TypeError, when the outcome carries no coldTuple.
+test("composeEntry: throws a legible Error (never a TypeError) when ORCL-01 has no coldTuple", () => {
+  const verdict = {
+    orcl01: { kind: "pass" },
+    orcl02: { kind: "clean", findings: [] },
+    orcl03: { kind: "vacuous-no-expected-signature" },
+  };
+  expect(() =>
+    composeEntry({
+      id: "x",
+      issue: [1],
+      tool: "agda_load_no_metas",
+      fixtureDir: "X",
+      entryFile: "Main.agda",
+      mutation: undefined,
+      serverEnv: undefined,
+      verdict,
+    }),
+  ).toThrow(/no coldTuple to lock/u);
 });
 
 // Test E
