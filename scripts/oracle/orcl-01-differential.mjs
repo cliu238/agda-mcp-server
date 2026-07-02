@@ -233,8 +233,11 @@ const TUPLE_FIELDS = ["success", "goalCount", "invisibleGoalCount", "hasHoles", 
  *  (Pitfall 4 / RESEARCH.md): "invalid-command-line-options",
  *  "load-incomplete-no-terminus", "process-died-during-reconciliation",
  *  "not-found", etc. are infra-level sentinels with no meaningful cold
- *  counterpart. */
-const COMPLETENESS_CLASSIFICATIONS = new Set(["ok-complete", "ok-with-holes", "type-error"]);
+ *  counterpart. Exported so Plan 02-05's composed CLI can replicate
+ *  this exact skip decision inline (it shares one materialization
+ *  across ORCL-01/ORCL-03 rather than calling `judgeOrcl01` itself) —
+ *  a plain re-export, never a second copy of the Set literal. */
+export const COMPLETENESS_CLASSIFICATIONS = new Set(["ok-complete", "ok-with-holes", "type-error"]);
 
 const LOAD_FAMILY_TOOL_PATTERN = /^agda_(load|typecheck)/;
 
@@ -329,22 +332,54 @@ function splitMergedArgv(mergedArgv) {
  * diffs the result against the warm side. Environment probes gate
  * BEFORE and AFTER the cold spawn — an unfaithful replay is always
  * `{ kind: "inconclusive", probe: <name> }`, never a diff verdict.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.keepSessionAlive] - Plan 02-05: when
+ *   `true`, the cold session is NOT killed on the success path (real
+ *   `pass`/`server-false-green-candidate` outcome, terminus reached) —
+ *   instead this function returns `{ outcome, session, materializedPath }`
+ *   so the caller can reuse the SAME still-open process for ORCL-03's
+ *   own `Cmd_infer_toplevel` rather than paying for a second cold
+ *   spawn. `session` is `null` on every OTHER path (pre-gate failure,
+ *   spawn/priming failure, post-gate terminus/timeout failure) — this
+ *   function always kills the session itself before returning in
+ *   those cases, so it never leaks regardless of `keepSessionAlive`.
+ *   Defaults to `false`, in which case this function's return shape
+ *   and behavior are IDENTICAL to before this option existed (the bare
+ *   outcome object, session always killed internally).
+ * @param {(opts: object) => { sendCommand: Function, kill: Function }} [options.spawnColdAgdaSession] -
+ *   Override for the cold-session spawn (dependency-injection seam for
+ *   Plan 02-05's own spawn-count tests). Defaults to this module's own
+ *   imported `spawnColdAgdaSession`.
  */
-export async function runColdLoadAndDiff(artifact, materialized, warm) {
+export async function runColdLoadAndDiff(artifact, materialized, warm, options = {}) {
+  const { keepSessionAlive = false, spawnColdAgdaSession: spawnFn = spawnColdAgdaSession } = options;
+
   const root = resolve(materialized.tmpDir);
   let materializedPath;
   try {
     materializedPath = resolveFileWithinRoot(root, warm.file);
   } catch (err) {
     if (err instanceof PathSandboxError) {
-      return {
+      const outcome = {
         kind: "inconclusive",
         probe: "spawn",
         detail: `warm.file "${warm.file}" escapes the materialized replay directory — nothing to load cold`,
       };
+      return keepSessionAlive ? { outcome, session: null, materializedPath: null } : outcome;
     }
     throw err;
   }
+
+  // Plan 02-05: once `materializedPath` is known, every return below
+  // routes through this helper — `session` is non-null ONLY on the
+  // success path further down (terminus reached, diff computed),
+  // signalling to the caller that a still-open cold process is
+  // available for ORCL-03 to reuse. `keepSessionAlive: false` (the
+  // default) makes this an identity wrapper, so existing callers
+  // (`judgeOrcl01`) see no behavior change at all.
+  const finish = (outcome, session = null) =>
+    keepSessionAlive ? { outcome, session, materializedPath } : outcome;
 
   // Pre-spawn gate: version / agdaDir-hash / closure-hash / build-fresh
   // must ALL pass before cold Agda is ever spawned.
@@ -353,7 +388,7 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
     (probe) => PRE_SPAWN_PROBE_NAMES.includes(probe.probe) && !probe.ok,
   );
   if (preFailure) {
-    return { kind: "inconclusive", probe: preFailure.probe, detail: preFailure.detail };
+    return finish({ kind: "inconclusive", probe: preFailure.probe, detail: preFailure.detail });
   }
 
   const mergedArgv = Array.isArray(artifact.manifest.mergedArgv) ? artifact.manifest.mergedArgv : [];
@@ -361,7 +396,7 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
   const innerCommand = command("Cmd_load", quoted(materializedPath), stringList(remainingFlags));
   const iotcm = iotcmEnvelope(materializedPath, innerCommand);
 
-  const session = spawnColdAgdaSession({
+  const session = spawnFn({
     agdaBin: artifact.manifest.agdaBinaryPath,
     cwd: materialized.tmpDir,
     env: { ...process.env, AGDA_DIR: materialized.agdaDirTmp },
@@ -391,11 +426,11 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
     await session.sendCommand(iotcmEnvelope(materializedPath, topLevelCommand("Cmd_show_version")));
   } catch (err) {
     session.kill();
-    return {
+    return finish({
       kind: "inconclusive",
       probe: "spawn",
       detail: err instanceof Error ? err.message : String(err),
-    };
+    });
   }
 
   let coldResult;
@@ -403,13 +438,19 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
     coldResult = await session.sendCommand(iotcm);
   } catch (err) {
     session.kill();
-    return {
+    return finish({
       kind: "inconclusive",
       probe: "spawn",
       detail: err instanceof Error ? err.message : String(err),
-    };
+    });
   }
-  session.kill();
+  // Only kill immediately when the caller has NOT asked to keep the
+  // session alive; a `keepSessionAlive` caller takes ownership of
+  // `session.kill()` for the eventual success path below (every OTHER
+  // path from here on still kills it itself, so it never leaks).
+  if (!keepSessionAlive) {
+    session.kill();
+  }
 
   // The live server always normalizes each response immediately after
   // JSON.parse (src/session/agda-transport.ts) before any load logic
@@ -427,11 +468,13 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
   });
   const terminusResult = postGate.probes.find((probe) => probe.probe === "terminus");
   if (terminusResult && !terminusResult.ok) {
-    return { kind: "inconclusive", probe: "terminus", detail: terminusResult.detail };
+    if (keepSessionAlive) session.kill();
+    return finish({ kind: "inconclusive", probe: "terminus", detail: terminusResult.detail });
   }
   const timeoutResult = postGate.probes.find((probe) => probe.probe === "timeout");
   if (timeoutResult && !timeoutResult.ok) {
-    return { kind: "inconclusive", probe: "timeout", detail: timeoutResult.detail };
+    if (keepSessionAlive) session.kill();
+    return finish({ kind: "inconclusive", probe: "timeout", detail: timeoutResult.detail });
   }
 
   const parsed = parseLoadResponses(normalizedResponses);
@@ -465,15 +508,18 @@ export async function runColdLoadAndDiff(artifact, materialized, warm) {
     warm.categories.every((category, index) => category === coldCategories[index]);
 
   if (tupleMatches && categoriesMatch) {
-    return { kind: "pass" };
+    return finish({ kind: "pass" }, keepSessionAlive ? session : null);
   }
-  return {
-    kind: "server-false-green-candidate",
-    warmTuple: warm.tuple,
-    coldTuple,
-    warmCategories: warm.categories,
-    coldCategories,
-  };
+  return finish(
+    {
+      kind: "server-false-green-candidate",
+      warmTuple: warm.tuple,
+      coldTuple,
+      warmCategories: warm.categories,
+      coldCategories,
+    },
+    keepSessionAlive ? session : null,
+  );
 }
 
 // ── judgeOrcl01: the standalone-runnable ORCL-01 predicate ──────────
