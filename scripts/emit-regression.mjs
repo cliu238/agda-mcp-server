@@ -397,6 +397,10 @@ export async function scriptMain(argv = process.argv.slice(2)) {
   // materialized when a later step throws (WR-01). Empty until step (b),
   // so rollback is a no-op for earlier throws (e.g. runOracle failing).
   let writtenFiles = [];
+  // Set the instant the matrix entry is durably persisted — once true,
+  // the committed entry references these fixtures, so a later throw
+  // (e.g. a synchronous stdout write failure) must NOT roll them back.
+  let persisted = false;
   try {
     const baselinePath = flagValue(argv, "--baseline");
     const id = flagValue(argv, "--id");
@@ -470,14 +474,17 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     // (f) Persist the one matrix entry.
     const matrixJsonPath = join(SERVER_REPO_ROOT, "test/fixtures/capture-regression-matrix.json");
     await writeMatrixEntry(entry, matrixJsonPath);
+    persisted = true;
     process.stdout.write(`Locked ${entry.id} into ${matrixJsonPath}\n`);
   } catch (err) {
-    // Any throw after step (b) leaves freshly-written fixtures in the
-    // tracked tree — roll them back so a failed emit never orphans files
-    // ready to be accidentally git-add-ed (WR-01). Reachable throw sites:
-    // composeEntry zod/coldTuple failure, replay failure, writeMatrixEntry
-    // duplicate-id rejection.
-    rollbackWrittenFiles(writtenFiles);
+    // Any throw after step (b) but BEFORE the matrix entry is persisted
+    // leaves freshly-written fixtures in the tracked tree — roll them back
+    // so a failed emit never orphans files ready to be accidentally
+    // git-add-ed (WR-01). Reachable throw sites: composeEntry zod/coldTuple
+    // failure, replay failure, writeMatrixEntry duplicate-id rejection.
+    // Once `persisted` is true the committed entry references these
+    // fixtures, so a later throw must never delete them (IN-05).
+    if (!persisted) rollbackWrittenFiles(writtenFiles);
     process.stderr.write(`emit-regression failed: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   }
