@@ -9,7 +9,12 @@
 // Wave 2 (emitter) appends entries by running the emitter against a
 // real capture; Wave 3 (replay runner + flagship rehearsal) reads
 // this matrix to drive replay. No hand-authored entries (D-09 part1:
-// "no hand-built synthetic bundles").
+// "no hand-built synthetic bundles"). This restriction is about a
+// captured DEFECT's content provenance -- an entry must not fabricate
+// a fake bug -- not a blanket ban on ever adding an entry by hand; a
+// mutation-less guard entry over already-real, already-captured
+// fixture content (e.g. "guard-no-metas-clean-load-under-fault-
+// injection", Phase 03.1) is not a synthetic bundle.
 
 import { z } from "zod";
 
