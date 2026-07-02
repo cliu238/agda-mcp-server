@@ -111,6 +111,10 @@ None - no external service configuration required. No new dependencies were inst
 - `agda_capture_session` is reachable from any session state today, but every field beyond the manifest's server-derived core is still an explicit placeholder (`mergedArgv: []`, `agdaDirContents: null`, `buildMode: "unknown"`, `importClosureHash: null`, `inlinedFirstPartySources: []`, `recordedActions: []`, `oracleSubstrate: null`) — cold self-replay (roadmap success criterion 6) is not yet achievable until 01-02 fills in the manifest fidelity fields
 - No blockers for 01-02
 
+## Self-Check: PASSED
+
+All 8 created files verified present on disk; all 4 task/metadata commit hashes (`9807f89`, `eba2f18`, `9cc2202`, `ae866d6`) verified present in `git log`.
+
 ---
 *Phase: 01-capture-foundation*
 *Completed: 2026-07-01*
