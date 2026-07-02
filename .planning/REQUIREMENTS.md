@@ -25,13 +25,13 @@ A capture is **true green** only if all three predicates pass. Each catches a di
 
 ### Reproduction (REPRO)
 
-- [ ] **REPRO-01**: A captured defect yields a minimal reproduction — the offending source snapshotted into a fixture plus the recorded trigger sequence — so the maintainer or an agent can deterministically re-trigger it (assisted/manual trimming; automatic minimization is out of scope for v1)
+- [x] **REPRO-01**: A captured defect yields a minimal reproduction — the offending source snapshotted into a fixture plus the recorded trigger sequence — so the maintainer or an agent can deterministically re-trigger it (assisted/manual trimming; automatic minimization is out of scope for v1)
 
 ### Regression Lock (LOCK)
 
-- [ ] **LOCK-01**: Fixture materialization writes the minimal `.agda` repro under the established `test/fixtures/agda/` convention with automated placement + naming (as the #65/#66 fixtures already demonstrate)
-- [ ] **LOCK-02**: A regression-test emitter turns a captured bundle + fixture into a durable `vitest` test that starts RED, asserts the *correct* behavior using **ORCL-01's cold result as the expected value**, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0). The emitter refuses to lock a capture that **fails ORCL-02** (never golden-masters a postulate/flag cheat as "correct") or is **ORCL-01 INCONCLUSIVE**
-- [ ] **LOCK-03**: The first real regression — the transitive-staleness / false-green defect (#64/#61) — is produced through the emitter as a from-RED test + fixture, both proving the scaffold works end-to-end and filling the highest-priority known coverage gap
+- [x] **LOCK-01**: Fixture materialization writes the minimal `.agda` repro under the established `test/fixtures/agda/` convention with automated placement + naming (as the #65/#66 fixtures already demonstrate)
+- [x] **LOCK-02**: A regression-test emitter turns a captured bundle + fixture into a durable `vitest` test that starts RED, asserts the *correct* behavior using **ORCL-01's cold result as the expected value**, and asserts on the normalized `ToolResult` envelope rather than wire order/timing (robust across Agda 2.6.4.3–2.9.0). The emitter refuses to lock a capture that **fails ORCL-02** (never golden-masters a postulate/flag cheat as "correct") or is **ORCL-01 INCONCLUSIVE**
+- [x] **LOCK-03**: The first real regression — the transitive-staleness / false-green defect (#64/#61) — is produced through the emitter as a from-RED test + fixture, both proving the scaffold works end-to-end and filling the highest-priority known coverage gap
 
 ### Triage / Fix Queue (QUEUE)
 
@@ -95,10 +95,10 @@ Each requirement maps to exactly one phase.
 | ORCL-01 | Phase 2 | Complete |
 | ORCL-02 | Phase 2 | Complete |
 | ORCL-03 | Phase 2 | Complete |
-| REPRO-01 | Phase 3 | Pending |
-| LOCK-01 | Phase 3 | Pending |
-| LOCK-02 | Phase 3 | Pending |
-| LOCK-03 | Phase 3 | Pending |
+| REPRO-01 | Phase 3 | Complete |
+| LOCK-01 | Phase 3 | Complete |
+| LOCK-02 | Phase 3 | Complete |
+| LOCK-03 | Phase 3 | Complete |
 | QUEUE-01 | Phase 4 | Pending |
 | QUEUE-02 | Phase 4 | Pending |
 | QUEUE-03 | Phase 4 | Pending |
