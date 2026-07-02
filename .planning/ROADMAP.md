@@ -105,7 +105,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Foundation: close the Phase-1 capture-staging collision (BLOCKER) + define the capture-regression matrix contract (D-01)
+- [x] 03-01-PLAN.md — Foundation: close the Phase-1 capture-staging collision (BLOCKER) + define the capture-regression matrix contract (D-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -164,6 +164,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
-| 3. Regression Lock Pipeline | 0/3 | Not started | - |
+| 3. Regression Lock Pipeline | 1/3 | In Progress|  |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
