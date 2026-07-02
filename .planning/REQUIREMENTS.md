@@ -9,9 +9,9 @@ The reproducible scaffold. Each requirement maps to a roadmap phase. "Actors" ar
 
 ### Capture (CAP)
 
-- [ ] **CAP-01**: A captured failure bundle is auto-stamped into a complete **replay manifest** from the live session — never caller-supplied: Agda version + pinned binary path, server version, Node/OS, the post-precedence **merged flags as an ordered argv vector with duplicates preserved** (not a set — repeated `-i`/`-l`/`--library-file` are order-significant), the realized `AGDA_DIR` contents (exact libraries + defaults files, so registration is *replayed* not re-derived), cwd/project root, whether the run used a fresh vs shared `_build`, and a **content-hash of the full transitive import closure** at the capture instant (so the oracle can pin to it and abort on drift)
-- [ ] **CAP-02**: A local fingerprint→prior-report dedup index routes a re-captured defect as `update` (with recurrence count) rather than a new `new-bug`, keying on the existing `fingerprintBugReport()` sha256
-- [ ] **CAP-03**: An agent can capture the current stuck/failed session into an on-disk bundle with one MCP verb (e.g. `agda_capture_failure`), emit-only (never writes into the repo tree itself — an out-of-band step persists it), following the `agda_bug_report_bundle` precedent
+- [x] **CAP-01**: A captured failure bundle is auto-stamped into a complete **replay manifest** from the live session — never caller-supplied: Agda version + pinned binary path, server version, Node/OS, the post-precedence **merged flags as an ordered argv vector with duplicates preserved** (not a set — repeated `-i`/`-l`/`--library-file` are order-significant), the realized `AGDA_DIR` contents (exact libraries + defaults files, so registration is *replayed* not re-derived), cwd/project root, whether the run used a fresh vs shared `_build`, and a **content-hash of the full transitive import closure** at the capture instant (so the oracle can pin to it and abort on drift)
+- [x] **CAP-02**: A local fingerprint→prior-report dedup index routes a re-captured defect as `update` (with recurrence count) rather than a new `new-bug`, keying on the existing `fingerprintBugReport()` sha256
+- [x] **CAP-03**: An agent can capture the current stuck/failed session into an on-disk bundle with one MCP verb (e.g. `agda_capture_failure`), emit-only (never writes into the repo tree itself — an out-of-band step persists it), following the `agda_bug_report_bundle` precedent
 - [ ] **CAP-04**: A session action log records the ordered tool calls + args + normalized envelopes for a session (via a recorder/replayer at the Agda `--interaction-json` stdio seam), giving a replayable trace that repro-extraction and test emission both read
 - [ ] **CAP-05**: Each capture also records the substrate the oracle triad reads — the agent's **source diff** (before/after, so the soundness scan has material), the **intended goal type** at task-start (`Cmd_goal_type`), and a **human/task-authored expected top-level signature** (the input the conformance proxy needs) — reusing existing `Cmd_goal_type`/`Cmd_infer_toplevel` plumbing
 
@@ -87,9 +87,9 @@ Each requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAP-01 | Phase 1 | Pending |
-| CAP-02 | Phase 1 | Pending |
-| CAP-03 | Phase 1 | Pending |
+| CAP-01 | Phase 1 | Complete |
+| CAP-02 | Phase 1 | Complete |
+| CAP-03 | Phase 1 | Complete |
 | CAP-04 | Phase 1 | Pending |
 | CAP-05 | Phase 1 | Pending |
 | ORCL-01 | Phase 2 | Pending |
