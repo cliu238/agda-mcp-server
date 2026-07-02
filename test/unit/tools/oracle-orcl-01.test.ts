@@ -3,10 +3,11 @@
 // Unit tests for scripts/oracle/orcl-01-differential.mjs: ORCL-01, the
 // server-faithfulness differential oracle predicate.
 //
-// Task 1 (5 tests, this commit): materializeCaptureEnvironment /
-// runProbeGate — pure/filesystem-only, no real Agda spawn required.
-// Task 2 (5 more tests, next commit): the cold Cmd_load + tuple/
-// category-set diff + judgeOrcl01()/scriptMain.
+// Task 1 (5 tests): materializeCaptureEnvironment / runProbeGate —
+// pure/filesystem-only, no real Agda spawn required.
+// Task 2 (5 tests): the cold Cmd_load + tuple/category-set diff +
+// judgeOrcl01()/scriptMain — 3 tests are RUN_AGDA_INTEGRATION-gated
+// (real cold-replay path against a real local Agda binary), 2 are pure.
 
 import { afterEach, expect, test } from "vitest";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,10 +15,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
-import { materializeCaptureEnvironment, runProbeGate } from "../../../scripts/oracle/orcl-01-differential.mjs";
+import {
+  extractErrorCategory,
+  judgeOrcl01,
+  materializeCaptureEnvironment,
+  runProbeGate,
+} from "../../../scripts/oracle/orcl-01-differential.mjs";
 
+import { AgdaSession } from "../../../src/agda-process.js";
+import { buildReplayManifest } from "../../../src/agda/session-capture/manifest-builder.js";
 import { hashImportClosure, inlineFirstPartySources } from "../../../src/agda/session-capture/import-closure-hash.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
+import { detectAgdaVersion } from "../../helpers/agda-version.js";
+
+const agdaVersion = detectAgdaVersion();
+const agdaAvailable = agdaVersion !== undefined;
+const it = agdaAvailable && process.env.RUN_AGDA_INTEGRATION === "1" ? test : test.skip;
 
 let tempDirs: string[] = [];
 let cleanupFns: Array<() => void> = [];
@@ -80,6 +93,25 @@ function baseArtifact(overrides: {
     recordedActions: overrides.recordedActions ?? [],
     oracleSubstrate: null,
     dedup: { kind: "new-bug", fingerprint: "test-fingerprint", recurrence: 1 },
+  };
+}
+
+function writeArtifact(artifact: unknown): string {
+  const dir = makeTempDir("agda-mcp-orcl01-artifact-");
+  const artifactPath = join(dir, "artifact.json");
+  writeFileSync(artifactPath, JSON.stringify(artifact), "utf8");
+  return artifactPath;
+}
+
+function loadFamilyAction(file: string, data: Record<string, unknown>) {
+  return {
+    tool: "agda_load",
+    args: { file },
+    timestamp: Date.now(),
+    normalizedResponse: {
+      classification: data.classification,
+      data,
+    },
   };
 }
 
@@ -174,4 +206,143 @@ test("inlineFirstPartySources never includes .agda-lib; neither does the materia
   const allMaterializedFiles = findFilesRecursive(materialized.tmpDir);
   expect(allMaterializedFiles.length).toBeGreaterThan(0);
   expect(allMaterializedFiles.some((file) => file.endsWith(".agda-lib"))).toBe(false);
+});
+
+// ── Task 2: cold Cmd_load + diff + judgeOrcl01() ────────────────────
+
+it("judgeOrcl01: a faithful capture of a clean load returns { kind: 'pass' }", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  let artifactPath: string;
+  try {
+    const loadResult = await session.load("CompleteFixture.agda");
+    expect(loadResult.classification).toBe("ok-complete");
+
+    const manifest = buildReplayManifest(session);
+    const artifact = baseArtifact({
+      manifest,
+      recordedActions: [
+        loadFamilyAction("CompleteFixture.agda", {
+          file: "CompleteFixture.agda",
+          success: loadResult.success,
+          goalCount: loadResult.goalCount,
+          invisibleGoalCount: loadResult.invisibleGoalCount,
+          hasHoles: loadResult.hasHoles,
+          isComplete: loadResult.isComplete,
+          classification: loadResult.classification,
+          errors: loadResult.errors,
+          warnings: loadResult.warnings,
+        }),
+      ],
+    });
+    artifactPath = writeArtifact(artifact);
+  } finally {
+    await session.destroy();
+  }
+
+  const outcome = await judgeOrcl01(artifactPath);
+  expect(outcome).toEqual({ kind: "pass" });
+});
+
+it("judgeOrcl01: a forged warm ok-complete over a genuinely cold-failing load returns server-false-green-candidate", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  let artifactPath: string;
+  try {
+    const loadResult = await session.load("ImportedTypeError.agda");
+    // Sanity: this fixture really does fail to type-check (verified
+    // fixture, see test/integration/agda/agda-load.test.ts).
+    expect(loadResult.success).toBe(false);
+
+    const manifest = buildReplayManifest(session);
+    const artifact = baseArtifact({
+      manifest,
+      recordedActions: [
+        // Forged: claims ok-complete even though the real load above
+        // just failed — simulates the server told the truth captured,
+        // this line lies about it, exactly the false-green shape
+        // ORCL-01 exists to catch.
+        loadFamilyAction("ImportedTypeError.agda", {
+          file: "ImportedTypeError.agda",
+          success: true,
+          goalCount: 0,
+          invisibleGoalCount: 0,
+          hasHoles: false,
+          isComplete: true,
+          classification: "ok-complete",
+          errors: [],
+          warnings: [],
+        }),
+      ],
+    });
+    artifactPath = writeArtifact(artifact);
+  } finally {
+    await session.destroy();
+  }
+
+  const outcome = await judgeOrcl01(artifactPath);
+  expect(outcome.kind).toBe("server-false-green-candidate");
+  expect(outcome.warmTuple.classification).toBe("ok-complete");
+  expect(outcome.coldTuple.classification).toBe("type-error");
+  expect(outcome.coldTuple.success).toBe(false);
+});
+
+it("judgeOrcl01: a manifest.agdaVersion mismatch against the real cold binary returns INCONCLUSIVE(version), never a false verdict", async () => {
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  let artifactPath: string;
+  try {
+    const loadResult = await session.load("CompleteFixture.agda");
+    const manifest = { ...buildReplayManifest(session), agdaVersion: "0.0.1" };
+    const artifact = baseArtifact({
+      manifest,
+      recordedActions: [
+        loadFamilyAction("CompleteFixture.agda", {
+          file: "CompleteFixture.agda",
+          success: loadResult.success,
+          goalCount: loadResult.goalCount,
+          invisibleGoalCount: loadResult.invisibleGoalCount,
+          hasHoles: loadResult.hasHoles,
+          isComplete: loadResult.isComplete,
+          classification: loadResult.classification,
+          errors: loadResult.errors,
+          warnings: loadResult.warnings,
+        }),
+      ],
+    });
+    artifactPath = writeArtifact(artifact);
+  } finally {
+    await session.destroy();
+  }
+
+  const outcome = await judgeOrcl01(artifactPath);
+  expect(outcome.kind).toBe("inconclusive");
+  expect(outcome.probe).toBe("version");
+});
+
+test("judgeOrcl01: a non-completeness warm classification (invalid-command-line-options) returns skip without any cold spawn attempt", async () => {
+  const artifact = baseArtifact({
+    recordedActions: [
+      loadFamilyAction("Whatever.agda", {
+        file: "Whatever.agda",
+        success: false,
+        goalCount: 0,
+        invisibleGoalCount: 0,
+        hasHoles: false,
+        isComplete: false,
+        classification: "invalid-command-line-options",
+        errors: ["Unknown flag: --not-a-real-flag"],
+        warnings: [],
+      }),
+    ],
+  });
+  const artifactPath = writeArtifact(artifact);
+
+  const outcome = await judgeOrcl01(artifactPath);
+  expect(outcome.kind).toBe("skip");
+  expect(outcome.reason).toContain("invalid-command-line-options");
+});
+
+test("extractErrorCategory extracts the bracketed error-category tag, or 'uncategorized' when absent", () => {
+  expect(extractErrorCategory("error: [SafeFlagPostulate]\nCannot postulate under --safe")).toBe(
+    "SafeFlagPostulate",
+  );
+  expect(extractErrorCategory("a message with no bracket tag")).toBe("uncategorized");
 });
