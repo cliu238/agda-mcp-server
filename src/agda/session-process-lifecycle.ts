@@ -86,7 +86,11 @@ export function assertProcSurvivedPreflight(
 /** Reset every field that depends on a live Agda process. Called
  *  from the `finally` branch of `sendCommand` so a follow-up tool
  *  sees a clean "No file loaded" surface instead of building a
- *  stale IOTCM envelope against a dead process. */
+ *  stale IOTCM envelope against a dead process. Also resets
+ *  `lastDispatchedLoadArgv` (WR-08): this runs strictly AFTER the
+ *  current command's `sendCommand` attempt resolves/throws, so a
+ *  mid-command process death can never leave a stale prior load's
+ *  flags behind for a later replay manifest to stamp as current. */
 export function resetFileBoundStateIfProcDied(
   session: AgdaSession,
   proc: ChildProcess,
@@ -98,6 +102,7 @@ export function resetFileBoundStateIfProcDied(
   session.lastClassification = null;
   session.lastLoadedAt = null;
   session.lastInvisibleGoalCount = 0;
+  session.lastDispatchedLoadArgv = [];
 }
 
 /** Start the Agda process if not already running, or replace the
@@ -157,7 +162,11 @@ export function adoptSpawnedProcessForSession(
 /** Reset session state when the Agda process closes. The identity
  *  guard ignores `close` events from a process the session already
  *  replaced — without it, a slow SIGTERM on the previous process
- *  would nuke the *current* process's state mid-command. */
+ *  would nuke the *current* process's state mid-command. Also resets
+ *  `lastDispatchedLoadArgv` (WR-08) for this idle/spontaneous-death
+ *  path — an Agda process crashing while idle is exactly a
+ *  stuck/failed session an agent may go on to capture, and its
+ *  replay manifest must never report a stale prior load's flags. */
 export function handleSessionProcessClose(
   session: AgdaSession,
   closingProc: ChildProcess,
@@ -167,6 +176,7 @@ export function handleSessionProcessClose(
   session.detachProcListeners = null;
   freeLibraryRegistration(session);
   resetProcBoundState(session);
+  session.lastDispatchedLoadArgv = [];
 }
 
 /** Tear down the proc handle and clear all process-bound state.

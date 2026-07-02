@@ -85,7 +85,13 @@ export function loadIncompleteNoTerminus(
 /** Clear load-success markers at the start of a load so a throwing or
  *  incomplete load can't leave stale success visible. currentFile is
  *  nulled too — Cmd_load uses an explicit path, not currentFile, and an
- *  in-flight load has no interaction state to point at yet. */
+ *  in-flight load has no interaction state to point at yet.
+ *
+ *  Deliberately does NOT reset `lastDispatchedLoadArgv` (WR-08):
+ *  `session.load()` synchronously pre-assigns that field to the true,
+ *  undeduped argv BEFORE calling `runLoad` (whose first statement
+ *  calls this function) — clearing it here would wipe out that
+ *  assignment on every single load. */
 export function invalidatePriorLoadState(session: AgdaSession): void {
   session.currentFile = null;
   session.goalIds = [];

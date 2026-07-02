@@ -312,6 +312,13 @@ export class AgdaSession {
   }
 
   async loadNoMetas(filePath: string): Promise<LoadResult> {
+    // Cmd_load_no_metas dispatches no options list at all, so the
+    // pre-dedup argv capture field (see its doc comment above) must
+    // reflect that fact BEFORE dispatching — otherwise a replay
+    // manifest built after a strict reload would keep reporting a
+    // prior load()'s flags instead of the current, accurate value
+    // (WR-08).
+    this.lastDispatchedLoadArgv = [];
     return runLoadNoMetas(this, filePath);
   }
 
