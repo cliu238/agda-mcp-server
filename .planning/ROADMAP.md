@@ -67,7 +67,25 @@ Plans:
   4. ORCL-03 (advisory) alpha-diffs the proven `Cmd_infer_toplevel` signature against CAP-05's expected signature over normalized internal types (not printed strings), flagging narrowing / added-premises / renames / target-edits for human review — never a hard gate; it may also carry a lightweight consistency probe (attempt the negation / derive `⊥`) to flag vacuous statements. (ORCL-03)
   5. It is explicit that ORCL-01 passing is necessary-but-insufficient: only all three predicates together justify "true green", and ORCL-01's cold result is the correct expected value handed to Phase 3.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — ORCL-01 foundation: WR-08 replay-fidelity fix + shared disposable cold-Agda-session lifecycle + 7 environment probes
+- [ ] 02-02-PLAN.md — ORCL-02 soundness-hygiene scan: policy file, widened pragma/FFI scan vocabulary, transitive closure walk, whitelist-diff
+
+**Wave 2** *(blocked on 02-01)*
+
+- [ ] 02-03-PLAN.md — ORCL-01 completion: materialization + library-registration replay + cold Cmd_load + normalized tuple/category-set diff
+
+**Wave 3** *(blocked on 02-03)*
+
+- [ ] 02-04-PLAN.md — ORCL-03 conformance proxy: alpha-diff comparison + cold Cmd_load/Cmd_infer_toplevel on a shared session
+
+**Wave 4** *(blocked on 02-02, 02-03, 02-04)*
+
+- [ ] 02-05-PLAN.md — Verdict composition: D-02 schema, single CLI entry point, verdict sidecar, abstention-rate metric
 
 ### Phase 3: Regression Lock Pipeline
 
@@ -83,6 +101,16 @@ Plans:
   4. The #64/#61 transitive-staleness / false-green defect is produced through the emitter as a from-RED test + fixture that goes green only when the defect is fixed — proving the scaffold works end-to-end and filling the highest-priority known coverage gap. (LOCK-03)
 
 **Plans**: TBD
+
+### Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 3
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
 
 ### Phase 4: Triage / Fix Queue
 
@@ -122,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
-| 2. Cold-Compiler Ground-Truth Oracle | 0/TBD | Not started | - |
+| 2. Cold-Compiler Ground-Truth Oracle | 0/5 | Not started | - |
 | 3. Regression Lock Pipeline | 0/TBD | Not started | - |
 | 4. Triage / Fix Queue | 0/TBD | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
