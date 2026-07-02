@@ -39,10 +39,10 @@ A capture is **true green** only if all three predicates pass. Each catches a di
 
 ### Triage / Fix Queue (QUEUE)
 
-- [ ] **QUEUE-01**: An in-repo flat-file fix queue (JSONL/markdown) is the single source of truth for captured defects, each with status (new/triaged/fixing/locked) and keyed by fingerprint; captured defects persist and flow rather than evaporating at session end
-- [ ] **QUEUE-02**: The queue carries a basic prioritization signal composed from already-captured data (false-green > crash > wrong-result > missing-feature; ties broken by recurrence count from the dedup index) giving the maintainer + agents one clear ordering
-- [ ] **QUEUE-03**: An `agda_triage_error` classifier turns a raw Agda error into a machine class (e.g. `mechanical-import`, `parser-regression`, `coverage-missing`, `dep-failure`, `toolchain`) with a confidence score and suggested action, feeding both capture-time classification and fix-queue routing
-- [ ] **QUEUE-04**: The in-repo queue can be mirrored one-way to GitHub Issues via `gh` (optional, non-authoritative — the flat file stays the SSOT)
+- [x] **QUEUE-01**: An in-repo flat-file fix queue (JSONL/markdown) is the single source of truth for captured defects, each with status (new/triaged/fixing/locked) and keyed by fingerprint; captured defects persist and flow rather than evaporating at session end
+- [x] **QUEUE-02**: The queue carries a basic prioritization signal composed from already-captured data (false-green > crash > wrong-result > missing-feature; ties broken by recurrence count from the dedup index) giving the maintainer + agents one clear ordering
+- [x] **QUEUE-03**: An `agda_triage_error` classifier turns a raw Agda error into a machine class (e.g. `mechanical-import`, `parser-regression`, `coverage-missing`, `dep-failure`, `toolchain`) with a confidence score and suggested action, feeding both capture-time classification and fix-queue routing
+- [x] **QUEUE-04**: The in-repo queue can be mirrored one-way to GitHub Issues via `gh` (optional, non-authoritative — the flat file stays the SSOT)
 
 ### Dogfooding Process (PROC)
 
@@ -104,10 +104,10 @@ Each requirement maps to exactly one phase.
 | LOCK-02 | Phase 3 | Complete |
 | LOCK-03 | Phase 3 | Complete |
 | FIX-01 | Phase 03.1 | Complete |
-| QUEUE-01 | Phase 4 | Pending |
-| QUEUE-02 | Phase 4 | Pending |
-| QUEUE-03 | Phase 4 | Pending |
-| QUEUE-04 | Phase 4 | Pending |
+| QUEUE-01 | Phase 4 | Complete |
+| QUEUE-02 | Phase 4 | Complete |
+| QUEUE-03 | Phase 4 | Complete |
+| QUEUE-04 | Phase 4 | Complete |
 | PROC-01 | Phase 5 | Pending |
 | PROC-02 | Phase 5 | Pending |
 
