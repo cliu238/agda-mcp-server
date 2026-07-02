@@ -31,6 +31,7 @@ import {
   resetRecordedActions,
 } from "../agda/session-capture/recorded-transport.js";
 import { buildOracleSubstrate } from "../agda/session-capture/oracle-substrate.js";
+import { deriveTriageFromActions } from "../agda/session-capture/triage-derivation.js";
 import { writeFileAtomic } from "../session/safe-source-io.js";
 
 import {
@@ -118,6 +119,17 @@ export function registerCaptureSession(
         const { actions, truncated, droppedCount } = drainRecordedActions();
         resetRecordedActions();
 
+        // QUEUE-03/D-10: derive triage + richer fingerprint identity
+        // fields from the last load-family action's recorded error
+        // (or fall back to today's generic shape when there is none).
+        // All scan/classification logic lives in triage-derivation.ts
+        // — this call is the only new logic inline in this file.
+        const { triage, fingerprintAffectedTool, fingerprintObserved } =
+          deriveTriageFromActions(actions, {
+            affectedTool: "agda_capture_session",
+            observed: inputs.note ?? "session capture",
+          });
+
         const oracleSubstrate = await buildOracleSubstrate(session, {
           expectedSignature: inputs.expectedSignature,
           beforeSource: inputs.beforeSource,
@@ -154,9 +166,9 @@ export function registerCaptureSession(
 
         const fingerprint = fingerprintBugReport({
           kind: "new-bug",
-          affectedTool: "agda_capture_session",
+          affectedTool: fingerprintAffectedTool,
           classification: sessionClassification ?? "unknown",
-          observed: inputs.note ?? "session capture",
+          observed: fingerprintObserved,
           expected: "",
           reproduction: [],
           serverVersion: manifest.serverVersion,
@@ -171,6 +183,7 @@ export function registerCaptureSession(
           recordedActions: actions,
           oracleSubstrate,
           dedup,
+          triage,
           note: inputs.note,
         };
 

@@ -10,6 +10,8 @@
 // fields rather than omitting them, so every consumer can rely on the
 // full shape always being present.
 
+import type { TriageResult } from "../error-classifier.js";
+
 /**
  * Server-stamped replay manifest: everything needed to reproduce the
  * environment a captured session ran in. Never caller-supplied (D-04)
@@ -115,6 +117,16 @@ export interface CaptureArtifact {
   recordedActions: RecordedAction[];
   oracleSubstrate: OracleSubstrate | null;
   dedup: DedupRouting;
+  /**
+   * QUEUE-03/D-10: `classifyAgdaError()`'s output for the last
+   * load-family action's recorded error, or `null` when no
+   * load-family action ever recorded one. Populated by
+   * `src/tools/register-capture-session.ts` via
+   * `src/agda/session-capture/triage-derivation.ts` — always
+   * explicit `null` (never omitted), per this file's own "full shape
+   * always present" convention.
+   */
+  triage: TriageResult | null;
   /** Optional free-text note supplied by the capturing agent. */
   note?: string;
 }

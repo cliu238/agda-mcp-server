@@ -19,6 +19,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { AgdaSession } from "../../../src/agda-process.js";
+import { classifyAgdaError } from "../../../src/agda/agent-ux.js";
 import { registerCaptureSession } from "../../../src/tools/register-capture-session.js";
 import { getServerVersion } from "../../../src/server-version.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
@@ -118,6 +119,10 @@ test("agda_capture_session is state-agnostic, returns a reference (not the artif
     const staged = JSON.parse(readFileSync(data.stagedPath, "utf8"));
     expect(staged.manifest.serverVersion).toBe(getServerVersion());
     expect(staged.recordedActions).toEqual([]);
+    // QUEUE-03/D-10: no load-family action ever recorded an error (no
+    // recorded actions at all in this zero-interaction session), so
+    // triage must be explicit null, never omitted.
+    expect(staged.triage).toBeNull();
   } finally {
     await session.destroy();
   }
@@ -190,6 +195,63 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
 
     // D-10 guardrail still holds across this test's env/expectedSignature path.
     expect(Object.keys(data)).toContain("sessionClassification");
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("agda_capture_session embeds a real triage classification from the last load-family action's error text", async () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  clearToolManifest();
+
+  const server = makeCapturingServer();
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    const errorText = "Parse error: could not parse the expression";
+
+    // A fake `agda_load` call - real load-family tool name, recorded
+    // through the SAME registerStructuredTool boundary CAP-04 feeds -
+    // carrying a deterministic, classifier-matching error string.
+    registerStructuredTool({
+      server: server as unknown as McpServer,
+      name: "agda_load",
+      description: "test",
+      category: "analysis",
+      outputDataSchema: z.object({
+        errors: z.array(z.string()),
+        success: z.boolean(),
+      }),
+      callback: async () =>
+        makeToolResult(
+          okEnvelope({
+            tool: "agda_load",
+            summary: "type-error",
+            classification: "type-error",
+            data: { errors: [errorText], success: false },
+          }),
+        ),
+    });
+
+    await server.get("agda_load")!.callback({});
+
+    registerCaptureSession(
+      server as unknown as McpServer,
+      session,
+      TEST_FIXTURE_PROJECT_ROOT,
+    );
+
+    const result = await server.get("agda_capture_session")!.callback({});
+    expect(result.structuredContent.ok).toBe(true);
+
+    const data = result.structuredContent.data;
+    const staged = JSON.parse(readFileSync(data.stagedPath, "utf8"));
+
+    // Never a hardcoded expected number/category - call the real
+    // classifier once to derive the expected value.
+    const expectedTriage = classifyAgdaError(errorText);
+    expect(staged.triage.category).toBe(expectedTriage.category);
+    expect(staged.triage.confidence).toBe(expectedTriage.confidence);
   } finally {
     await session.destroy();
   }
