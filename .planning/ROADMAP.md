@@ -136,7 +136,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03.1-02-PLAN.md — The proof: flip the flagship lock to green, add the D-05 goal-less-load guard entry, and run the full no-regression sweep against real Agda
+- [x] 03.1-02-PLAN.md — The proof: flip the flagship lock to green, add the D-05 goal-less-load guard entry, and run the full no-regression sweep against real Agda
 
 ### Phase 4: Triage / Fix Queue
 
