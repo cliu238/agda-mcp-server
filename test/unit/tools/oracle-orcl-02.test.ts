@@ -97,6 +97,59 @@ describe("scanPragmaVocabulary", () => {
     const findings = scanPragmaVocabulary(source);
     expect(findings.filter((f: { kind: string }) => f.kind === "prim-trust-me")).toHaveLength(0);
   });
+
+  // Plan-level success criteria names all 7 cheat shapes explicitly
+  // (postulate, TERMINATING, NO_POSITIVITY_CHECK/NO_UNIVERSE_CHECK,
+  // primTrustMe, COMPILE/FOREIGN, --with-K override, residual holes).
+  // The two below and the bare-hole/{! !} cases round out direct
+  // coverage of the remaining named shapes not otherwise exercised by
+  // a standalone fixture above.
+
+  test("detects a {-# NO_POSITIVITY_CHECK #-} pragma", () => {
+    const source = [
+      "module NoPositivityExample where",
+      "",
+      "{-# NO_POSITIVITY_CHECK #-}",
+      "data Bad : Set where",
+      "  bad : (Bad → Bad) → Bad",
+      "",
+    ].join("\n");
+    const findings = scanPragmaVocabulary(source);
+    const noPositivity = findings.filter((f: { kind: string }) => f.kind === "no-positivity-check");
+    expect(noPositivity.length).toBeGreaterThan(0);
+    expect(noPositivity[0].line).toBe(3);
+  });
+
+  test("detects a {-# NO_UNIVERSE_CHECK #-} pragma", () => {
+    const source = [
+      "module NoUniverseExample where",
+      "",
+      "{-# NO_UNIVERSE_CHECK #-}",
+      "data Type : Set where",
+      "  wrap : Set → Type",
+      "",
+    ].join("\n");
+    const findings = scanPragmaVocabulary(source);
+    const noUniverse = findings.filter((f: { kind: string }) => f.kind === "no-universe-check");
+    expect(noUniverse.length).toBeGreaterThan(0);
+    expect(noUniverse[0].line).toBe(3);
+  });
+
+  test("detects a bare residual hole (?)", () => {
+    const source = "module BareHole where\n\nholeOnly : Set\nholeOnly = ?\n";
+    const findings = scanPragmaVocabulary(source);
+    const holes = findings.filter((f: { kind: string }) => f.kind === "residual-hole");
+    expect(holes.length).toBeGreaterThan(0);
+    expect(holes[0].line).toBe(4);
+  });
+
+  test("detects an extended {! ... !} hole", () => {
+    const source = "module ExtendedHole where\n\nholeOnly : Set\nholeOnly = {! !}\n";
+    const findings = scanPragmaVocabulary(source);
+    const holes = findings.filter((f: { kind: string }) => f.kind === "residual-hole");
+    expect(holes.length).toBeGreaterThan(0);
+    expect(holes[0].line).toBe(4);
+  });
 });
 
 // ── with-K override precondition: raw data the Task-2 closure+policy
