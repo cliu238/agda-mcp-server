@@ -121,6 +121,28 @@ test("runEnvironmentProbes: version probe fails when the captured manifest never
   expect(result.detail).toContain("never detected");
 });
 
+test("runEnvironmentProbes: version probe abstains (never throws) on an unparseable captured Agda version (WR-02)", () => {
+  // manifestAgdaVersion is read straight from the untrusted capture; a
+  // non-null but unparseable value previously threw out of the entire
+  // run (parseAgdaVersion has no digit run to match). It must now
+  // abstain (ok: false / INCONCLUSIVE), never propagate an exception.
+  const badManifest: ProbeResult[] = runEnvironmentProbes({
+    ...baseValidInput(),
+    manifestAgdaVersion: "not-a-version",
+    detectedAgdaVersion: "2.8.0",
+  });
+  const manifestResult = findProbe(badManifest, "version");
+  expect(manifestResult.ok).toBe(false);
+  expect(manifestResult.detail).toContain("not-a-version");
+
+  // Symmetric: an unparseable cold-detected version also abstains.
+  const badCold: ProbeResult[] = runEnvironmentProbes({
+    ...baseValidInput(),
+    detectedAgdaVersion: "???",
+  });
+  expect(findProbe(badCold, "version").ok).toBe(false);
+});
+
 test("runEnvironmentProbes: agdaDir-hash probe fails when a replayed library path is missing on this machine", () => {
   const missingPath = "/definitely/does/not/exist/on/this/machine/foo.agda-lib";
   const probes: ProbeResult[] = runEnvironmentProbes({

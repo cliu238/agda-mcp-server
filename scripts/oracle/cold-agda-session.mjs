@@ -266,9 +266,28 @@ function versionProbe({ manifestAgdaVersion, detectedAgdaVersion }) {
       detail: "cold run could not detect an Agda version",
     };
   }
-  const matches =
-    compareVersions(parseAgdaVersion(detectedAgdaVersion), parseAgdaVersion(manifestAgdaVersion)) === 0;
-  if (matches) {
+  // WR-02: `manifestAgdaVersion` is read straight from the untrusted
+  // capture manifest (`artifact.manifest.agdaVersion`), and
+  // `detectedAgdaVersion` from a cold `agda --version` probe. A non-null
+  // but unparseable value (no digit run) makes `parseAgdaVersion` throw;
+  // that exception previously propagated out through runProbeGate ->
+  // runColdLoadAndDiff -> runOracle, aborting the whole CLI with no
+  // verdict written. An unparseable version is evidence the environments
+  // cannot be matched — abstain (INCONCLUSIVE), never throw and never a
+  // false PASS (this module's stated contract).
+  let coldVersion;
+  let capturedVersion;
+  try {
+    coldVersion = parseAgdaVersion(detectedAgdaVersion);
+    capturedVersion = parseAgdaVersion(manifestAgdaVersion);
+  } catch {
+    return {
+      probe: "version",
+      ok: false,
+      detail: `could not parse an Agda version for comparison (captured="${manifestAgdaVersion}", cold="${detectedAgdaVersion}")`,
+    };
+  }
+  if (compareVersions(coldVersion, capturedVersion) === 0) {
     return { probe: "version", ok: true };
   }
   return {
