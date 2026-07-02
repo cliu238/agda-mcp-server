@@ -152,7 +152,22 @@ Plans:
   3. An `agda_triage_error` classifier turns a raw Agda error into a machine class (mechanical-import, parser-regression, coverage-missing, dep-failure, toolchain) with a confidence score and suggested action, feeding both capture-time classification and fix-queue routing. (QUEUE-03)
   4. The in-repo queue can be mirrored one-way to GitHub Issues via `gh` (optional, non-authoritative — the flat file stays the SSOT). (QUEUE-04)
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — QUEUE-01 engine: zod schema + typed loader, intake upsert (append-new/bump-in-place), CAP-02 dedup repoint to the queue file
+- [ ] 04-02-PLAN.md — QUEUE-03 wiring: embed classifyAgdaError()'s output on every capture + fix the fingerprint-fidelity gap
+
+**Wave 2** *(blocked on 04-01 completion)*
+
+- [ ] 04-03-PLAN.md — QUEUE-01 seed data: the real 13-entry cargo (flagship + CHG-REVERIFY confirmed + CHG needs-reverify specs)
+- [ ] 04-04-PLAN.md — QUEUE-04 GitHub mirror: dry-run-default, idempotent one-way upsert via execFileSync
+
+**Wave 3** *(blocked on 04-01, 04-03 completion)*
+
+- [ ] 04-05-PLAN.md — QUEUE-02 priority scoring + D-03 regenerated dashboard (close-rate + WIP-limit advisory)
 
 ### Phase 5: Dogfooding Orchestration + Fuel
 
@@ -179,5 +194,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Capture Foundation | 5/5 | Complete   | 2026-07-02 |
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
-| 4. Triage / Fix Queue | 0/TBD | Not started | - |
+| 4. Triage / Fix Queue | 0/5 | Not started | - |
 | 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
