@@ -3,13 +3,16 @@ export interface CommandCompletionSnapshot {
   responseCount: number;
   lastResponseKind?: string | null;
   /**
-   * This command is a metas `Cmd_load` whose goal-state terminus
-   * (`AllGoalsWarnings` / `Error` / `InteractionPoints`) we must wait
-   * for. Set only on that path; every other command leaves it false and
-   * keeps the original fast idle behavior.
+   * This command is a load-family command awaiting a terminus before it
+   * may resolve — true for BOTH a metas `Cmd_load` (awaiting
+   * `AllGoalsWarnings` / `Error` / `InteractionPoints`) AND a strict
+   * `Cmd_load_no_metas` (awaiting the widened idle window keyed on an
+   * `Error`). Derived from `AgdaTransport`'s `terminus.mode !== null`
+   * (see `src/session/load-terminus-tracker.ts`); every non-load command
+   * leaves it false and keeps the original fast idle behavior.
    */
   awaitGoalTerminus?: boolean;
-  /** The awaited goal-state terminus has been observed. */
+  /** The awaited load terminus (metas or strict) has been observed. */
   sawGoalTerminus?: boolean;
 }
 

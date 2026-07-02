@@ -198,6 +198,19 @@ export async function runLoadNoMetas(
   // Agda 2.8.0 — so success is inferred from silence after the widened
   // idle window (AGDA_MCP_LOAD_TERMINUS_IDLE_MS, the same tunable the
   // metas path already uses) rather than from a positive event.
+  //
+  // ASYMMETRY WITH THE METAS PATH (deliberate): runLoad additionally
+  // rejects on `!parsed.sawLoadTerminus`, but the strict path CANNOT —
+  // a clean strict load has no positive terminus to have seen, so that
+  // check would false-RED every legitimate goal-less load (the D-02
+  // trap). RESIDUAL RISK: an Error arriving LATER than
+  // AGDA_MCP_LOAD_TERMINUS_IDLE_MS (default 2000ms) after the final
+  // response would still be missed, reopening the #64/#61 class for
+  // pathologically slow machines/modules. This is inherent to a signal
+  // that has no positive terminus; the mitigation is the tunable window,
+  // and it is strictly better than the pre-fix unguarded idle path. The
+  // process-crash-during-load truncation is a separate, still-open mode
+  // (handleProcessClose resolves immediately) — out of this fix's scope.
   const responses = await session.sendCommand(
     session.iotcmFor(absPath, command("Cmd_load_no_metas", quoted(absPath))),
     undefined,

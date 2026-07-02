@@ -15,6 +15,18 @@
 // mutation-less guard entry over already-real, already-captured
 // fixture content (e.g. "guard-no-metas-clean-load-under-fault-
 // injection", Phase 03.1) is not a synthetic bundle.
+//
+// What that guard entry proves, precisely (Phase 03.1 D-05): the
+// widened strict-terminus idle window does NOT break a legitimately
+// goal-less strict load -- it still classifies ok-complete under the
+// same fault-injection serverEnv that exposed the flagship false-green,
+// i.e. the fix does not over-correct clean loads into false-REDs or
+// hangs. It is NOT fix-discriminating: a clean load is ok-complete with
+// or without the strict mode, since the idle timer fires either way and
+// only the resolution DELAY changes. The single fix-discriminating lock
+// is the MUTATION entry "issue-64-61-transitive-staleness" (plus the
+// load-terminus-tracker unit tests), which flips red->green only when
+// the strict guard is present.
 
 import { z } from "zod";
 
