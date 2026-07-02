@@ -212,6 +212,13 @@ test("agda_capture_session never collides on stagedPath for two same-session, sa
     // fingerprint/recurrence (new-bug/1), exactly CR-03's repro shape:
     // two "ok-complete"-classified captures in the same session.
     const result1 = await server.get("agda_capture_session")!.callback({});
+    // A zero-interaction session's two capture calls can otherwise
+    // complete within the same millisecond, making `capturedAt`
+    // ambiguous evidence of independent writes even when the
+    // underlying files are genuinely distinct - force a tick so the
+    // capturedAt-divergence assertion below is deterministic rather
+    // than timing-flaky.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const result2 = await server.get("agda_capture_session")!.callback({});
 
     const data1 = result1.structuredContent.data;
