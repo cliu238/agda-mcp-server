@@ -194,3 +194,55 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
     await session.destroy();
   }
 });
+
+test("agda_capture_session never collides on stagedPath for two same-session, same-fingerprint captures (closes 01-VERIFICATION.md CR-03 BLOCKER)", async () => {
+  clearToolManifest();
+
+  const server = makeCapturingServer();
+  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+
+  try {
+    registerCaptureSession(
+      server as unknown as McpServer,
+      session,
+      TEST_FIXTURE_PROJECT_ROOT,
+    );
+
+    // No `note` on either call - both calls share the identical
+    // fingerprint/recurrence (new-bug/1), exactly CR-03's repro shape:
+    // two "ok-complete"-classified captures in the same session.
+    const result1 = await server.get("agda_capture_session")!.callback({});
+    // A zero-interaction session's two capture calls can otherwise
+    // complete within the same millisecond, making `capturedAt`
+    // ambiguous evidence of independent writes even when the
+    // underlying files are genuinely distinct - force a tick so the
+    // capturedAt-divergence assertion below is deterministic rather
+    // than timing-flaky.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const result2 = await server.get("agda_capture_session")!.callback({});
+
+    const data1 = result1.structuredContent.data;
+    const data2 = result2.structuredContent.data;
+
+    expect(data1.kind).toBe("new-bug");
+    expect(data1.recurrence).toBe(1);
+    expect(data2.kind).toBe("new-bug");
+    expect(data2.recurrence).toBe(1);
+
+    // The fix under test: two captures sharing the identical
+    // fingerprint/recurrence pair must still produce structurally
+    // distinct staged paths.
+    expect(data1.stagedPath).not.toBe(data2.stagedPath);
+    expect(existsSync(data1.stagedPath)).toBe(true);
+    expect(existsSync(data2.stagedPath)).toBe(true);
+
+    // Proves the first artifact survived on disk (not just that a
+    // file exists at both paths) - the second capture must not have
+    // silently overwritten the first's data.
+    const staged1 = JSON.parse(readFileSync(data1.stagedPath, "utf8"));
+    const staged2 = JSON.parse(readFileSync(data2.stagedPath, "utf8"));
+    expect(staged1.capturedAt).not.toBe(staged2.capturedAt);
+  } finally {
+    await session.destroy();
+  }
+});

@@ -41,6 +41,15 @@ import {
   type ToolDiagnostic,
 } from "./tool-helpers.js";
 
+// Per-process monotonic sequence counter appended to every staged
+// capture filename. Two captures in the same session can share the
+// identical fingerprint/recurrence pair (the dedup index only
+// advances via the manual, out-of-band scripts/promote-capture.mjs)
+// - without this counter both would collide on the same stagedPath
+// and writeFileAtomic's rename would silently clobber the first
+// artifact (closes 01-VERIFICATION.md CR-03 BLOCKER).
+let stagedFileSequence = 0;
+
 const captureReferenceDataSchema = z.object({
   stagedPath: z.string(),
   fingerprint: z.string(),
@@ -163,7 +172,7 @@ export function registerCaptureSession(
         mkdirSync(captureDir, { recursive: true });
         const stagedPath = join(
           captureDir,
-          `${dedup.fingerprint}-${dedup.recurrence}.json`,
+          `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}.json`,
         );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
 
