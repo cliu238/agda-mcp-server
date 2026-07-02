@@ -314,22 +314,25 @@ Not applicable — this is a greenfield feature phase (new tool + new model), no
 
 **If this table is empty:** N/A — see rows above.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where exactly does the "before" source diff (CAP-05) get its baseline from?**
    - What we know: D-04 explicitly defers this to plan-phase research: "how the 'before' source of the diff is reconstructed (git vs recorded edits vs agent-supplied)."
    - What's unclear: Whether to shell out to `git diff`/`git show` (requires the project to be a git repo and the file to be tracked — not guaranteed for every dogfooding target), to track edits via the recorder (requires wiring proof-edit application, `apply-*.ts`, into the same recording seam), or to require the agent to pass `beforeSource` explicitly as a tool input.
    - Recommendation: The lowest-risk default for Phase 1 is agent-supplied `beforeSource` (optional, like `expectedSignature` per D-02's optionality pattern) with a `git diff`-based best-effort fallback when the target is inside a git repo and the file is tracked — falling back to "no diff available" (with a `nextAction` warning) otherwise. This avoids a hard git dependency while still capturing the common case automatically. Confirm this choice explicitly in plan-phase, not silently.
+   - **Resolved by: 01-04 Task 1.** Plan 01-04 implements exactly this recommendation — agent-supplied `beforeSource` takes priority, with a git-diff-based fallback (`git show HEAD:<path>`) when the target is a tracked file in a git repo, and an explicit "unavailable" `beforeSourceOrigin` + warning diagnostic otherwise (git-fallback priority order).
 
 2. **Where precisely does `RecordedTransport` intercept — the `AgdaTransport` class itself, or the `dispatchSessionCommand`/`dispatchSessionControlCommand` call sites in `session-command-dispatch.ts`?**
    - What we know: CONTEXT.md flags this as the exact seam decision left to plan-phase ("Ring-buffer sizing and exactly where `RecordedTransport` wraps the transport are for plan-phase"). `agda-transport.ts` is already at 535 lines (over ceiling) so new fields there are out.
    - What's unclear: Whether recording at the `AgdaTransport.sendCommand`/`sendFireAndForgetCommand` level (captures raw `AgdaResponse[]`) or at `dispatchSessionCommand` level (captures the already-normalized/ higher-level tool-call boundary CAP-04's "normalized envelopes" language suggests) is the correct layer — CAP-04 explicitly says "normalized envelopes," which points toward the `ToolEnvelope` boundary in `src/tools/tool-registration.ts`'s `timedCallback` wrapper, not the raw transport.
    - Recommendation: Record at the MCP tool-call boundary (in `tool-registration.ts`'s `timedCallback`, or a thin wrapper around it) so "ordered tool calls + args + normalized envelopes" is captured verbatim as CAP-04 literally states, rather than reconstructing normalized envelopes from raw `AgdaResponse[]` after the fact. This also naturally captures *all* tool calls (not just Agda-protocol ones), which may matter for a faithful session lineage. Verify this reading against CAP-04's exact wording in plan-phase.
+   - **Resolved by: 01-03 Task 1 (`timedCallback` MCP boundary).** Plan 01-03 wires `RecordedTransport`-equivalent recording at the `tool-registration.ts` `timedCallback` wrapper (the MCP tool-call boundary), per the recommendation — not at the raw `AgdaTransport` layer — so CAP-04's "ordered tool calls + args + normalized envelopes" language is satisfied literally.
 
 3. **What counts as "fresh vs shared `_build`" for the manifest field, given this project's `_build` convention (`test/fixtures/agda/_build/` is gitignored, but dogfooding targets are arbitrary external Agda projects)?**
    - What we know: `.gitignore` only knows about the repo's own `test/fixtures/agda/_build/`; dogfooding targets (agda-unimath, Codex-Homotopy-Group) are separate external projects with their own build/interface-cache conventions.
    - What's unclear: How the capture model detects "fresh" vs "shared" `_build` for an arbitrary external target project, not just this repo's own fixtures.
    - Recommendation: Likely a simple existence + mtime-recency heuristic on the target project's own `_build`/interface-cache directory (if any), or an explicit flag threaded from the dogfooding driver script (Phase 5) rather than server-side detection. Flag for plan-phase to decide the exact detection heuristic.
+   - **Resolved by: 01-02 Task 2 (mtime heuristic).** Plan 01-02 implements the existence + mtime-recency heuristic on the target project's own `_build`/interface-cache directory, per the recommendation, rather than server-side deep detection or a Phase-5 driver flag.
 
 ## Environment Availability
 
