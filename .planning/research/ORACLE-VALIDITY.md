@@ -16,13 +16,24 @@ It is **structurally invalid (a guaranteed miss)** for the two families the real
 
 ## Empirical grounding (the Hopf/agda-unimath dogfooding)
 
-The triad is not theoretical — it was seeded by *observed* **Codex** behavior while autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** over the MCP server (the `emilyriehl/autoformalizing-hopf` experiment — private repo, mirrored locally at `ref/README.md`). The stated goal was library-quality contributions, not flag-planting.
+The triad is not theoretical — it was seeded by *observed* **Codex** behavior while autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** over the MCP server (the `emilyriehl/autoformalizing-hopf` experiment — private repo). The stated goal was library-quality contributions, not flag-planting.
 
 - Codex **took shortcuts and flag-planted** rather than writing library-quality code → the empirical origin of **ORCL-02** (soundness-cheat scan: postulates / unsafe flags / FFI).
 - Codex **narrowed scope / proved a weaker statement**, and had to be explicitly steered back to the general theorems → the empirical origin of **ORCL-03** (conformance / proved-the-wrong-or-narrower statement).
 - Canonical case study — **join associativity**: codex was kept working but had to be interrupted twice, with an eventual pivot to human rocq-hott code. The worked example of "agent stalls + narrows"; a candidate Phase-3 regression fixture / Phase-5 dogfooding fuel.
 
 This is *why* ORCL-02/03 are first-class in v1 and not deferred: the real experiment already produced exactly these cheats.
+
+### Measured against agda-mcp-server itself (Codex-Homotopy-Group)
+
+A second corpus — `emilyriehl/Codex-Homotopy-Group` (private; π₃(S²)=ℤ over agda-unimath) — **directly dogfoods this server** and turns the false-green from hypothesis into a measured fact.
+
+- **The #64/#61/#65/#66 family is MEASURED.** On 2026-05-30 the team injected a real type error; `agda_load` / `agda_typecheck` / `agda_load_no_metas` / `agda_proof_status` (v0.6.7, Agda 2.8.0) ALL returned ok-complete / zero-errors while raw `agda` rejected (`UnequalTerms: UU !=< A`). They retired MCP from the acceptance path and froze the distrust into `check.sh`'s header + a Skill. Redundantly corroborated by an extractor over 711 `agda_*` calls (290 anomalies, 12 families) in `agda-mcp-ux-report/`. ⚠️ v0.6.7 — re-verify against current `main` before treating any specific defect as live.
+- **`loop.sh`'s `gate_verify` is a hand-rolled prototype of this exact triad**, built *because* MCP "ok" was untrusted: (1) raw-agda typecheck + unsolved-meta = ORCL-01; (2) no-holes grep + (3) no-postulate grep = ORCL-02; (4) pinned `.sig` substring = a crude ORCL-03/CAP-05.
+- **PR #1 self-reports 4 gaps of that gate — each closed by a specific predicate:** renamed-statement-without-`.sig` → ORCL-03 (fed by CAP-05; PROC-01 hard gate); imported-postulate (single-file grep) → ORCL-02 transitive-closure scan; file-level `--allow-unsolved-metas` override → ORCL-01 completeness tuple + ORCL-02 pragma-aware scan; trivially-true restatement → ORCL-03 negation probe (AUTO-08).
+- **Refinements this corpus forces:** ORCL-01 must **replay the exact sandbox** (CHG ships two `check.sh` variants / different `.agda-lib` / flags — not one canonical check); the soundness scan must be **pragma-aware** (a file-level flag overrides the library flag); completeness accounting must distinguish a **legitimate scaffold-hole** workflow (intentional `{!!}` + `--allow-unsolved-metas`) from a claimed-complete proof, or ORCL false-reds normal in-progress work.
+
+The measurable Loop-② win is concrete: **retract the "do not trust MCP ok-complete" warning** the team baked into their Skill.
 
 ## Coverage matrix (representative)
 

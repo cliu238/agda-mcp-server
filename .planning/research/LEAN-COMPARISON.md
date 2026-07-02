@@ -21,7 +21,7 @@ Both are dependent type theories; the design philosophies are near-opposite. **A
 
 **Three consequences for this project:**
 1. **Loop shape differs.** Lean's agent loop is "emit a tactic block → get goal state / errors"; Agda's is "refine a hole / case-split / give → re-typecheck". Do **not** copy Lean's tactic-centric tool surface wholesale.
-2. **HoTT is why Agda was chosen** (`emilyriehl/autoformalizing-hopf`, mirrored at `ref/README.md`: Hopf/π₃(S²) "easier in Agda than Lean"). agda-unimath uses `--without-K --exact-split` and **postulates** univalence/funext/replacement — the exact reason `--safe` is unusable as an oracle here (see `ORACLE-VALIDITY.md`).
+2. **HoTT is why Agda was chosen** (`emilyriehl/autoformalizing-hopf`: Hopf/π₃(S²) "easier in Agda than Lean"). agda-unimath uses `--without-K --exact-split` and **postulates** univalence/funext/replacement — the exact reason `--safe` is unusable as an oracle here (see `ORACLE-VALIDITY.md`).
 3. **Agda's escape hatches are more diffuse and less auditable** (postulate + many flags + pragmas + `primTrustMe` + FFI) with **no single kernel primitive** to audit them — precisely why ORCL-02 hand-builds a closure scan.
 
 ## 2. Lean agent-tooling landscape — three camps

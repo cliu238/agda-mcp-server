@@ -83,6 +83,10 @@ Only **two surgical `src/` additions**: a pure `session-capture` model + the emi
 - `src/protocol/command-builder.ts` — IOTCM SSOT; `Cmd_goal_type` / `Cmd_infer_toplevel` plumbing reused for CAP-05.
 - `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STRUCTURE.md`, `.planning/codebase/INTEGRATIONS.md` — layering (`protocol → agda → session → tools`) and the Agda-binary integration seam.
 
+### Field evidence (Codex-Homotopy-Group — private corpus that dogfoods this server)
+- `emilyriehl/Codex-Homotopy-Group` → `agda-mcp-ux-report/` (README.md + `extract-mcp-evidence.mjs` + `mcp-evidence.json`) — a real forensic report on THIS server: 711 `agda_*` calls, 290 anomalies in 12 named families, a target envelope schema, and **8 turn-key regression specs**. The extractor's per-call field list is a concrete template for what the CAP-04 action log should emit. (private/access-gated; ⚠️ measured on v0.6.7)
+- `emilyriehl/Codex-Homotopy-Group` → `loop.sh` (`gate_verify`) + PR #1 `SCRIPTS-USAGE.md` — the bash oracle prototype the MCP is meant to replace; its 4 checks / 4 self-reported gaps map onto ORCL-01/02/03. Full mapping in `.planning/research/ORACLE-VALIDITY.md`.
+
 </canonical_refs>
 
 <code_context>
@@ -111,6 +115,8 @@ Only **two surgical `src/` additions**: a pure `session-capture` model + the emi
 - The **two surgical `src/` additions** are a hard constraint: (1) a pure `session-capture` model, (2) the emit-only capture tool. Persistence of the artifact, index writes, and orchestration live in `scripts/` + data dirs.
 - Staging + index location convention: an out-of-repo, gitignored area (OS temp or `.agda-mcp/captures/`). The capture tool reads the index and stages the artifact there; a separate script promotes it into the repo.
 - Manifest fidelity is exact and order-sensitive: merged flags as an **ordered argv preserving duplicates** (repeated `-i`/`-l`/`--library-file` are order-significant), realized `AGDA_DIR` contents, and a **content-hash of the full transitive import closure** (so Phase-2's oracle can pin to it and abort on drift).
+- **CAP-04 field list (from a real extractor):** CHG's `extract-mcp-evidence.mjs` reconstructs per-call `{ ok, classification, goalCount, invisibleGoalCount, hasHoles, isComplete, elapsedMs, wallTimeMs, serverVersion, agdaVersion, args, excerpt }` — a concrete template for what the recorder should capture natively (a native log makes such forensic extractors unnecessary).
+- **Model the scaffold-hole workflow:** agents deliberately place temporary `{!!}` + a file-level `--allow-unsolved-metas` to verify scaffold shape, then remove them. What capture records (and what Phase-2 ORCL later judges) MUST distinguish intentional-scaffold-incomplete from claimed-complete — never treat a deliberate scaffold hole as a defect.
 
 </specifics>
 
@@ -122,6 +128,9 @@ Only **two surgical `src/` additions**: a pure `session-capture` model + the emi
 - **Durable flat-file fix queue** (QUEUE-01) → Phase 4; it supersedes the Phase-1 minimal dedup index. (D-03)
 - **Oracle consumption of the CAP-05 substrate** (ORCL-02/03) → Phase 2. Phase 1 only *records* the substrate, never judges.
 - **Where the source-diff "before" comes from** (git vs recorded edits vs agent-supplied) → resolve in plan-phase research, not by preference. (D-04)
+- **8 turn-key regression specs + target envelope schema** (CHG `agda-mcp-ux-report/`) → Phase 3 LOCK seeds (each is a captured anomaly already reduced to a lockable from-RED test). Pointer only; formalize at Phase-3 plan time.
+- **Phase-5 integration constraints** (CHG `MCP-SETUP.md`): pinned launch `codex mcp add agda --env AGDA_MCP_ROOT=… -- npx -y agda-mcp-server@<ver>`; `agda_effective_options` must surface the merged argv incl. injected `-l <library>`; the two-location deploy-into-sandbox model → Phase 5 context.
+- **Candidate defects from CHG (v0.6.7 — re-verify vs current main before locking):** `agda_auto` feeding `-d 5 --list-candidates` to Agda as an expression; `ok:true` wrapping Agda errors; state-change tools reporting "solved" after a failed reload; `agda_search_definitions` hardcoding an `agda/` layout (dead on agda-unimath's `src/`). → Phase-3 LOCK-03 candidates once the capture tool exists.
 
 </deferred>
 
