@@ -459,22 +459,25 @@ expect(categorySet([...data.errors, ...data.warnings])).toEqual(entry.expected.e
 | A2 | The exact fixture content (Nat/Bool signature-only swap, transitive 2-file shape) is representative enough of "the #64/#61 family" to satisfy LOCK-03's "the transitive-staleness/false-green defect" wording, as opposed to needing the literal CHG-corpus shape | Central Research Question | If a reviewer insists LOCK-03 must reproduce the EXACT original agda-unimath-scale trigger (not a minimized analog), the emitter/trimmer would need to attempt capture against a real large corpus rather than this minimized fixture — REPRO-01's own "minimal reproduction" framing and D-07's "no automatic minimization" language both support that a minimized, mechanism-equivalent fixture is the intended deliverable, not a byte-for-byte reproduction of the original scale. |
 | A3 | Extending `runLoadNoMetas` with a terminus-tracking guard (mirroring `runLoad`'s) is a sufficiently narrow fix for Phase 3.1, with no other hidden asymmetries between the two load paths | State of the Art, "Confirms LOCK-03 is fixable" | If wrong (some other divergence exists), Phase 3.1's scope could grow; this claim is inferred from reading the two functions side-by-side, not from having implemented and tested the fix itself (that is explicitly Phase 3.1's job, not this research's). |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Exact capture-regression matrix field names and emitter CLI shape**
    - What we know: D-01 mandates the matrix+loader idiom; Claude's Discretion explicitly leaves file naming/location and CLI shape open. This research proposes concrete field names (`id`, `issue`, `status`, `tool`, `fixtureEntry`, `serverEnv`, `expected`) informed by what the flagship empirically needs.
    - What's unclear: Whether future (Phase 4) captures beyond the flagship will need additional fields this proposal doesn't anticipate (e.g., multi-step trigger sequences beyond "load → edit → reload").
    - Recommendation: Treat the proposed schema as a strong starting point, not a final contract; keep it extensible (the `serverEnv` field, e.g., should be optional and additive).
+   - **RESOLVED:** Field names finalized in 03-01 Task 2's `captureRegressionEntrySchema` (`id`, `issue`, `status`, `tool`, `fixtureDir`, `entryFile`, `mutation`, `serverEnv`, `expected` — `fixtureEntry` split into `fixtureDir`+`entryFile`). Emitter CLI shape finalized in 03-02 Task 3's `scriptMain` flags (`--baseline`, `--id`, `--issue`, `--fixture-dir`, `--tool`, `--server-env`, `--force`, `--dry-run`).
 
 2. **Should the emitter require a pre-existing verdict sidecar file, or call `runOracle()` fresh?**
    - What we know: `scripts/oracle/run-oracle.mjs`'s `runOracle` is an exported function; the sidecar file is also a real, persisted artifact.
    - What's unclear: Whether "refuse to lock a capture that fails ORCL-02 or is ORCL-01 INCONCLUSIVE" (LOCK-02) should re-run the oracle at emit time (freshest signal, but slower/re-spawns cold Agda) or trust an existing sidecar (faster, but could be stale if the capture or code changed since the sidecar was written).
    - Recommendation: Call `runOracle()` fresh at emit time — matches D-05's own "runs the new entry once... at emit time" freshness principle, and avoids a stale-sidecar class of bug entirely.
+   - **RESOLVED:** 03-02 Task 3 — `scriptMain` calls `runOracle(primaryPath)` fresh on every invocation; no `.verdict.json` sidecar is ever read or trusted.
 
 3. **Does the flagship's fixture need to register in `fixture-matrix.json` as well as the new capture-regression matrix?**
    - What we know: Claude's Discretion explicitly leaves this open. `fixture-matrix.json` is about single-file load-classification expectations; the flagship is a 2-file scenario with a mid-test mutation, which doesn't fit that schema's shape (`expectedClassification` etc. assume a static file).
    - What's unclear: Whether there's value in also asserting the STATIC (pre-edit) `Main.agda`+`Dep.agda` pair's baseline classification via `fixture-matrix.json` for cheap regression coverage of "this fixture still loads cleanly when nothing is broken."
    - Recommendation: Skip it for the flagship (the shape doesn't fit); revisit only if a future single-file capture-regression naturally fits `fixture-matrix.json`'s existing schema.
+   - **RESOLVED:** Not attempted — no Phase 3 plan/task registers the flagship fixture in `fixture-matrix.json`, matching this research's own "skip it for the flagship" recommendation.
 
 ## Environment Availability
 
