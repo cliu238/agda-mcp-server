@@ -182,7 +182,21 @@ Plans:
   3. The orchestrator (`scripts/dogfood-run.mjs`) launches the server over MCP stdio via the existing harness — never a second `AgdaSession` (#39) — records the tool-call transcript, and auto-persists captures.
   4. Captures are re-run N times and classified (deterministic → real defect; flaky → tagged `timing/nondeterministic`) before filing, so timing/idle phantoms (#65/#66) never enter the queue.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — PROC-02 fuel-pointer set (4 pinned corpora + policy files) + PROC-01 task-manifest hard-gate contract
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md — The recording proxy: transparent stdio tee, unconditional AGDA_MCP_CAPTURE=1, auto-persist, run report (never a second AgdaSession, #39)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-03-PLAN.md — Wrap-up pipeline: oracle triad -> N-times warm-replay flake gate -> fix-queue filing / gitignored side-channel
+- [ ] 05-04-PLAN.md — Dogfooding runbook packaged as a cross-tool Agent Skill (.agents/skills/) + idempotent install script
 
 ## Progress
 
@@ -195,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
 | 4. Triage / Fix Queue | 5/5 | Complete   | 2026-07-02 |
-| 5. Dogfooding Orchestration + Fuel | 0/TBD | Not started | - |
+| 5. Dogfooding Orchestration + Fuel | 0/4 | Planned | - |
