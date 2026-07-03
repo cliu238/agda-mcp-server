@@ -106,6 +106,30 @@ function parseDogfoodArgv(argv) {
 }
 
 /**
+ * Decide the proxy's OWN exit code from the child's terminal state.
+ * A child that exited on its own passes its exit code straight
+ * through. A child that never produced one (`childExitCode === null`
+ * covers BOTH a spawn failure — the 'error' event fired and the
+ * process never ran — and a signal death) must NOT collapse to a
+ * clean 0: a spawn/'error' death or a SPONTANEOUS signal death (OOM
+ * kill, an operator's kill -9 aimed at the server) is total failure
+ * -> 1, so a harness or CI wrapper gating on the proxy's exit status
+ * never reads "the server never started" as success. The ONE
+ * legitimate signal death is the proxy's own `child.kill()` teardown
+ * on the agent-disconnect path -> 0.
+ *
+ * Pure and exported so the decision table is directly unit-testable
+ * (test/unit/tools/dogfood-run-spawn-options.test.ts); the single
+ * live call site is finalize()'s `finally` in runDogfoodProxy.
+ */
+export function computeProxyExitCode({ childExitCode, childSignalCode, childFailed, proxyKilledChild }) {
+  if (typeof childExitCode === "number") {
+    return childExitCode;
+  }
+  return childFailed || (childSignalCode != null && !proxyKilledChild) ? 1 : 0;
+}
+
+/**
  * Run the transparent recording proxy for one dogfooding session.
  *
  * Sequencing is load-bearing: `loadTaskManifest` (the D-03 hard gate)
@@ -232,6 +256,13 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   // agent disconnecting (process.stdin ending, which node:readline
   // surfaces as fromAgent's own "close" event).
   let finalized = false;
+  // WR-03: a child that dies without an exit CODE (a spawn 'error' —
+  // the process never ran — or a signal kill) must not report a clean
+  // exit 0. `childFailed` marks the 'error'-event path;
+  // `proxyKilledChild` marks finalize's own kill() below as the one
+  // LEGITIMATE signal death. See computeProxyExitCode.
+  let childFailed = false;
+  let proxyKilledChild = false;
   async function finalize() {
     if (finalized) return;
     finalized = true;
@@ -242,7 +273,10 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         // cold-agda-session.mjs / mcp-local-client.mjs's convention.
         // Killing FIRST (the agent-disconnect path) also ends the
         // child's stdout, which is what lets the drain below complete.
-        child.kill();
+        // kill() returns true only when the signal was actually
+        // deliverable — a never-spawned child yields false, so a spawn
+        // failure is never mistaken for a proxy-initiated teardown.
+        proxyKilledChild = child.kill();
       }
 
       // Snapshot the report only AFTER the child's stdout has fully
@@ -266,7 +300,12 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         `dogfood-run: failed to write run report: ${err instanceof Error ? err.message : String(err)}\n`,
       );
     } finally {
-      const exitCode = child.exitCode ?? 0;
+      const exitCode = computeProxyExitCode({
+        childExitCode: child.exitCode,
+        childSignalCode: child.signalCode,
+        childFailed,
+        proxyKilledChild,
+      });
       // process.exit() does not wait for queued asynchronous stdout
       // writes, which would truncate tail lines still being forwarded
       // to the agent. Stream writes are FIFO, so this empty write's
@@ -285,8 +324,12 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   });
   // A spawn failure (missing binary, EACCES) surfaces as an unhandled
   // 'error' event, not an exit — route it into finalize so the proxy
-  // reports and shuts down cleanly instead of crashing.
+  // reports and shuts down cleanly instead of crashing, while
+  // `childFailed` keeps the resulting exit code non-zero (a
+  // never-spawned child has exitCode === null, which must never read
+  // as a clean 0 — see computeProxyExitCode).
   child.on("error", (err) => {
+    childFailed = true;
     process.stderr.write(
       `dogfood-run: server child process error: ${err instanceof Error ? err.message : String(err)}\n`,
     );
