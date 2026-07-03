@@ -61,6 +61,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - **Motivating experiment (the concrete origin of Loop ②):** this server was built for / stressed by autoformalizing the **Hopf fibration / π₃(S²)** in **agda-unimath** with **Codex driving the MCP** (the Lean FRO challenge; goal = library-quality contributions, not flag-planting). The Phase-2 oracle triad (ORCL-02/03) is grounded in *observed* agent behavior there — Codex narrowed scope, took shortcuts, and flag-planted — not just theory. agda-unimath (the Hopf work) is the PROC-02 fuel corpus; the canonical difficulty was **join associativity** (codex interrupted twice → human rocq-hott pivot). Paper outline: private repo `emilyriehl/autoformalizing-hopf` (access-gated). A sibling private corpus, `emilyriehl/Codex-Homotopy-Group` (π₃(S²)=ℤ), **directly dogfoods this server** and measured the false-green ORCL-01 targets — see `.planning/research/ORACLE-VALIDITY.md`.
 - Bug-finding is treated as ongoing first-class work by the maintainer, not an afterthought.
 - Existing seeds to build on: `src/reporting/bug-report.ts` (capture entry point), `src/session/tool-recommendation.ts` + session-status (future Loop ① seed).
+- **Shipped v1.0 (2026-07-03):** Loop ② scaffold end-to-end — 6 phases, 26 plans, ~34k lines added since milestone start; only two surgical `src/` additions (session-capture model + emit-only capture tool), everything else in `scripts/` + repo data dirs; full suite 1583 tests green incl. real-Agda integration. Tech debt tracked in `milestones/v1.0-MILESTONE-AUDIT.md` (9 items, headline: ORCL-02 runtime policy passthrough W2). 8 CHG needs-reverify defects sit in the fix queue as next-milestone fuel.
 
 ## Constraints
 
@@ -77,10 +78,14 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Prioritize Loop ② (self-improvement) over Loop ① (guidance) this milestone | Loop ① needs more exploration; a hardening loop compounds value and is the prerequisite substrate | — Pending |
-| Scope v1 to the "reproducible scaffold" | Get the capture→fix→lock loop working before layering knowledge accumulation / automation on top | — Pending |
-| Organic fuel sources (stdlib/open projects + own math project + agent-generated), no curated benchmark set | Real usage surfaces real defects; curated benchmarks risk "testing for the sake of testing" | — Pending |
-| Build on existing `bug-report.ts` as the capture entry point | Structured bundle + fingerprints already exist; extend rather than rebuild | — Pending |
+| Prioritize Loop ② (self-improvement) over Loop ① (guidance) this milestone | Loop ① needs more exploration; a hardening loop compounds value and is the prerequisite substrate | ✓ Good — v1.0 shipped the full loop; first fix→lock cycle (03.1) proved it compounds |
+| Scope v1 to the "reproducible scaffold" | Get the capture→fix→lock loop working before layering knowledge accumulation / automation on top | ✓ Good — scaffold complete; automation/knowledge layers remain cleanly deferred |
+| Organic fuel sources (stdlib/open projects + own math project + agent-generated), no curated benchmark set | Real usage surfaces real defects; curated benchmarks risk "testing for the sake of testing" | ✓ Good — 4 pinned real corpora incl. the two Hopf/π₃(S²) repos that ground ORCL-02/03 |
+| Build on existing `bug-report.ts` as the capture entry point | Structured bundle + fingerprints already exist; extend rather than rebuild | ✓ Good — fingerprint/dedup reused verbatim; capture tool stayed emit-only |
+
+| Oracle = triad (differential + soundness scan + conformance proxy), never a single cold re-run | A fresh compile is sound for exactly one false-green family; agent cheats and wrong-statements need their own predicates | ✓ Good — v1.0; ORCL-01 abstains honestly, ORCL-02 cheat findings file unconditionally |
+| N-times warm-replay anti-phantom gate before queue filing | Timing/idle phantoms (#65/#66 family) must never enter the queue as deterministic defects | ✓ Good — v1.0 (05-03); flaky routes to gitignored side-channel, frozen queue schema untouched |
+| Runbook as cross-tool Agent Skill in tracked `.agents/skills/` | `.claude/`/`.codex/` are gitignored (Pitfall 1); Codex and Claude Code must both discover it | ✓ Good — v1.0 (05-04) with idempotent symlink installer |
 
 ## Evolution
 
