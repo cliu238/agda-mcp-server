@@ -58,6 +58,7 @@ test("recordToClientLine correlates a capture-session request/response and stage
     toolName: "agda_capture_session",
     isCaptureSession: true,
     elapsedMs: expect.any(Number),
+    stagedCapture: { stagedPath: "/tmp/x.json", fingerprint: "abc", kind: "new-bug", recurrence: 1 },
   });
 
   const report = recorder.getReport({
@@ -68,6 +69,42 @@ test("recordToClientLine correlates a capture-session request/response and stage
   });
   expect(report.stagedCaptures).toHaveLength(1);
   expect(report.stagedCaptures[0].stagedPath).toBe("/tmp/x.json");
+});
+
+// ── Behavior 1b: a FAILED capture-session response stages nothing and returns stagedCapture null ──
+
+test("recordToClientLine returns stagedCapture null for a failed capture-session response and never re-stages the previous capture", () => {
+  const dir = makeTempDir("agda-mcp-dogfood-transcript-");
+  const transcriptPath = join(dir, "transcript.jsonl");
+  const recorder = createRunRecorder({ transcriptPath });
+
+  // First: a successful capture.
+  recorder.recordToServerLine(REQUEST_LINE);
+  const first = recorder.recordToClientLine(RESPONSE_LINE);
+  expect(first?.stagedCapture?.stagedPath).toBe("/tmp/x.json");
+
+  // Then: a FAILED capture call — its error envelope's data carries no stagedPath.
+  recorder.recordToServerLine(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "agda_capture_session", arguments: {} },
+    }),
+  );
+  const second = recorder.recordToClientLine(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      result: { isError: true, structuredContent: { ok: false, data: {} } },
+    }),
+  );
+
+  expect(second?.isCaptureSession).toBe(true);
+  expect(second?.stagedCapture).toBeNull();
+  // Only the first capture is staged — the failed one must not surface
+  // the previous capture again (the at(-1) re-promotion hazard).
+  expect(recorder.stagedCaptures).toHaveLength(1);
 });
 
 // ── Behavior 2: a non-capture-session tool tallies but never stages ──

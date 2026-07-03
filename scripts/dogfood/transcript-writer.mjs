@@ -142,25 +142,35 @@ export function createRunRecorder({ transcriptPath }) {
       perTool[toolName] = tally;
 
       const isCaptureSession = toolName === "agda_capture_session";
+      let stagedCapture = null;
       if (isCaptureSession) {
         const data = parsed?.result?.structuredContent?.data;
         if (data && typeof data.stagedPath === "string") {
-          stagedCaptures.push({
+          stagedCapture = {
             stagedPath: data.stagedPath,
             fingerprint: data.fingerprint,
             kind: data.kind,
             recurrence: data.recurrence,
-          });
+          };
+          stagedCaptures.push(stagedCapture);
         }
       }
 
-      return { toolName, elapsedMs, isCaptureSession };
+      // `stagedCapture` is the capture THIS response staged (null for a
+      // FAILED capture call, whose error envelope carries no
+      // stagedPath). Callers acting on a capture-session event must use
+      // THIS value — inferring "the" capture via stagedCaptures.at(-1)
+      // would re-promote the PREVIOUS capture whenever a later capture
+      // call fails.
+      return { toolName, elapsedMs, isCaptureSession, stagedCapture };
     },
 
     /** Read-only reference to the same array `recordToClientLine`
-     *  pushes onto — lets a caller inspect the most-recently-staged
-     *  capture (`.at(-1)`) immediately, without waiting for
-     *  `getReport()`. */
+     *  pushes onto — a live view of every capture staged so far,
+     *  without waiting for `getReport()`. To act on the capture a
+     *  SPECIFIC response staged, use that call's own returned
+     *  `stagedCapture` instead: `.at(-1)` resolves to the PREVIOUS
+     *  capture when the latest capture call failed. */
     stagedCaptures,
 
     getReport({ runId, startedAt, corpusRoot, manifestPath }) {

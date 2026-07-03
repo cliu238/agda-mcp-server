@@ -153,7 +153,11 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     process.stdout.write(`${line}\n`);
 
     if (event?.isCaptureSession) {
-      const staged = recorder.stagedCaptures.at(-1);
+      // Promote exactly the capture THIS response staged: a failed
+      // capture call yields stagedCapture === null and stages nothing —
+      // inferring via stagedCaptures.at(-1) here would silently
+      // re-promote the PREVIOUS successful capture instead.
+      const staged = event.stagedCapture;
       if (staged) {
         // Best-effort relative to the proxy's own liveness: a
         // promote-capture failure is reported but never crashes the
@@ -168,6 +172,10 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
             );
           }
         })();
+      } else {
+        process.stderr.write(
+          "dogfood-run: observed a failed agda_capture_session response — nothing staged to auto-persist.\n",
+        );
       }
     }
   });
