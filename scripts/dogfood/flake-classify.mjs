@@ -91,7 +91,9 @@ function findLastLoadFamilyAction(artifact) {
  *   N for flake-classification re-runs): 3 matches Pitfall 3's own
  *   suggested "3-5" range. Callers (dogfood-wrapup.mjs) may override
  *   via their own `--rerun-n`/`AGDA_MCP_DOGFOOD_RERUN_N` argument —
- *   this module itself reads no env var directly.
+ *   this module itself reads no env var directly. Must be a positive
+ *   integer: anything else (NaN, 0, a negative or fractional value)
+ *   throws rather than classifying on an empty observation list.
  * @param {object} [options]
  * @param {{
  *   materializeCaptureEnvironment?: (artifact: object) => Promise<{ tmpDir: string, cleanup(): void }>,
@@ -118,6 +120,15 @@ export async function classifyFlakiness(artifact, n = 3, options = {}) {
   // Guaranteed non-null: findWarmLoadTuple's own non-null return
   // implies at least one action matching the SAME tool-pattern exists.
   const action = findLastLoadFamilyAction(artifact);
+
+  // Defense-in-depth against an unvalidated caller-supplied count: a
+  // NaN/0/negative `n` would skip the replay loop entirely and
+  // classify on an EMPTY observation list — `allAgree` would be false
+  // with ZERO harness calls, silently diverting every deterministic
+  // candidate into the flaky side channel. Refuse loudly instead.
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`classifyFlakiness: n must be a positive integer, got ${n}`);
+  }
 
   const materialize = options.deps?.materializeCaptureEnvironment ?? materializeCaptureEnvironment;
   const createHarness = options.deps?.createMcpHarness ?? createMcpHarness;

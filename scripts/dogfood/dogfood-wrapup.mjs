@@ -202,15 +202,26 @@ export async function wrapUpCapture(artifactPath, artifact, config = {}) {
 // ── CLI ──────────────────────────────────────────────────────────────
 
 /** Extracts `--rerun-n <N>` / `--queue-path <path>` from a flat
- *  `--flag value` argv array, positional arg 0 = runId. */
+ *  `--flag value` argv array, positional arg 0 = runId. Throws on a
+ *  non-positive-integer rerun count: a typo'd env var or a missing/
+ *  non-numeric `--rerun-n` value must fail loudly HERE, never reach
+ *  `classifyFlakiness` as `NaN`/`0` — a zero-iteration replay loop
+ *  would classify every deterministic candidate as "flaky" on an
+ *  EMPTY observation list and silently unfile it. */
 function parseWrapupArgv(argv) {
   const runId = argv[0];
 
   const rerunNFlagIndex = argv.indexOf("--rerun-n");
-  const rerunN =
+  const rerunNRaw =
     rerunNFlagIndex !== -1
-      ? Number(argv[rerunNFlagIndex + 1])
-      : Number(process.env.AGDA_MCP_DOGFOOD_RERUN_N ?? 3);
+      ? argv[rerunNFlagIndex + 1]
+      : (process.env.AGDA_MCP_DOGFOOD_RERUN_N ?? "3");
+  const rerunN = Number(rerunNRaw);
+  if (!Number.isInteger(rerunN) || rerunN < 1) {
+    throw new Error(
+      `--rerun-n / AGDA_MCP_DOGFOOD_RERUN_N must be a positive integer, got "${rerunNRaw}"`,
+    );
+  }
 
   const queuePathFlagIndex = argv.indexOf("--queue-path");
   const queueJsonPath =
@@ -222,7 +233,15 @@ function parseWrapupArgv(argv) {
 }
 
 export async function scriptMain(argv = process.argv.slice(2)) {
-  const { runId, rerunN, queueJsonPath } = parseWrapupArgv(argv);
+  let parsedArgs;
+  try {
+    parsedArgs = parseWrapupArgv(argv);
+  } catch (err) {
+    process.stderr.write(`dogfood-wrapup: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const { runId, rerunN, queueJsonPath } = parsedArgs;
 
   if (!runId) {
     process.stderr.write(

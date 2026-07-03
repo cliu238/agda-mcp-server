@@ -180,6 +180,25 @@ test("classifyFlakiness: replays the SAME tool+args as the artifact's own last l
   }
 });
 
+// ── Guard: a non-positive-integer n must throw, never "classify" on zero replays ──
+
+test("classifyFlakiness: rejects a non-positive-integer n instead of classifying on an empty observation list", async () => {
+  const action = loadAction("agda_load", { file: "Main.agda" }, "Main.agda", "ok-complete");
+  const artifact = baseArtifact([action]);
+  const materializeSpy = vi.fn();
+  const createHarnessSpy = vi.fn();
+
+  for (const badN of [Number.NaN, 0, -1, 1.5]) {
+    await expect(
+      classifyFlakiness(artifact, badN, {
+        deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+      }),
+    ).rejects.toThrow(/positive integer/);
+  }
+  expect(materializeSpy).not.toHaveBeenCalled();
+  expect(createHarnessSpy).not.toHaveBeenCalled();
+});
+
 // ── Extra: last load-family action wins when multiple are present ────
 
 test("classifyFlakiness: uses the LAST load-family recordedAction when multiple are present", async () => {
