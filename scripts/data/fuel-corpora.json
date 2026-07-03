@@ -1,0 +1,34 @@
+[
+  {
+    "key": "agda-stdlib",
+    "repo": "agda/agda-stdlib",
+    "access": "public",
+    "pinnedRef": "039e1f4abda49f307f7ed1f5e15232a1c8e9c48c",
+    "policyKey": "agda-stdlib",
+    "notes": "Pinned to tag v2.1.1's commit, aligning with .github/workflows/ci.yml's wenkokke/setup-agda agda-stdlib-version pin. Resolved via git ls-remote --tags https://github.com/agda/agda-stdlib.git on 2026-07-02 — re-verify if consumed long after that date."
+  },
+  {
+    "key": "agda-unimath",
+    "repo": "UniMath/agda-unimath",
+    "access": "public",
+    "pinnedRef": "c85d7fb834778f96a66576318cdc4ef3d4b80a26",
+    "policyKey": "agda-unimath",
+    "notes": "Pinned to default-branch HEAD resolved via git ls-remote https://github.com/UniMath/agda-unimath.git HEAD on 2026-07-02. Host of the Hopf/pi_3(S^2) work; targets Agda 2.8.0 per its own docs — re-verify at clone time."
+  },
+  {
+    "key": "codex-homotopy-group",
+    "repo": "emilyriehl/Codex-Homotopy-Group",
+    "access": "private",
+    "pinnedRef": "81a2f26f19845decccd7ad840d3d8ab5840762c3",
+    "policyKey": "codex-homotopy-group",
+    "notes": "Pinned to main HEAD resolved 2026-07-02 via gh api repos/emilyriehl/Codex-Homotopy-Group/commits/main. Directly dogfoods this server (v0.6.7 measured false-greens); the FIRST OFFICIAL dogfood-run target per D-02. Re-clone via: gh repo clone emilyriehl/Codex-Homotopy-Group."
+  },
+  {
+    "key": "autoformalizing-hopf",
+    "repo": "emilyriehl/autoformalizing-hopf",
+    "access": "private",
+    "pinnedRef": "ad347342cfcd0471ed68eee869cc3ce78d77c34f",
+    "policyKey": "autoformalizing-hopf",
+    "notes": "Pinned to main HEAD resolved 2026-07-02 via gh api repos/emilyriehl/autoformalizing-hopf/commits/main. The motivating Hopf/pi_3(S^2) paper repo; also built on agda-unimath. Re-clone via: gh repo clone emilyriehl/autoformalizing-hopf."
+  }
+]
