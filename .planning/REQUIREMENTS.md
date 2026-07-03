@@ -46,7 +46,7 @@ A capture is **true green** only if all three predicates pass. Each catches a di
 
 ### Dogfooding Process (PROC)
 
-- [ ] **PROC-01**: A written dogfooding runbook + driver-prompt snippet makes the *process* reproducible — telling an agent when and how to invoke the capture verb while proving against real corpora, so "point Codex at stdlib and harvest defects" can be re-run on demand. **Declaring the target's expected top-level signature up front is a hard gate** (without it ORCL-03's conformance proxy is vacuous)
+- [x] **PROC-01**: A written dogfooding runbook + driver-prompt snippet makes the *process* reproducible — telling an agent when and how to invoke the capture verb while proving against real corpora, so "point Codex at stdlib and harvest defects" can be re-run on demand. **Declaring the target's expected top-level signature up front is a hard gate** (without it ORCL-03's conformance proxy is vacuous)
 - [ ] **PROC-02**: A pinned fuel pointer set lists the source corpora (agda-stdlib, chosen OSS Agda projects, the maintainer's own math projects — the **agda-unimath Hopf/π₃(S²)** work in `emilyriehl/autoformalizing-hopf` and `emilyriehl/Codex-Homotopy-Group` (both private/access-gated; the latter directly dogfoods this server and ships a bash oracle-triad prototype in `loop.sh`)) with pinned commits, so dogfooding runs are reproducible across time. It is the home for the per-project **machine-readable policy** ORCL-02 reads: the sanctioned-axiom whitelist and the required/forbidden flag baseline (per corpus/regime) — concrete first entries from the Codex-Homotopy-Group corpus: sanctioned axioms = univalence / function-extensionality / replacement; required flags = `--without-K --exact-split --no-import-sorts --auto-inline --no-require-unique-meta-solutions --no-postfix-projections` (auto-applied from the agda-unimath `.agda-lib`). See `.planning/research/FUEL-CORPORA.md` for the full cross-phase artifact→phase inventory of both corpora
 
 ## v2 Requirements
@@ -108,7 +108,7 @@ Each requirement maps to exactly one phase.
 | QUEUE-02 | Phase 4 | Complete |
 | QUEUE-03 | Phase 4 | Complete |
 | QUEUE-04 | Phase 4 | Complete |
-| PROC-01 | Phase 5 | Pending |
+| PROC-01 | Phase 5 | Complete |
 | PROC-02 | Phase 5 | Pending |
 
 **Coverage:**
