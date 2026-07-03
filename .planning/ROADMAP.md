@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Regression Lock Pipeline** - A captured defect becomes a minimal repro + a from-RED vitest regression, proven end-to-end on #64/#61 (completed 2026-07-02)
 - [x] **Phase 03.1: Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green** (INSERTED) - `runLoadNoMetas` gains a strict terminus guard; the flagship regression flips RED → locked under real Agda, closing the loop's first fix→stay-locked cycle (completed 2026-07-02)
 - [x] **Phase 4: Triage / Fix Queue** - Captured defects persist and flow through a durable in-repo queue with status, prioritization, and optional GitHub mirror (completed 2026-07-02)
-- [ ] **Phase 5: Dogfooding Orchestration + Fuel** - Point an agent at pinned real corpora and harvest defects reproducibly over MCP stdio
+- [x] **Phase 5: Dogfooding Orchestration + Fuel** - Point an agent at pinned real corpora and harvest defects reproducibly over MCP stdio (completed 2026-07-03)
 
 ## Phase Details
 
@@ -195,8 +195,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-03-PLAN.md — Wrap-up pipeline: oracle triad -> N-times warm-replay flake gate -> fix-queue filing / gitignored side-channel
-- [ ] 05-04-PLAN.md — Dogfooding runbook packaged as a cross-tool Agent Skill (.agents/skills/) + idempotent install script
+- [x] 05-03-PLAN.md — Wrap-up pipeline: oracle triad -> N-times warm-replay flake gate -> fix-queue filing / gitignored side-channel
+- [x] 05-04-PLAN.md — Dogfooding runbook packaged as a cross-tool Agent Skill (.agents/skills/) + idempotent install script
 
 ## Progress
 
@@ -209,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
 | 4. Triage / Fix Queue | 5/5 | Complete   | 2026-07-02 |
-| 5. Dogfooding Orchestration + Fuel | 2/4 | In Progress|  |
+| 5. Dogfooding Orchestration + Fuel | 4/4 | Complete   | 2026-07-03 |
