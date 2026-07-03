@@ -288,3 +288,41 @@ test("buildQueueEntryFromVerdict: the summary differs between an orcl01 candidat
   expect(orcl01Entry.defectKind).toBe("false-green");
   expect(orcl02Entry.defectKind).toBe("false-green");
 });
+
+test("buildQueueEntryFromVerdict: a co-occurring ORCL-02 cheat leads the summary (mirroring filing precedence) and the ORCL-01 signal is still mentioned", () => {
+  const artifact = baseArtifact();
+
+  const entry = buildQueueEntryFromVerdict(
+    artifact,
+    "capture.json",
+    fakeVerdict({
+      orcl01: { kind: "server-false-green-candidate" },
+      orcl02: { kind: "cheat-flagged", findings: cheatFindings() },
+    }),
+  );
+
+  // On this path the entry is filed BECAUSE OF the ORCL-02 cheat (the
+  // flake gate is skipped), so the cheat findings must lead — but the
+  // co-occurring ORCL-01 signal must not be dropped either.
+  expect(entry.summary).toContain("ORCL-02");
+  expect(entry.summary).toContain("postulate");
+  expect(entry.summary).toContain("ORCL-01");
+  expect(entry.summary.indexOf("ORCL-02")).toBeLessThan(entry.summary.indexOf("ORCL-01"));
+});
+
+test("buildQueueEntryFromVerdict: affectedTool is the last LOAD-FAMILY action, not an unrelated trailing call", () => {
+  const artifact = baseArtifact({
+    recordedActions: [
+      { tool: "agda_load", args: { file: "Main.agda" }, timestamp: Date.now(), normalizedResponse: {} },
+      { tool: "agda_capture_session", args: {}, timestamp: Date.now(), normalizedResponse: {} },
+    ],
+  });
+
+  const entry = buildQueueEntryFromVerdict(
+    artifact,
+    "capture.json",
+    fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }),
+  );
+
+  expect(entry.affectedTool).toBe("agda_load");
+});

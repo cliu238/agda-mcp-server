@@ -49,6 +49,26 @@ import { resolveRunsRoot } from "./transcript-writer.mjs";
 import { writeFileAtomic } from "../../src/session/safe-source-io.js";
 import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
 
+const LOAD_FAMILY_TOOL_PATTERN = /^agda_(load|typecheck)/;
+
+/**
+ * The tool name of the LAST load-family recorded action, or `null`
+ * when the capture has none. For a filed load-family defect this is
+ * the action the oracle keyed on — a trailing unrelated call
+ * (`agda_capture_session` itself, say) must not become the queue
+ * entry's `affectedTool`.
+ */
+function lastLoadFamilyToolName(recordedActions) {
+  const actions = Array.isArray(recordedActions) ? recordedActions : [];
+  for (let i = actions.length - 1; i >= 0; i--) {
+    const tool = actions[i]?.tool;
+    if (typeof tool === "string" && LOAD_FAMILY_TOOL_PATTERN.test(tool)) {
+      return tool;
+    }
+  }
+  return null;
+}
+
 /**
  * Pure helper (exported for direct unit-testing): builds a
  * `fixQueueEntrySchema`-shaped object from a judged `artifact` +
@@ -73,21 +93,32 @@ export function buildQueueEntryFromVerdict(artifact, artifactPath, verdict) {
     ? `${artifactPath.slice(0, -".json".length)}.verdict.json`
     : `${artifactPath}.verdict.json`;
 
-  let summary;
-  if (verdict.orcl01.kind === "server-false-green-candidate") {
-    summary = "ORCL-01 server-faithfulness differential flagged a candidate false-green.";
-  } else if (verdict.orcl02.kind === "cheat-flagged") {
+  // Mirrors wrapUpCapture's own STRICT filing precedence (ORCL-02
+  // cheat-flagged first) and CONCATENATES both signals when both are
+  // present: in the co-occurrence case the entry is filed BECAUSE OF
+  // the confirmed ORCL-02 cheat (the flake gate is skipped entirely),
+  // so the summary must lead with the cheat findings rather than
+  // reporting only an ORCL-01 candidate that never survived the
+  // N-rerun gate on that path.
+  const summaryParts = [];
+  if (verdict.orcl02.kind === "cheat-flagged") {
     const findingKinds = [...new Set(verdict.orcl02.findings.map((finding) => finding.kind))];
-    summary =
+    summaryParts.push(
       `ORCL-02 soundness-hygiene scan flagged ${verdict.orcl02.findings.length} `
-      + `unsanctioned finding(s): ${findingKinds.join(", ")}.`;
-  } else {
-    // Unreachable in practice — wrapUpCapture only ever calls this
-    // helper from its filing fall-through, which is only reached when
-    // one of the two branches above already matched. Documented
-    // defensively rather than assumed silently.
-    summary = "Dogfood wrap-up flagged this capture for filing.";
+        + `unsanctioned finding(s): ${findingKinds.join(", ")}.`,
+    );
   }
+  if (verdict.orcl01.kind === "server-false-green-candidate") {
+    summaryParts.push("ORCL-01 server-faithfulness differential flagged a candidate false-green.");
+  }
+  const summary =
+    summaryParts.length > 0
+      ? summaryParts.join(" ")
+      : // Unreachable in practice — wrapUpCapture only ever calls this
+        // helper from its filing fall-through, which is only reached when
+        // one of the two signals above already matched. Documented
+        // defensively rather than assumed silently.
+        "Dogfood wrap-up flagged this capture for filing.";
 
   return {
     fingerprint: artifact.dedup.fingerprint,
@@ -98,7 +129,10 @@ export function buildQueueEntryFromVerdict(artifact, artifactPath, verdict) {
     recurrence: artifact.dedup.recurrence,
     title: `Dogfood-surfaced: ${artifact.dedup.fingerprint}`,
     summary,
-    affectedTool: artifact.recordedActions.at(-1)?.tool ?? "unknown",
+    affectedTool:
+      lastLoadFamilyToolName(artifact.recordedActions)
+      ?? artifact.recordedActions.at(-1)?.tool
+      ?? "unknown",
     capturePath: artifactPath,
     verdictPath,
     matrixEntryId: null,
