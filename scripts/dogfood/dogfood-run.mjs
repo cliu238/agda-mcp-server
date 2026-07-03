@@ -143,7 +143,22 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   const fromAgent = createInterface({ input: process.stdin });
   fromAgent.on("line", (line) => {
     recorder.recordToServerLine(line);
-    child.stdin.write(`${line}\n`);
+    // Guarded: an agent line can arrive in the window between the
+    // child's death and the proxy's own exit — writing to a dead
+    // child's stdin would raise an uncaught write-after-end.
+    if (child.stdin.writable) {
+      child.stdin.write(`${line}\n`);
+    }
+  });
+  // Belt-and-braces for the unguardable race (`writable` flips false
+  // only after a broken pipe surfaces): a stdin 'error' event with no
+  // listener would crash the proxy mid-session, taking the agent's
+  // live proving session down with it.
+  child.stdin.on("error", (err) => {
+    process.stderr.write(
+      `dogfood-run: dropped agent line — server stdin unwritable: `
+        + `${err instanceof Error ? err.message : String(err)}\n`,
+    );
   });
 
   // Server -> proxy -> agent.
@@ -244,6 +259,15 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   }
 
   child.on("close", () => {
+    void finalize();
+  });
+  // A spawn failure (missing binary, EACCES) surfaces as an unhandled
+  // 'error' event, not an exit — route it into finalize so the proxy
+  // reports and shuts down cleanly instead of crashing.
+  child.on("error", (err) => {
+    process.stderr.write(
+      `dogfood-run: server child process error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     void finalize();
   });
   fromAgent.on("close", () => {

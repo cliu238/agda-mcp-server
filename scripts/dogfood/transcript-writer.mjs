@@ -60,9 +60,26 @@ function escapeTableCell(value) {
  * `appendFileSync` (not `writeFileAtomic`) matches this project's own
  * scripts/oracle/run-oracle.mjs metrics-line precedent for this exact
  * category of file (many small writes, never a single mutable file).
+ *
+ * NEVER throws: this is called from the proxy's readline 'line'
+ * handlers, where a propagated exception (ENOSPC, the runs dir removed
+ * mid-run) would become an uncaught exception and take the agent's
+ * live proving session down with the proxy — recording is best-effort
+ * relative to forwarding. Warns once on stderr, then stays silent.
  */
+let transcriptAppendFailureWarned = false;
 function appendTranscriptLine(transcriptPath, direction, raw) {
-  appendFileSync(transcriptPath, `${JSON.stringify({ direction, ts: Date.now(), raw })}\n`, "utf8");
+  try {
+    appendFileSync(transcriptPath, `${JSON.stringify({ direction, ts: Date.now(), raw })}\n`, "utf8");
+  } catch (err) {
+    if (!transcriptAppendFailureWarned) {
+      transcriptAppendFailureWarned = true;
+      process.stderr.write(
+        `transcript-writer: failed to append transcript line (suppressing further warnings): `
+          + `${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
+  }
 }
 
 /**
