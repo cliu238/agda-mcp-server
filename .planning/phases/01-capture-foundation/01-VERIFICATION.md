@@ -1,13 +1,15 @@
 ---
 phase: 01-capture-foundation
 verified: 2026-07-02T04:18:08Z
-status: gaps_found
+status: passed
+reverified: 2026-07-03T04:30:00Z
 score: 6/6 roadmap success criteria functionally VERIFIED, but 1 cross-cutting BLOCKER (silent artifact overwrite) undermines the substrate's reliability guarantee
 overrides_applied: 0
 gaps:
   - truth: "The staged CaptureArtifact (manifest + recorded action log + oracle substrate) is durably retained across a session that captures more than once — the explicitly-designed-for 'two captures in the same session' flow (01-05-PLAN.md Task 1's own drain-then-reset spec)"
-    status: failed
-    reason: "Confirmed independently (matches code review CR-03, reproduced empirically): the staged filename is `${dedup.fingerprint}-${dedup.recurrence}.json`. `dedup.recurrence` only advances when the out-of-band `scripts/promote-capture.mjs` is run manually. Within one session, two `agda_capture_session` calls with the same classification/note (a completely normal dogfooding pattern — e.g. capturing the same stuck session twice, or capturing two similar-looking issues before anyone runs the promotion script) produce the SAME fingerprint and the SAME recurrence (1), hence the SAME staged path. `writeFileAtomic`'s rename silently clobbers the first artifact. Because each capture also calls `resetRecordedActions()` immediately after draining (src/tools/register-capture-session.ts:103-104), the first capture's recorded action log is not recoverable from memory either — it is permanently and silently lost. This directly undermines Phase 1's stated deliverable ('the foundational substrate the rest of the loop reads') and the milestone's Core Value ('every real proof session reliably converts into a stronger server')."
+    status: resolved
+    resolution: "Closed by Phase 3: commit 0a79b73 (feat 03-01: per-process monotonic stagedFileSequence appended to staged filename, commit message: closes 01-VERIFICATION.md CR-03 BLOCKER) + commit af34cc7 (fix 03 WR-03: cross-process randomUUID suffix). Current code: src/tools/register-capture-session.ts:194 writes `${fingerprint}-${recurrence}-${stagedFileSequence++}-${randomUUID()}.json`. Regression-locked by test/unit/tools/register-capture-session.test.ts:294-309 (two same-fingerprint captures produce distinct staged paths, both artifacts on disk). Re-verified 2026-07-03 during v1.0 milestone audit."
+    original_reason: "Confirmed independently (matches code review CR-03, reproduced empirically): the staged filename is `${dedup.fingerprint}-${dedup.recurrence}.json`. `dedup.recurrence` only advances when the out-of-band `scripts/promote-capture.mjs` is run manually. Within one session, two `agda_capture_session` calls with the same classification/note (a completely normal dogfooding pattern — e.g. capturing the same stuck session twice, or capturing two similar-looking issues before anyone runs the promotion script) produce the SAME fingerprint and the SAME recurrence (1), hence the SAME staged path. `writeFileAtomic`'s rename silently clobbers the first artifact. Because each capture also calls `resetRecordedActions()` immediately after draining (src/tools/register-capture-session.ts:103-104), the first capture's recorded action log is not recoverable from memory either — it is permanently and silently lost. This directly undermines Phase 1's stated deliverable ('the foundational substrate the rest of the loop reads') and the milestone's Core Value ('every real proof session reliably converts into a stronger server')."
     artifacts:
       - path: "src/tools/register-capture-session.ts"
         issue: "Line 164-167: staged filename derived only from `dedup.fingerprint`/`dedup.recurrence`, both of which can repeat within a session because the dedup index is read-only in-process (write-side is the manual `scripts/promote-capture.mjs`); no collision check or unique suffix guards the write."
@@ -22,8 +24,8 @@ human_verification: []
 
 **Phase Goal:** An agent can snapshot a stuck/failed live session into a self-replaying capture artifact with one MCP verb — the foundational substrate the rest of the loop reads.
 **Verified:** 2026-07-02T04:18:08Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Status:** passed (re-verified 2026-07-03 — see Re-verification Addendum at end)
+**Re-verification:** Yes — v1.0 milestone audit re-verified the single blocking gap against current code
 
 **Note on ROADMAP `Mode: mvp` annotation:** ROADMAP.md tags this phase `Mode: mvp`, but the phase goal text is not in User Story format (`gsd-sdk query user-story.validate` returns `valid: false` against it), and all 5 plans/summaries use the traditional `must_haves: {truths, artifacts, key_links}` structure, not MVP-mode user-flow steps. Standard goal-backward verification (not MVP-narrowed verification) was applied, consistent with how this phase was actually planned and executed. This is an informational note, not a gap.
 
@@ -148,3 +150,19 @@ overrides:
 
 *Verified: 2026-07-02T04:18:08Z*
 *Verifier: Claude (gsd-verifier)*
+
+---
+
+## Re-verification Addendum (2026-07-03, v1.0 milestone audit)
+
+The single blocking gap above (CR-03 silent staged-artifact overwrite) was **closed by Phase 3** and is regression-locked:
+
+- `0a79b73` — feat(03-01): per-process monotonic `stagedFileSequence` appended to the staged filename (commit message: "closes 01-VERIFICATION.md CR-03 BLOCKER")
+- `af34cc7` — fix(03): cross-process `randomUUID()` suffix (WR-03)
+- Current code: `src/tools/register-capture-session.ts:194` — `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`
+- Regression test: `test/unit/tools/register-capture-session.test.ts:294-309` — two same-fingerprint captures in one session produce distinct staged paths with both artifacts present on disk (passing in the current suite: 1583 passed / 0 failed at HEAD)
+
+Since the sole blocker is fixed with evidence, phase status flips to **passed**. Residual non-blocking items are carried as milestone tech debt (see `v1.0-MILESTONE-AUDIT.md`):
+
+1. **WR-01 (durability edge):** `resetRecordedActions()` still runs immediately after drain, before `writeFileAtomic` — a write failure (disk full / permissions) in that window loses the drained action log. Discretionary in the original verification ("Consider…").
+2. **Gap plans 01-06 / 01-07 were never executed and are superseded in their blocking content.** 01-06's CR-03 core landed via Phase 3 (above); its WR-02 fingerprint-coarseness item was addressed by Phase 4 (`04-02` richer fingerprint identity via `triage-derivation.ts`); WR-08/WR-12 remain minor open items. 01-07 targeted `scripts/verify-cold-replay.mjs` (CR-01 path traversal, CR-02 false-PASS) — that maintainer stopgap script is superseded by Phase 2's ORCL-01 differential (`scripts/oracle/orcl-01-differential.mjs`) as the production cold-replay oracle; the script's defects stand but it is no longer load-bearing.
