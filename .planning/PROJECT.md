@@ -4,7 +4,7 @@
 
 `agda-mcp-server` is a TypeScript MCP server that drives a long-lived `agda --interaction-json` subprocess, exposing interactive theorem-proving capabilities (load/typecheck, goals, case-split/give/refine/auto, compute/infer, search, backend compile, proof-edits) to AI coding agents like Codex and Claude Code.
 
-v1.0 established Loop ② — the reproducible improvement loop (use → capture → judge → file → fix → lock → re-use). This milestone (**v1.1 Feed the Loop**) is about feeding that loop for real: digest the backlog of captured-but-unverified defects, open a team feedback channel so colleagues' proof sessions flow into the queue, distribute prebuilt interface caches so heavy corpora start in seconds, and sweep the residual v1.0 tech debt.
+v1.0 established Loop ② — the reproducible improvement loop (use → capture → judge → file → fix → lock → re-use). This milestone (**v1.1 Feed the Loop**) is about feeding that loop for real: digest the backlog of captured-but-unverified defects, open a team feedback channel so colleagues' proof sessions flow into the queue, and sweep the residual v1.0 tech debt.
 
 ## Core Value
 
@@ -12,15 +12,16 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 
 ## Current Milestone: v1.1 Feed the Loop
 
-**Goal:** Feed the shipped Loop ② pipeline its first real cargo and wire up its permanent fuel inlets — backlog re-verified through the pipeline, teammates' sessions uploaded and auto-judged, heavy corpora starting in seconds — while sweeping v1.0's residual debt.
+**Goal:** Feed the shipped Loop ② pipeline its first real cargo and wire up its permanent fuel inlets — backlog re-verified through the pipeline, teammates' sessions uploaded and auto-judged — while sweeping v1.0's residual debt.
 
 **Target features:**
 - Digest existing cargo: re-verify the 8 `needsReverify` CHG defect specs through the shipped wrap-up pipeline (confirmed → fix flow; not reproducible → close); fix the ORCL-02 policy-passthrough silent mismatch (W2/POLICY-01)
 - Team feedback channel: per-person revocable Bearer keys + written consent text; fail-open upload script (captures + runs + full agent logs); ~100-line HTTPS ingest endpoint archiving by person/date; unattended cron judging into the fix queue; pinned-environment distribution via git install (no npm)
-- Prebuilt interface caches (reshaped 2026-07-03): an idempotent `ensure-corpus-built` script (records measured cache size/build duration) + the server container image pre-bakes pinned Agda and warm corpus caches; the GitHub-Releases pack/fetch channel is deferred to v2 — it had zero v1.1 consumers; the oracle never consumes caches
+- End-to-end validation (E2E-01): one fresh **live** dogfooding session on the pinned CHG corpus runs the complete loop with zero fixture shortcuts — dogfood-run → capture → upload → ingest → judge → queue (→ fix→lock if a defect is confirmed); acceptance is loop-to-verdict
 - Residual debt sweep: the P2 list from `milestones/v1.0-MILESTONE-AUDIT.md`
+- (The former third theme — prebuilt interface-cache distribution — was **deleted from v1.1 on 2026-07-03** by consumer audit: zero v1.1 users. The CACHE family lives in REQUIREMENTS.md's v2 section, anchored on the oracle-prewarm item with a recorded trigger.)
 
-**Delivery constraint (autonomous-run readiness):** The ingest endpoint and the cache build machine are the SAME server — a JHU IDIES-style k8s environment (deployment pattern + 22 lessons: `~/projects6/litellm/.claude/skills/litellm-k8s-deploy/SKILL.md`) arriving ~2026-07-07. Until then all work must run and verify on the local Mac (local endpoint mode, stdlib-validated cache pipeline); real k8s deployment is a thin late step. No new credentials are needed before the server arrives: gh is authed as cliu238 (WRITE on both private fuel corpora), Agda 2.8.0 via nix, npm is NOT needed (git install), teammate keys are issued by hand after the mechanism ships.
+**Delivery constraint (autonomous-run readiness):** The ingest endpoint + cron judge deploy to a JHU IDIES-style k8s server (deployment pattern + 22 lessons: `~/projects6/litellm/.claude/skills/litellm-k8s-deploy/SKILL.md`) arriving ~2026-07-07. Until then all work must run and verify on the local Mac (local endpoint mode); real k8s deployment is a thin late step. No new credentials are needed before the server arrives: gh is authed as cliu238 (WRITE on both private fuel corpora), Agda 2.8.0 via nix, npm is NOT needed (git install), teammate keys are issued by hand after the mechanism ships.
 
 ## Requirements
 
@@ -53,7 +54,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 
 - Backlog digestion: 8 `needsReverify` specs re-verified through the shipped pipeline; ORCL-02 policy passthrough fixed (v1.1)
 - Team feedback channel: consent + revocable keys, fail-open upload, HTTPS ingest + unattended judging, pinned-env distribution via git install (v1.1)
-- Prebuilt interface-cache distribution: build/publish pipeline + strict-gated fetch with local-build fallback (v1.1)
+- End-to-end validation: one live CHG dogfood session through the complete loop, zero fixture shortcuts (v1.1)
 - Residual v1.0 debt sweep per `milestones/v1.0-MILESTONE-AUDIT.md` (v1.1)
 
 ### Out of Scope
@@ -67,7 +68,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - A curated proof benchmark suite — fuel is deliberately organic (real usage), not a "test for the sake of testing" set
 - npm publishing (PUB-01), external-user GitHub issue template (FEED-01), v1.0 tag push — standalone items deliberately kept outside v1.1; run ad hoc via `/gsd-quick` when wanted
 - Remote-hosting the MCP server / shared dev host as the primary answer — rejected for the cache goal (agent-local file divergence, #39 single-session invariant, would recreate the staleness false-green class); prebuilt cache distribution chosen instead
-- Public CACHE channel (GitHub Releases to the public + provenance/attestation) — deferred until the private channel is proven; trust-critical since `.agdai` files are unconditionally trusted by Agda
+- The entire prebuilt-cache theme (CACHE: build script, image prebake, cluster build job, any distribution channel) — deleted from v1.1 by consumer audit 2026-07-03 (zero users: oracle forbidden from caches by design, server needs source clones only, Agda's own `_build` covers local use); v2 anchored on the oracle-prewarm item (CACHE-04) with a recorded trigger; the public channel additionally stays trust-critical (`.agdai` unconditionally trusted by Agda)
 
 ## Context
 
@@ -80,7 +81,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - Bug-finding is treated as ongoing first-class work by the maintainer, not an afterthought.
 - Existing seeds to build on: `src/reporting/bug-report.ts` (capture entry point), `src/session/tool-recommendation.ts` + session-status (future Loop ① seed).
 - **Shipped v1.0 (2026-07-03):** Loop ② scaffold end-to-end — 6 phases, 26 plans, ~34k lines added since milestone start; only two surgical `src/` additions (session-capture model + emit-only capture tool), everything else in `scripts/` + repo data dirs; full suite 1583 tests green incl. real-Agda integration. Tech debt tracked in `milestones/v1.0-MILESTONE-AUDIT.md` (9 items, headline: ORCL-02 runtime policy passthrough W2). 8 CHG needs-reverify defects sit in the fix queue as next-milestone fuel.
-- **v1.1 infrastructure timeline:** ingest + cache-build server = one JHU IDIES-style k8s environment arriving ~2026-07-07; local-Mac-first until then (nginx-ingress path apps, Ceph PVC storage, GHCR + GitHub Actions CI/CD over SSH jump — see litellm-k8s-deploy skill). Autonomous-run readiness verified 2026-07-03: gh authed as cliu238 with WRITE on both `emilyriehl` private corpora; local CHG clone at `~/projects6/Codex-Homotopy-Group`; agda-stdlib / agda-unimath / hopf cloneable on demand per `scripts/data/fuel-corpora.json`; Agda 2.8.0 via nix; 215GB disk free; npm deliberately not required anywhere.
+- **v1.1 infrastructure timeline:** ingest/judging server = a JHU IDIES-style k8s environment arriving ~2026-07-07; local-Mac-first until then (nginx-ingress path apps, Ceph PVC storage, GHCR + GitHub Actions CI/CD over SSH jump — see litellm-k8s-deploy skill). Autonomous-run readiness verified 2026-07-03: gh authed as cliu238 with WRITE on both `emilyriehl` private corpora; local CHG clone at `~/projects6/Codex-Homotopy-Group`; agda-stdlib / agda-unimath / hopf cloneable on demand per `scripts/data/fuel-corpora.json`; Agda 2.8.0 via nix; 215GB disk free; npm deliberately not required anywhere.
 
 ## Constraints
 
@@ -105,10 +106,10 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 | Oracle = triad (differential + soundness scan + conformance proxy), never a single cold re-run | A fresh compile is sound for exactly one false-green family; agent cheats and wrong-statements need their own predicates | ✓ Good — v1.0; ORCL-01 abstains honestly, ORCL-02 cheat findings file unconditionally |
 | N-times warm-replay anti-phantom gate before queue filing | Timing/idle phantoms (#65/#66 family) must never enter the queue as deterministic defects | ✓ Good — v1.0 (05-03); flaky routes to gitignored side-channel, frozen queue schema untouched |
 | Runbook as cross-tool Agent Skill in tracked `.agents/skills/` | `.claude/`/`.codex/` are gitignored (Pitfall 1); Codex and Claude Code must both discover it | ✓ Good — v1.0 (05-04) with idempotent symlink installer |
-| Ingest endpoint + cache build machine = ONE JHU IDIES-style k8s server (arrives ~2026-07-07); everything local-Mac-first, k8s deploy as a thin late step | One box for both roles; litellm-k8s-deploy pattern + 22 lessons directly reusable; an autonomous run must never block on not-yet-available infra | Pending (v1.1) |
+| Ingest + judging on a JHU IDIES-style k8s server (arrives ~2026-07-07); everything local-Mac-first, k8s deploy as a thin late step | litellm-k8s-deploy pattern + 22 lessons directly reusable; an autonomous run must never block on not-yet-available infra (the server's second planned role — cache build machine — was deleted with the CACHE theme) | Pending (v1.1) |
 | TEAM-03 ingest = HTTPS endpoint (not git inbox) | The same server hosts cache builds anyway; endpoint archives by person/date to PVC; matches the proven litellm ingress pattern | Pending (v1.1) |
 | TEAM-04 distribution = git install; npm publishing stays out of scope | No npm account exists and interactive signup/2FA can't be automated mid-run; `npm install github:cliu238/agda-mcp-server#<tag>` achieves the same version pinning with zero new credentials | Pending (v1.1) |
-| CACHE reshaped: `ensure-corpus-built` script + server-image prebake; Releases pack/fetch channel deferred to v2 | Owner scope challenge (2026-07-03): the download channel had zero v1.1 consumers — active teammates already hold local builds, ORCL-01 is forbidden from consuming caches, no CI requirement; the image IS "server directly uses prepared content" | Pending (v1.1) |
+| Entire CACHE theme deleted from v1.1 (after first being reshaped to script+image the same day) | Owner-driven consumer audit, applied to the end: the oracle is forbidden from caches by design, the server/image needs only source clones, teammates already hold warm local `_build`s (Agda's own incremental cache), onboarding = one documented overnight build — every successively smaller form (Releases channel → image prebake → local script) failed the same "who consumes it" test; v2 anchored on CACHE-04 (oracle prewarm), triggered by TEAM-04's INCONCLUSIVE/timeout rate becoming the bottleneck | Decided (v1.1) |
 | Server plan kept after an explicit no-server alternative was analyzed | GitHub-inbox + Mac-only judging was laid out (fewer moving parts, no day-4 gate); owner explicitly chose to use the JHU k8s server, accepting two runtime environments and the ~07-07 dependency — do not relitigate | Decided (v1.1) |
 
 ## Evolution
@@ -129,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 — Milestone v1.1 Feed the Loop started: scope confirmed (4 themes: digest backlog, team feedback channel, prebuilt cache distribution, debt sweep; standalone npm/issue-template/tag-push items excluded), infrastructure timeline recorded (JHU k8s server ~07-07, local-Mac-first), requirements pending.*
+*Last updated: 2026-07-03 — Milestone v1.1 Feed the Loop: requirements defined (16 REQs after the CACHE theme was deleted by consumer audit), roadmap reworked to 4 phases (6–9), infrastructure timeline recorded (JHU k8s server ~07-07, local-Mac-first).*

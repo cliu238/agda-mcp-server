@@ -23,17 +23,15 @@ Locked context (not re-litigated): internal colleagues only; one-time consent = 
 - [ ] **TEAM-04**: Unattended cron judging digests uploads: safely extract (materialize-pattern path-sandboxing — never bare tar trust) → oracle triad → N-rerun flake gate → intake → fix queue as `new`, reusing the shipped wrap-up machinery with parameterized corpus-clone paths and policy keys so bundles from another machine don't silently abstain (closes the `agdaDirContents.libraries` absolute-path probe gap). Per-run INCONCLUSIVE/abstention rate is surfaced in the run summary — no human is watching otherwise.
 - [ ] **TEAM-05**: A teammate can go zero → uploading with pinned-environment distribution via **git install**: an install script (or devcontainer) pins the exact server version (git tag) and exact Agda (`tooling/scripts/run-pinned-agda.sh`), with documented steps. No npm account anywhere in the flow.
 
-### Prebuilt Interface Caches (CACHE)
+### End-to-End Validation (E2E)
 
-Locked context: reshaped 2026-07-03 after a scope challenge — the GitHub-Releases pack/upload/fetch channel had **zero v1.1 consumers** (active teammates already have local builds; the oracle is cold by design; no CI requirement) and is deferred to v2 (CACHE-05). v1.1 ships the build primitive plus server-image prebake instead — the server directly uses prepared content; nothing is ever auto-downloaded; ORCL-01's cold replay stays untouched and always-cold (prebuilt caches serve live sessions, never the oracle).
-
-- [ ] **CACHE-01**: An idempotent `ensure-corpus-built` script: given (exact `agda --version` × corpus `pinnedRef` × oracle-policy flags baseline — all three already pinned by existing SSOT files), builds the corpus `_build` interface cache on the current machine and skips when the key already matches; every run records measured build duration and on-disk cache size into a small manifest (the data that decides whether a distribution channel is ever worth building). Works on macOS and Linux; proven end-to-end on agda-stdlib; agda-unimath documented via the `caffeinate` background path. This is both the teammate "build once locally" official path and the primitive the image bake (CACHE-02) reuses. **No public-repo self-hosted runner** — heavy builds run locally or as a cluster-internal job (DEPLOY-02).
-- [ ] **CACHE-02**: The server image pre-bakes prepared corpora: the DEPLOY container image layers pinned Agda + pinned corpus checkouts **with warm interface caches** built at image-build time via CACHE-01 (checkout and `_build` created in the same layer so Agda's mtime staleness check holds). Acceptance: inside the container, a warm load of a cached corpus module skips recompilation. Published to GHCR (layers handle storage/transfer/dedup — no bespoke distribution channel); consumed by the cluster jobs and available to any container-using teammate.
+- [ ] **E2E-01**: One fresh, **live** dogfooding session on the pinned CHG corpus (`emilyriehl/Codex-Homotopy-Group` — the fuel manifest's designated first official dogfood-run target, v1.0 decision D-02) runs the COMPLETE loop with zero fixture shortcuts: agent proof-work via `dogfood-run.mjs` → auto-capture → TEAM-02 upload → TEAM-03 ingest → TEAM-04 cron judge (policy key resolved correctly via POLICY-01 — CHG is exactly the case-mismatch corpus) → fix-queue intake with correct dedup against existing CHG entries. Acceptance is **loop-to-verdict** (a definitive per-capture verdict + correct queue behavior), not "must find a new defect"; any confirmed defect continues through the REVERIFY-02 fix→lock path. Precondition documented, not engineered: CHG's vendored agda-unimath is built locally once (overnight, via the corpus's own tooling — no cache system).
 
 ### Deployment (DEPLOY) — gated on server arrival (~2026-07-07)
 
+Note: the former CACHE theme (build script, image cache prebake, cluster build job) was **deleted from v1.1 on 2026-07-03** after a consumer audit found zero v1.1 users — see v2 Requirements and Out of Scope. The image below is consequently small (Node + pinned Agda + pinned corpus *source* clones for judging replays — no corpus caches) and buildable on standard hosted runners or locally; no self-hosted runner exists anywhere.
+
 - [ ] **DEPLOY-01**: The ingest endpoint + cron judge run on the JHU IDIES-style k8s server, containerized per the litellm-k8s-deploy pattern (GHCR image built `linux/amd64`, nginx-ingress path app with `proxy-body-size` raised to match the TEAM-03 cap, PVC storage root, Ceph-UID-correct securityContext). Local mode remains a working fallback; POLICY-01's case-sensitivity fix is re-verified on the cluster.
-- [ ] **DEPLOY-02**: Corpus-cache/image builds are runnable as a cluster-internal job on the same server (resource requests sized for agda-unimath's >10 GB needs): running CACHE-01's script and baking/pushing the CACHE-02 image layers to GHCR — never wired to public-repo GitHub Actions. If cluster resources turn out not to permit the unimath build, the documented local-Mac build path (CACHE-01) is the accepted fallback (recorded, not silent).
 
 ### Residual Debt Sweep (DEBT) — from `milestones/v1.0-MILESTONE-AUDIT.md`
 
@@ -49,11 +47,13 @@ Locked context: reshaped 2026-07-03 after a scope challenge — the GitHub-Relea
 
 Deferred. Tracked, not in the current roadmap.
 
-### Cache — public channel
+### Prebuilt interface caches (CACHE family — deleted from v1.1, 2026-07-03)
 
-- **CACHE-03**: Public distribution channel: GitHub Releases opened to external users with build provenance/attestation (GitHub Artifact Attestations or equivalent), public CI builds, published checksums, README docs. TRUST-CRITICAL: `.agdai` files are unconditionally trusted by Agda — a poisoned interface can fake a checked proof. Hard-gated on the private channel being proven.
-- **CACHE-04**: Oracle prewarm whitelist — allowing ORCL-01 cold replays to consume prebuilt *library* caches (fresh `_build` for the user's module only), scoped to standalone corpora (agda-stdlib, pinned agda-unimath; CHG/Hopf vendor unimath as a submodule and cannot be safely prewarmed without changing `buildFreshProbe`). Trigger: cron judging's INCONCLUSIVE/timeout rate on heavy corpora becomes the bottleneck.
-- **CACHE-05**: Raw `.agdai` bundle pack/publish/fetch channel (GitHub Releases per-bundle tags, sha256 gates, 2 GiB split fallback, explicit post-extract mtime re-stamp) — the originally-scoped v1.1 design, deferred because it had no consumers. Trigger: a real non-container consumer appears (CI running unimath tests, external users) AND CACHE-01's measured sizes make distribution worthwhile.
+The entire theme was removed from v1.1 after a consumer audit found zero v1.1 users: the oracle is **forbidden** from consuming caches by design; the server/image needs only corpus *source* clones; active teammates already hold warm local `_build`s (Agda's own incremental cache); new-teammate onboarding needs one documented overnight build. The real pain (hours-long cold replays on heavy corpora) belongs to the judge, whose cure is CACHE-04 — everything else in the family is CACHE-04's substrate and gets built together with it, not before.
+
+- **CACHE-04** (the anchor): Oracle prewarm whitelist — allowing ORCL-01 cold replays to consume prebuilt *library* caches (fresh `_build` for the user's module only), scoped to standalone corpora (agda-stdlib, pinned agda-unimath; CHG/Hopf vendor unimath as a submodule and cannot be safely prewarmed without changing `buildFreshProbe`). **Trigger: TEAM-04's per-run INCONCLUSIVE/timeout rate on heavy corpora becomes the bottleneck.** Substrate built with it at that point: an idempotent `ensure-corpus-built` primitive and image/bundle packaging (the deleted v1.1 CACHE-01/CACHE-02/DEPLOY-02 designs, recorded in git history at tag-time of this file).
+- **CACHE-03**: Public distribution channel: GitHub Releases opened to external users with build provenance/attestation (GitHub Artifact Attestations or equivalent), public CI builds, published checksums, README docs. TRUST-CRITICAL: `.agdai` files are unconditionally trusted by Agda — a poisoned interface can fake a checked proof. Hard-gated on a proven private channel existing at all.
+- **CACHE-05**: Raw `.agdai` bundle pack/publish/fetch channel (GitHub Releases per-bundle tags, sha256 gates, 2 GiB split fallback, explicit post-extract mtime re-stamp) — the originally-scoped v1.1 design. Trigger: a real non-container consumer appears (CI running unimath tests, external users) AND measured cache sizes (a two-line `du`/`time` check) make distribution worthwhile.
 
 ### Team channel — scale
 
@@ -72,8 +72,7 @@ Deferred. Tracked, not in the current roadmap.
 | Remote-hosting the MCP server / shared dev host as primary answer | Rejected: agent-local file divergence, #39 single-session invariant, would recreate the staleness false-green class |
 | Public cache channel before the private one is proven | Trust-critical (`.agdai` unconditionally trusted); needs provenance/attestation first (CACHE-03) |
 | Self-hosted GitHub Actions runner on the public repo | Live security risk: public-repo PRs could execute code on the box holding ingest keys + colleague logs; cluster-internal jobs instead |
-| Wiring prebuilt caches into ORCL-01 in v1.1 | Oracle is offline-batch by design; prewarm is a v2 refinement (CACHE-04) with a real correctness boundary |
-| GitHub-Releases cache pack/fetch channel in v1.1 | Zero current consumers (teammates built locally, oracle forbidden, no CI need); deferred to v2 (CACHE-05) pending CACHE-01's measured size data |
+| The entire CACHE theme in v1.1 (build script, image cache prebake, cluster build job, any distribution channel) | Consumer audit 2026-07-03: zero v1.1 users — oracle forbidden from caches by design, server needs source clones only, teammates already hold warm local `_build`s (Agda's own incremental cache), onboarding = one documented overnight build. v2 anchored on CACHE-04 with a recorded trigger |
 | Dropping the server entirely (GitHub-inbox + Mac-only alternative) | Analyzed 2026-07-03 and offered; maintainer explicitly chose to keep the JHU k8s server plan, accepting two runtime environments and the ~07-07 dependency |
 | Per-event consent prompts, log redaction/trimming | One-time key-issuance consent, trusted internal team (locked decision; Sentry precedent: attachments aren't scrubbed either) |
 | GitHub Issues as ingest path | `fix-queue.json` stays SSOT; `mirror-github.mjs` remains optional post-triage visibility |
@@ -81,17 +80,31 @@ Deferred. Tracked, not in the current roadmap.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| — | — | — |
+| POLICY-01 | Phase 6 | Pending |
+| REVERIFY-01 | Phase 6 | Pending |
+| REVERIFY-02 | Phase 6 | Pending |
+| TEAM-01 | Phase 7 | Pending |
+| TEAM-02 | Phase 7 | Pending |
+| TEAM-03 | Phase 7 | Pending |
+| TEAM-04 | Phase 7 | Pending |
+| E2E-01 | Phase 7 | Pending |
+| TEAM-05 | Phase 8 | Pending |
+| DEPLOY-01 | Phase 8 | Pending |
+| DEBT-01 | Phase 9 | Pending |
+| DEBT-02 | Phase 9 | Pending |
+| DEBT-03 | Phase 9 | Pending |
+| DEBT-04 | Phase 9 | Pending |
+| DEBT-05 | Phase 9 | Pending |
+| DEBT-06 | Phase 9 | Pending |
+| DEBT-07 | Phase 9 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️ (roadmap pending)
+- v1.1 requirements: 17 total
+- Mapped to phases: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-03*
-*Last updated: 2026-07-03 after initial definition*
+*Last updated: 2026-07-03 after CACHE-theme deletion, roadmap rework (Phases 6–9), and E2E-01 addition (live CHG full-loop validation)*
