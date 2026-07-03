@@ -140,6 +140,17 @@ export function createRunRecorder({ transcriptPath }) {
         return undefined;
       }
 
+      // A line carrying a `method` field is a server-initiated REQUEST
+      // (or notification), never a response — JSON-RPC ids are
+      // per-direction namespaces, so a server->client request's id can
+      // numerically collide with a pending agent request id. Consuming
+      // the pending entry for it would record a bogus elapsed time AND
+      // orphan the REAL response when it arrives (silently missing a
+      // staged capture).
+      if (parsed.method !== undefined) {
+        return undefined;
+      }
+
       const pending = pendingRequests.get(parsed.id);
       if (!pending) {
         // A response whose id was never seen in a prior request line

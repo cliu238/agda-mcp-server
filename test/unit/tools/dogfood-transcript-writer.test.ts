@@ -168,6 +168,33 @@ test("recordToClientLine on an unmatched response id is recorded but does not th
   expect(transcriptContent.trim().split("\n")).toHaveLength(2);
 });
 
+// ── Behavior 3b: a server-initiated request never consumes a pending id ──
+
+test("recordToClientLine ignores a server-initiated request whose id collides with a pending tools/call, so the real response still correlates", () => {
+  const dir = makeTempDir("agda-mcp-dogfood-transcript-");
+  const transcriptPath = join(dir, "transcript.jsonl");
+  const recorder = createRunRecorder({ transcriptPath });
+
+  recorder.recordToServerLine(REQUEST_LINE); // pending id 1
+
+  // A server-initiated request (carries BOTH method and id) whose id
+  // numerically collides with the pending agent request id — JSON-RPC
+  // ids are per-direction namespaces, so this is legal on the wire.
+  const serverInitiatedRequest = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "sampling/createMessage",
+    params: {},
+  });
+  expect(recorder.recordToClientLine(serverInitiatedRequest)).toBeUndefined();
+
+  // The REAL response afterwards must still correlate and stage the capture.
+  const event = recorder.recordToClientLine(RESPONSE_LINE);
+  expect(event?.toolName).toBe("agda_capture_session");
+  expect(event?.stagedCapture?.stagedPath).toBe("/tmp/x.json");
+  expect(recorder.stagedCaptures).toHaveLength(1);
+});
+
 // ── Behavior 4: on-disk transcript shape ──────────────────────────────
 
 test("the transcript file on disk contains one newline-delimited JSON line per recorded line, each with direction + numeric ts", () => {
