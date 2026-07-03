@@ -28,17 +28,18 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - ✓ Structured bug-report bundles with fingerprints (`src/reporting/bug-report.ts`) — existing seed for Loop ②
 - ✓ Tool recommendation + session-status (`src/session/tool-recommendation.ts`) — existing seed for Loop ①
 - ✓ Literate-Agda extraction, extension loading, Zod-validated tool boundary — existing
+- ✓ Reproducible dogfooding workflow over MCP stdio — validated in Phase 5 (`dogfood-run.mjs` recording proxy, `agda-dogfooding` Agent Skill runbook, pinned 4-corpus fuel manifest, wrap-up pipeline with N-rerun anti-phantom flake gate)
+- ✓ Near-one-click capture of a stuck/failed session into a structured report — validated in Phase 1 (capture verb + self-replaying capture artifact + replay manifest)
+- ✓ Captured failure → regression test that reproduces the defect — validated in Phase 3 (lock-in pipeline; #64/#61 false-green locked from RED end-to-end)
+- ✓ Triage/fix queue with durable backpressure — validated in Phase 4 (zod-validated flat-file queue, QUEUE-02 priority, dashboard, capture-time triage)
+- ✓ Loop-driven bug fixing demonstrated — validated in Phase 03.1 (flagship transitive-staleness false-green fixed from the queue) and made repeatable by Phases 4–5
+- ✓ Engineering-quality hardening — validated in Phases 2–3 (oracle triad ground truth; durable regression tests assert correct results, never golden-master a false-green)
 
 ### Active
 
-<!-- This milestone (v1): the reproducible scaffold for Loop ②. Hypotheses until shipped. -->
+<!-- This milestone (v1): the reproducible scaffold for Loop ②. All v1 hypotheses validated — see Validated. -->
 
-- [ ] A reproducible dogfooding workflow to run real Agda proofs through the MCP (fuel: agda-stdlib / open-source projects, my own math project, agent-generated ad-hoc proofs)
-- [ ] Streamlined, near-one-click capture of a stuck/failed proof session into a structured bug/gap report (building on `bug-report.ts`)
-- [ ] Convert a captured failure into a regression test case that reproduces the defect
-- [ ] A triage/fix queue that captured issues flow into
-- [ ] Continuous feature completion + bug fixing driven by what the loop surfaces
-- [ ] Engineering-quality hardening (regression coverage that locks fixes in place)
+- (none — v1 scaffold complete; next milestone defines new hypotheses)
 
 ### Out of Scope
 
@@ -99,4 +100,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 — Phase 4 (Triage / Fix Queue) complete: an in-repo flat-file queue (`test/fixtures/fix-queue.json`, zod-validated SSOT) keyed by fingerprint, seeded with 13 real defects (the flagship + 4 confirmed + 8 needs-reverify CHG specs); QUEUE-02 priority (false-green>crash>wrong-result>missing-feature) + a regenerated dashboard; capture-time triage classification (reusing the shipped classifier via a new `triage-derivation.ts` helper); and a dry-run-default one-way GitHub mirror (`gh` via argv-array, non-authoritative). The loop now has durable backpressure — intake persists and flows rather than evaporating. Next: Phase 5 (Dogfooding Orchestration + Fuel), the final phase. (Prior: Phases 1-3 + 03.1 built + proved the capture→lock→fix cycle.)*
+*Last updated: 2026-07-03 — Phase 5 (Dogfooding Orchestration + Fuel) complete — milestone v1.0 phases all done: pinned 4-corpus fuel manifest + task-manifest hard gate (05-01); transparent recording proxy `dogfood-run.mjs` with auto-persisted captures + run report (05-02); wrap-up pipeline `dogfood-wrapup.mjs` composing the Phase-2 oracle triad with an N-times warm-replay anti-phantom flake gate — deterministic candidates file into the Phase-4 queue, flaky ones route to a gitignored side-channel (05-03); PROC-01 runbook shipped as a cross-tool Agent Skill + idempotent installer (05-04). Phase-wide code review: 13 Critical/Warning findings fixed across 2 auto-fix passes, final verdict clean; verification 20/20 must-haves passed. Loop ② scaffold is end-to-end: use → capture → judge → file → fix → lock → re-use.*
