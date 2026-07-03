@@ -15,6 +15,34 @@
 // capture with no load-family recorded action classifies trivially as
 // "not-applicable" without ever touching an injected dependency.
 //
+// Replay fidelity contract (environment parity with ORCL-01's cold
+// replay): each warm replay runs against the SAME materialized
+// environment ORCL-01 itself replays — `materialized.tmpDir` (the
+// inlined first-party sources) as the server's project root AND
+// `materialized.agdaDirTmp` (the captured `libraries`/`defaults`
+// files) as AGDA_DIR, passed via `createMcpHarness`'s `extraEnv`.
+// Without the AGDA_DIR half, the replayed server would inherit the
+// operator's AMBIENT AGDA_DIR through `...process.env` and judge a
+// library-registered capture (the flagship corpora — agda-unimath /
+// codex-homotopy-group / autoformalizing-hopf — all are) in a
+// different world than the one that confirmed the ORCL-01 candidate.
+// ACCEPTED residual delta: ORCL-01's cold replay ALSO re-passes the
+// captured spawn-time `-l` flags (`splitMergedArgv`'s `libraryFlags`
+// -> `extraSpawnArgs`) directly on the cold agda argv. The warm
+// replay CANNOT: the real server derives its `-l` spawn flags solely
+// from `.agda-lib` discovery at the project root
+// (src/agda/library-registration.ts), and `.agda-lib` is deliberately
+// never part of `inlinedFirstPartySources` (see
+// materializeCaptureEnvironment's own header), so a materialized
+// project root yields none. Routing them through
+// AGDA_MCP_DEFAULT_FLAGS instead would inject them into `Cmd_load`'s
+// per-call option list — the exact wrong channel Plan 02-03
+// empirically confirmed misattributes library-resolution errors (see
+// splitMergedArgv's rationale in orcl-01-differential.mjs) — so the
+// delta is documented here rather than bridged unfaithfully. The
+// replayed AGDA_DIR's `defaults` file still carries the captured
+// default-library selection for files not governed by a `.agda-lib`.
+//
 // Ships as a scripts/ + repo-data-dir artifact per D-05 — no new MCP
 // verb, no new src/ tool surface. Must be imported via `npx tsx` (not
 // plain `node`): it imports .ts siblings (src/repo-root.ts,
@@ -98,7 +126,11 @@ function findLastLoadFamilyAction(artifact) {
  * materializes its OWN fresh temp-dir copy of the captured sources and
  * spawns its OWN fresh `createMcpHarness` server instance — never one
  * long-lived session reused across iterations, and never a repeated
- * cold ORCL-01 spawn. Both the materialized temp dirs and the spawned
+ * cold ORCL-01 spawn. Each harness server runs inside ITS OWN
+ * iteration's materialized environment: `tmpDir` as project root plus
+ * `agdaDirTmp` as AGDA_DIR (via `extraEnv`), matching ORCL-01's cold
+ * replay — see the module header's replay fidelity contract. Both the
+ * materialized temp dirs and the spawned
  * harness are torn down at the end of every iteration (nested
  * `finally` blocks: the temp dir is cleaned even when `createHarness`
  * itself rejects or `close()` fails), so neither leaks regardless of
@@ -115,8 +147,8 @@ function findLastLoadFamilyAction(artifact) {
  *   throws rather than classifying on an empty observation list.
  * @param {object} [options]
  * @param {{
- *   materializeCaptureEnvironment?: (artifact: object) => Promise<{ tmpDir: string, cleanup(): void }>,
- *   createMcpHarness?: (opts: { serverRepoRoot: string, projectRoot: string }) => Promise<{
+ *   materializeCaptureEnvironment?: (artifact: object) => Promise<{ tmpDir: string, agdaDirTmp: string, cleanup(): void }>,
+ *   createMcpHarness?: (opts: { serverRepoRoot: string, projectRoot: string, extraEnv?: Record<string, string> }) => Promise<{
  *     callTool(name: string, args: Record<string, unknown>): Promise<unknown>,
  *     close(): Promise<void>,
  *   }>,
@@ -163,6 +195,13 @@ export async function classifyFlakiness(artifact, n = 3, options = {}) {
       const harness = await createHarness({
         serverRepoRoot: SERVER_REPO_ROOT,
         projectRoot: materialized.tmpDir,
+        // Same materialized environment ORCL-01's own cold replay uses
+        // (`env: { ...process.env, AGDA_DIR: materialized.agdaDirTmp }`
+        // in orcl-01-differential.mjs): the replayed server must read
+        // the CAPTURED `libraries`/`defaults` files, never the
+        // operator's ambient AGDA_DIR — see the module header's replay
+        // fidelity contract.
+        extraEnv: { AGDA_DIR: materialized.agdaDirTmp },
       });
       try {
         const result = await harness.callTool(action.tool, action.args);

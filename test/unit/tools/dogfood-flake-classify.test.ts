@@ -180,6 +180,42 @@ test("classifyFlakiness: replays the SAME tool+args as the artifact's own last l
   }
 });
 
+// ── Test 6 (environment fidelity): each harness runs inside ITS OWN materialized env ──
+
+test("classifyFlakiness: passes each iteration's OWN materialized tmpDir as projectRoot and agdaDirTmp as extraEnv.AGDA_DIR to createMcpHarness", async () => {
+  const action = loadAction("agda_load", { file: "Main.agda" }, "Main.agda", "ok-complete");
+  const artifact = baseArtifact([action]);
+
+  let materialization = 0;
+  const materializeSpy = vi.fn(async () => {
+    materialization += 1;
+    return {
+      tmpDir: `/fake-src-${materialization}`,
+      agdaDirTmp: `/fake-agdadir-${materialization}`,
+      cleanup: vi.fn(),
+    };
+  });
+  const harness = fakeHarnessReturning(["ok-complete", "ok-complete", "ok-complete"]);
+  const createHarnessSpy = vi.fn(
+    async (_opts: { serverRepoRoot: string; projectRoot: string; extraEnv?: Record<string, string> }) => harness,
+  );
+
+  await classifyFlakiness(artifact, 3, {
+    deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+  });
+
+  expect(createHarnessSpy).toHaveBeenCalledTimes(3);
+  for (let i = 0; i < 3; i += 1) {
+    const opts = createHarnessSpy.mock.calls[i][0];
+    // Pairing matters: harness i must run in materialization i's env —
+    // never a stale dir from a previous iteration, and never the
+    // operator's ambient AGDA_DIR (the WR-01 fidelity gap: an omitted
+    // extraEnv.AGDA_DIR silently inherits `...process.env`'s one).
+    expect(opts.projectRoot).toBe(`/fake-src-${i + 1}`);
+    expect(opts.extraEnv?.AGDA_DIR).toBe(`/fake-agdadir-${i + 1}`);
+  }
+});
+
 // ── All-null observations: replay-inconclusive, never mislabeled flaky ──
 
 test("classifyFlakiness: N replays that ALL fail to produce a classification report replay-inconclusive, not flaky", async () => {
