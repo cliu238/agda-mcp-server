@@ -58,3 +58,18 @@ test("dogfood-run.mjs's own source text never imports AgdaSession (#39)", () => 
   // invariant must not self-invalidate the test.
   expect(source).not.toMatch(/^import\s*\{[^}]*\bAgdaSession\b/m);
 });
+
+// ── Behavior 5: source-text invariant — proxy stdout/stderr carry 'error' listeners ──
+
+test("dogfood-run.mjs registers 'error' listeners on process.stdout and process.stderr so an abrupt agent death cannot EPIPE-crash the proxy before run-report.json is written", () => {
+  const source = readFileSync(DOGFOOD_RUN_PATH, "utf8");
+  // An agent dying mid-session closes the read ends of the proxy's
+  // stdout/stderr pipes; any line still draining during the finalize
+  // window then raises an ASYNC 'error' (EPIPE) event on the stream.
+  // Without a listener that is an uncaught exception that kills the
+  // proxy BEFORE writeRunReport — losing the whole run's judgeable
+  // record. These listeners are the crash guard; removing either one
+  // silently reintroduces the loss.
+  expect(source).toMatch(/process\.stdout\.on\(\s*["']error["']/);
+  expect(source).toMatch(/process\.stderr\.on\(\s*["']error["']/);
+});

@@ -134,6 +134,23 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     stdio: options.stdio,
   });
 
+  // The agent owns the read ends of THIS process's stdout/stderr
+  // pipes. If the agent dies abruptly mid-session (an operator killing
+  // a wedged Codex/Claude session is a realistic dogfooding teardown),
+  // any line still draining to the agent — a forwarded server response
+  // on stdout, or the child's own piped stderr output during the
+  // finalize drain window — surfaces as an ASYNC 'error' event (EPIPE)
+  // on the corresponding stream. With no listener that is an uncaught
+  // exception that kills the proxy BEFORE writeRunReport runs: no
+  // run-report.json means dogfood-wrapup refuses the run and every
+  // staged capture goes unjudged. Forwarding to a dead agent is moot,
+  // but finalize (the run-report write) must still complete — so both
+  // events are consumed. (A stderr listener also keeps
+  // `child.stderr.pipe(process.stderr)` from destroying the
+  // destination with an unhandled error for the same reason.)
+  process.stdout.on("error", () => {});
+  process.stderr.on("error", () => {});
+
   child.stderr.pipe(process.stderr);
 
   // Agent -> proxy -> server. Line-buffered via node:readline (MCP
@@ -165,7 +182,12 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   const fromServer = createInterface({ input: child.stdout });
   fromServer.on("line", (line) => {
     const event = recorder.recordToClientLine(line);
-    process.stdout.write(`${line}\n`);
+    // Guarded like the child.stdin forward above: recording (already
+    // done) matters even when the agent's read end is gone, forwarding
+    // does not.
+    if (process.stdout.writable) {
+      process.stdout.write(`${line}\n`);
+    }
 
     if (event?.isCaptureSession) {
       // Promote exactly the capture THIS response staged: a failed
