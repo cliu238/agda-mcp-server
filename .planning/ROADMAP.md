@@ -191,7 +191,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — The recording proxy: transparent stdio tee, unconditional AGDA_MCP_CAPTURE=1, auto-persist, run report (never a second AgdaSession, #39)
+- [x] 05-02-PLAN.md — The recording proxy: transparent stdio tee, unconditional AGDA_MCP_CAPTURE=1, auto-persist, run report (never a second AgdaSession, #39)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -209,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
 | 4. Triage / Fix Queue | 5/5 | Complete   | 2026-07-02 |
-| 5. Dogfooding Orchestration + Fuel | 1/4 | In Progress|  |
+| 5. Dogfooding Orchestration + Fuel | 2/4 | In Progress|  |
