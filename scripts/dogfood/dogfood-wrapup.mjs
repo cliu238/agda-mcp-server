@@ -284,13 +284,29 @@ export async function scriptMain(argv = process.argv.slice(2)) {
 
   const results = [];
   for (const staged of stagedCaptures) {
-    const artifact = JSON.parse(readFileSync(staged.stagedPath, "utf8"));
-    const outcome = await wrapUpCapture(staged.stagedPath, artifact, {
-      queueJsonPath,
-      flakyLogPath,
-      n: rerunN,
-    });
-    results.push({ stagedPath: staged.stagedPath, ...outcome });
+    // Per-capture error isolation: one deleted/corrupt staged file, an
+    // absent stagedPath field, or one wrapUpCapture rejection (oracle
+    // cold-spawn failure, a stale dist/ build failing harness creation)
+    // must never zero out the whole run — every remaining capture still
+    // gets judged and wrapup-report.json still gets written.
+    try {
+      const artifact = JSON.parse(readFileSync(staged.stagedPath, "utf8"));
+      const outcome = await wrapUpCapture(staged.stagedPath, artifact, {
+        queueJsonPath,
+        flakyLogPath,
+        n: rerunN,
+      });
+      results.push({ stagedPath: staged.stagedPath, ...outcome });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`dogfood-wrapup: failed to judge ${staged.stagedPath}: ${message}\n`);
+      results.push({
+        stagedPath: staged.stagedPath,
+        filed: false,
+        classification: "error",
+        error: message,
+      });
+    }
   }
 
   const summary = {
@@ -302,6 +318,7 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     flaky: results.filter((r) => r.classification === "flaky").length,
     replayInconclusive: results.filter((r) => r.classification === "replay-inconclusive").length,
     notACandidate: results.filter((r) => r.classification === "not-a-candidate").length,
+    errors: results.filter((r) => r.classification === "error").length,
     results,
   };
 
@@ -311,8 +328,14 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     `[dogfood-wrapup] run ${runId}: ${summary.totalCaptures} capture(s) judged — `
       + `${summary.filed} filed, ${summary.flaky} flaky, `
       + `${summary.replayInconclusive} replay-inconclusive, `
-      + `${summary.notACandidate} not-a-candidate.\n`,
+      + `${summary.notACandidate} not-a-candidate, ${summary.errors} error(s).\n`,
   );
+
+  if (summary.errors > 0) {
+    // The report is complete, but at least one capture went unjudged —
+    // surface that as a non-zero exit so a caller/CI can notice.
+    process.exitCode = 1;
+  }
 }
 
 if (isMainModule(import.meta.url, process.argv[1])) {
