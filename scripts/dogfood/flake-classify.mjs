@@ -99,8 +99,10 @@ function findLastLoadFamilyAction(artifact) {
  * spawns its OWN fresh `createMcpHarness` server instance — never one
  * long-lived session reused across iterations, and never a repeated
  * cold ORCL-01 spawn. Both the materialized temp dirs and the spawned
- * harness are torn down at the end of every iteration (`finally`), so
- * neither leaks regardless of the observed classification.
+ * harness are torn down at the end of every iteration (nested
+ * `finally` blocks: the temp dir is cleaned even when `createHarness`
+ * itself rejects or `close()` fails), so neither leaks regardless of
+ * the observed classification.
  *
  * @param {object} artifact - A staged CaptureArtifact-shaped object.
  * @param {number} [n=3] - Number of independent replay iterations.
@@ -157,15 +159,23 @@ export async function classifyFlakiness(artifact, n = 3, options = {}) {
   const observedClassifications = [];
   for (let i = 0; i < n; i++) {
     const materialized = await materialize(artifact);
-    const harness = await createHarness({
-      serverRepoRoot: SERVER_REPO_ROOT,
-      projectRoot: materialized.tmpDir,
-    });
     try {
-      const result = await harness.callTool(action.tool, action.args);
-      observedClassifications.push(result?.structuredContent?.data?.classification ?? null);
+      const harness = await createHarness({
+        serverRepoRoot: SERVER_REPO_ROOT,
+        projectRoot: materialized.tmpDir,
+      });
+      try {
+        const result = await harness.callTool(action.tool, action.args);
+        observedClassifications.push(result?.structuredContent?.data?.classification ?? null);
+      } finally {
+        // Swallow a close() rejection: it must never mask the real
+        // callTool error nor skip the temp-dir cleanup below.
+        await harness.close().catch(() => {});
+      }
     } finally {
-      await harness.close();
+      // Runs even when createHarness itself rejects (server spawn
+      // failure, e.g. a missing build) — the per-iteration temp copy
+      // of the captured sources must never leak.
       materialized.cleanup();
     }
   }

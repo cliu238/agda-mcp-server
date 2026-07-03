@@ -229,6 +229,48 @@ test("classifyFlakiness: skips a trailing load-family action whose response lack
   }
 });
 
+// ── Cleanup: temp dirs never leak, even on harness-creation or close() failure ──
+
+test("classifyFlakiness: cleans up the materialized temp dir even when harness creation fails", async () => {
+  const action = loadAction("agda_load", { file: "Main.agda" }, "Main.agda", "ok-complete");
+  const artifact = baseArtifact([action]);
+
+  const cleanup = vi.fn();
+  const materializeSpy = vi.fn(async () => ({ tmpDir: "/fake", cleanup }));
+  const createHarnessSpy = vi.fn(async () => {
+    throw new Error("spawn failed: dist/index.js missing");
+  });
+
+  await expect(
+    classifyFlakiness(artifact, 3, {
+      deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+    }),
+  ).rejects.toThrow(/spawn failed/);
+
+  expect(cleanup).toHaveBeenCalledTimes(1);
+});
+
+test("classifyFlakiness: a close() rejection neither skips temp-dir cleanup nor fails the replay", async () => {
+  const action = loadAction("agda_load", { file: "Main.agda" }, "Main.agda", "ok-complete");
+  const artifact = baseArtifact([action]);
+
+  const cleanup = vi.fn();
+  const materializeSpy = vi.fn(async () => ({ tmpDir: "/fake", cleanup }));
+  const callTool = vi.fn(async () => ({ structuredContent: { data: { classification: "ok-complete" } } }));
+  const close = vi.fn(async () => {
+    throw new Error("close failed");
+  });
+  const createHarnessSpy = vi.fn(async () => ({ callTool, close }));
+
+  const result = await classifyFlakiness(artifact, 3, {
+    deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+  });
+
+  expect(result.classification).toBe("deterministic");
+  expect(close).toHaveBeenCalledTimes(3);
+  expect(cleanup).toHaveBeenCalledTimes(3);
+});
+
 // ── Guard: a non-positive-integer n must throw, never "classify" on zero replays ──
 
 test("classifyFlakiness: rejects a non-positive-integer n instead of classifying on an empty observation list", async () => {
