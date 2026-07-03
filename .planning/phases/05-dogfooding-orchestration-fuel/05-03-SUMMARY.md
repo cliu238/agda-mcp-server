@@ -104,6 +104,12 @@ None - no external service configuration required.
 - The fix-queue schema (`test/fixtures/fix-queue.ts`) and priority table (`scripts/queue/priority.mjs`) remain untouched, as required — this plan only ever calls the existing `upsertQueueEntry` with schema-conformant entries.
 - No blockers for Plan 05-04 (the Skill/runbook plan, which documents this plan's CLI shape as already fixed by this plan's own text rather than waiting on execution).
 
+## Self-Check: PASSED
+
+- All 6 key-files (5 created source/test files + this SUMMARY.md) verified present on disk via `[ -f ]`.
+- All 5 commits (`ee28862`, `9b25ca7`, `276f671`, `8e81304`, `6e5452d`) verified present via `git log --oneline --all`.
+- All plan-level `<verification>` commands re-ran green immediately before this SUMMARY was written: unit tests (15/15), real-Agda live test (1/1), full `test/unit/tools/` regression (375 passed, 12 skipped, 0 failed), and `npx tsc -p tsconfig.test.json --noEmit` (zero errors attributable to this plan's files).
+
 ---
 *Phase: 05-dogfooding-orchestration-fuel*
 *Completed: 2026-07-03*
