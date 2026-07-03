@@ -1,0 +1,6 @@
+{
+  "$comment": "PROC-02's policy for the agda-stdlib fuel corpus (Phase 5). agda-stdlib is a general-purpose standard library, not a HoTT/univalent library, so it has no established sanctioned-axiom regime or project-wide required-flag convention analogous to agda-unimath's --without-K baseline. Left intentionally near-empty pending real dogfooding evidence against this corpus, so ORCL-02 honestly reports against an empty whitelist rather than a fabricated one.",
+  "sanctionedAxioms": [],
+  "requiredFlags": [],
+  "forbiddenFlags": []
+}

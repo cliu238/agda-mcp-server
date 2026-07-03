@@ -1,0 +1,13 @@
+{
+  "$comment": "PROC-02's policy for the Codex-Homotopy-Group fuel corpus (private repo emilyriehl/Codex-Homotopy-Group), which proves theorems using agda-unimath and therefore mirrors agda-unimath.json's own sanctioned axioms and required flags verbatim (D-02: this corpus inherits agda-unimath's axiom/flag regime; values sourced from REQUIREMENTS.md's own PROC-02 wording and FUEL-CORPORA.md). This is also the FIRST OFFICIAL dogfood-run target per D-02: it directly dogfoods this server (v0.6.7 measured false-greens) and its .agda-lib-derived policy facts are ready.",
+  "sanctionedAxioms": ["univalence", "function-extensionality", "replacement"],
+  "requiredFlags": [
+    "--without-K",
+    "--exact-split",
+    "--no-import-sorts",
+    "--auto-inline",
+    "--no-require-unique-meta-solutions",
+    "--no-postfix-projections"
+  ],
+  "forbiddenFlags": []
+}
