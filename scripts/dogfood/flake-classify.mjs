@@ -33,12 +33,19 @@ const LOAD_FAMILY_TOOL_PATTERN = /^agda_(load|typecheck)/;
 /**
  * Scan `artifact.recordedActions` (defaulting to `[]` when absent or
  * not an array) from the END for the last entry whose `tool` is a
- * string matching `/^agda_(load|typecheck)/`, returning that RAW
- * `RecordedAction` object (carrying its own `.tool`/`.args`) or `null`.
+ * string matching `/^agda_(load|typecheck)/` AND whose
+ * `normalizedResponse.data` carries a string `file` and a string
+ * `classification` — the SAME two gates `findWarmLoadTuple` applies —
+ * returning that RAW `RecordedAction` object (carrying its own
+ * `.tool`/`.args`) or `null`.
  *
  * This is a small, DELIBERATE, additive duplicate of
  * `findWarmLoadTuple`'s own internal scan-for-last-match loop
- * (scripts/oracle/orcl-01-differential.mjs), rather than either:
+ * (scripts/oracle/orcl-01-differential.mjs) — INCLUDING its
+ * response-shape gating, so both scans always select the SAME action
+ * (a trailing FAILED load-family call, whose error envelope has no
+ * `data.file`/`data.classification`, is skipped by both) — rather
+ * than either:
  *   (a) modifying that module's existing export to also return the
  *       tool name — avoided, since `scripts/oracle/*` is Phase-2-owned
  *       and this project's Architectural Responsibility Map marks it
@@ -58,9 +65,19 @@ function findLastLoadFamilyAction(artifact) {
   const actions = Array.isArray(artifact?.recordedActions) ? artifact.recordedActions : [];
   for (let i = actions.length - 1; i >= 0; i--) {
     const action = actions[i];
-    if (typeof action?.tool === "string" && LOAD_FAMILY_TOOL_PATTERN.test(action.tool)) {
-      return action;
+    if (typeof action?.tool !== "string" || !LOAD_FAMILY_TOOL_PATTERN.test(action.tool)) {
+      continue;
     }
+    // Mirror findWarmLoadTuple's response-shape gate: entries without a
+    // string data.file/data.classification (e.g. a failed call's error
+    // envelope) are scanned PAST there too. Without this clause the two
+    // scans could select DIFFERENT actions, and the flake gate would
+    // replay an action the ORCL-01 candidate never keyed on.
+    const data = action?.normalizedResponse?.data;
+    if (!data || typeof data.file !== "string" || typeof data.classification !== "string") {
+      continue;
+    }
+    return action;
   }
   return null;
 }

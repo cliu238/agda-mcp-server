@@ -180,6 +180,37 @@ test("classifyFlakiness: replays the SAME tool+args as the artifact's own last l
   }
 });
 
+// ── Faithful scan: a trailing FAILED load-family call never displaces the gated action ──
+
+test("classifyFlakiness: skips a trailing load-family action whose response lacks file/classification (a failed call), replaying the same action findWarmLoadTuple gated on", async () => {
+  const goodArgs = { file: "First.agda" };
+  const failedTrailingAction = {
+    tool: "agda_typecheck",
+    args: { file: "Second.agda" },
+    timestamp: Date.now(),
+    // A failed call's error envelope: data carries no file/classification.
+    normalizedResponse: { data: {} },
+  };
+  const artifact = baseArtifact([
+    loadAction("agda_load", goodArgs, "First.agda", "ok-complete"),
+    failedTrailingAction,
+  ]);
+
+  const materializeSpy = vi.fn(async () => ({ tmpDir: "/fake", cleanup: vi.fn() }));
+  const harness = fakeHarnessReturning(["ok-complete", "ok-complete", "ok-complete"]);
+  const createHarnessSpy = vi.fn(async () => harness);
+
+  await classifyFlakiness(artifact, 3, {
+    deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+  });
+
+  expect(harness.callTool).toHaveBeenCalledTimes(3);
+  for (const call of harness.callTool.mock.calls) {
+    expect(call[0]).toBe("agda_load");
+    expect(call[1]).toEqual(goodArgs);
+  }
+});
+
 // ── Guard: a non-positive-integer n must throw, never "classify" on zero replays ──
 
 test("classifyFlakiness: rejects a non-positive-integer n instead of classifying on an empty observation list", async () => {
