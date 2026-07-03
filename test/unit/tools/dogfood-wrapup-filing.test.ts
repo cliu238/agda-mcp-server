@@ -77,6 +77,17 @@ function cheatFindings() {
   return [{ file: "Postulates.agda", line: 4, kind: "postulate", detail: "unsafeAxiom", sanctioned: false }];
 }
 
+/** Minimal fixQueueEntrySchema-shaped surface this test file asserts
+ *  on — typed (rather than `unknown`) so `upsertFn.mock.calls[0][0]`
+ *  field accesses typecheck. */
+interface FakeQueueEntry {
+  fingerprint: string;
+  status: string;
+  defectKind: string;
+  summary: string;
+  [key: string]: unknown;
+}
+
 // ── Test 1: true-green -> not filed; classifyFlakiness/upsertQueueEntry never called ──
 
 test("wrapUpCapture: a true-green verdict (orcl01=pass, orcl02=clean) is never filed and never classified for flakiness", async () => {
@@ -128,7 +139,7 @@ test("wrapUpCapture: a server-false-green-candidate that N-reruns as determinist
   const artifact = baseArtifact();
   const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }));
   const classifyFn = vi.fn(async () => ({ classification: "deterministic", observedClassifications: ["type-error", "type-error", "type-error"] }));
-  const upsertFn = vi.fn(async (entry: unknown) => entry);
+  const upsertFn = vi.fn(async (entry: FakeQueueEntry) => entry);
 
   const result = await wrapUpCapture("fake-capture.json", artifact, {
     queueJsonPath: throwawayQueuePath(),
@@ -176,7 +187,7 @@ test("wrapUpCapture: an orcl02 cheat-flagged verdict (orcl01=skip) is filed dire
     }),
   );
   const classifyFn = vi.fn();
-  const upsertFn = vi.fn(async (entry: unknown) => entry);
+  const upsertFn = vi.fn(async (entry: FakeQueueEntry) => entry);
 
   const result = await wrapUpCapture("fake-capture.json", artifact, {
     queueJsonPath: throwawayQueuePath(),
@@ -203,7 +214,7 @@ test("wrapUpCapture: an orcl02 cheat-flagged signal files even when a co-occurri
   // "flaky" classification would route the whole capture to the
   // side-channel instead of filing it.
   const classifyFn = vi.fn(async () => ({ classification: "flaky", observedClassifications: ["ok-complete", "type-error"] }));
-  const upsertFn = vi.fn(async (entry: unknown) => entry);
+  const upsertFn = vi.fn(async (entry: FakeQueueEntry) => entry);
   const appendFlakyFn = vi.fn();
 
   const result = await wrapUpCapture("fake-capture.json", artifact, {

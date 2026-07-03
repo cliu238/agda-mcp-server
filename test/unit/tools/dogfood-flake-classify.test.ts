@@ -62,7 +62,7 @@ function baseArtifact(recordedActions: unknown[] = []) {
  *  happened without caring about its return value. */
 function fakeHarnessReturning(classifications: Array<string | null>) {
   let call = 0;
-  const callTool = vi.fn(async () => {
+  const callTool = vi.fn(async (_name: string, _args: Record<string, unknown>) => {
     const classification = classifications[Math.min(call, classifications.length - 1)];
     call += 1;
     return { structuredContent: { data: { classification } } };
