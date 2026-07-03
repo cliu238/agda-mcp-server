@@ -187,7 +187,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — PROC-02 fuel-pointer set (4 pinned corpora + policy files) + PROC-01 task-manifest hard-gate contract
+- [x] 05-01-PLAN.md — PROC-02 fuel-pointer set (4 pinned corpora + policy files) + PROC-01 task-manifest hard-gate contract
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -209,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Cold-Compiler Ground-Truth Oracle | 5/5 | Complete   | 2026-07-02 |
 | 3. Regression Lock Pipeline | 3/3 | Complete   | 2026-07-02 |
 | 4. Triage / Fix Queue | 5/5 | Complete   | 2026-07-02 |
-| 5. Dogfooding Orchestration + Fuel | 0/4 | Planned | - |
+| 5. Dogfooding Orchestration + Fuel | 1/4 | In Progress|  |
