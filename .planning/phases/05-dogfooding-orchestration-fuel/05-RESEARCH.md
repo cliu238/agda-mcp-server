@@ -674,27 +674,31 @@ if (existsSync(claudeLink) || lstatSync(claudeLink, { throwIfNoEntry: false })) 
 
 **If this table is empty:** N/A — see entries above.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does "re-run N times" (success criterion 4) mean re-running the recorded action against fresh warm sessions, or re-running ORCL-01's cold differential, or both?**
    - What we know: Pitfall 3's prose ("re-run the capture N times... classify: deterministic (same envelope every time)") and CONTEXT.md's explicit naming of `test/helpers/mcp-harness.ts` as the N-rerun vehicle both point toward warm-replay. ORCL-01 itself is a single, already-existing cold-vs-warm comparison, not naturally a thing you'd "re-run" for its own sake (cold agda has no timing heuristic to be unstable about).
    - What's unclear: whether the plan should ALSO re-run ORCL-01's cold side N times as a belt-and-suspenders check (cheap insurance, since a from-scratch `agda --interaction-json` invocation could in principle also have its own environment-level flakiness, e.g. filesystem cache state) — this research recommends starting with warm-replay-only (Pattern 3) as the primary signal and treating cold-side repetition as a nice-to-have, not required for success criterion 4.
    - Recommendation: plan-phase should make this an explicit, named design decision (not left implicit in a "we'll figure it out during implementation" way), since it is genuinely the mechanism behind this phase's flagship anti-phantom guarantee.
+   - **RESOLVED:** `05-03-PLAN.md`'s `classifyFlakiness` (Task 1) implements warm-replay-via-harness exactly as recommended — N fresh `createMcpHarness` sessions replaying the same recorded action, never a repeated cold ORCL-01 spawn.
 
 2. **Where do flaky-classified captures live, if not the tracked fix queue?**
    - What we know: the existing `fixQueueEntrySchema`'s `defectKind` enum has no slot for "flaky"; `scripts/queue/priority.mjs`'s ordering table is frozen and load-bearing for Phase 4's already-shipped dashboard.
    - What's unclear: whether the maintainer would actually prefer a schema extension (a genuinely valid alternative — it's a values call, not a correctness constraint) over a side-channel file.
    - Recommendation: default to the side-channel (`.agda-mcp/runs/.../flaky-captures.jsonl`, Pitfall 6) unless the planner has a specific reason to extend the tracked schema; either way, decide explicitly rather than defaulting by omission.
+   - **RESOLVED:** `05-03-PLAN.md` (Task 2, `appendFlakyLog`) routes flaky classifications to the gitignored `.agda-mcp/runs/<run-id>/flaky-captures.jsonl` side-channel exactly as recommended; the tracked `fixQueueEntrySchema`/`DEFECT_KIND_WEIGHT` enum is never touched. (A co-occurring ORCL-02 cheat-flagged signal still files immediately regardless of a flaky ORCL-01 result — see 05-03-PLAN.md's filing-precedence fix.)
 
 3. **Should `dogfood-run.mjs` auto-invoke `dogfood-wrapup.mjs` at child-process exit, or must the maintainer always run it as a separate command?**
    - What we know: CONTEXT.md's scope fence says "on-demand, not a daemon"; D-04 says the wrap-up pipeline itself is "auto-chained in code" (meaning: once invoked, its internal steps run without per-step human confirmation) — but this doesn't settle whether the TRIGGER for starting the wrap-up is automatic-on-exit or a separate manual command.
    - What's unclear: whether auto-triggering on exit would create surprising latency (a real corpus's cold recompiles are slow, per Pitfall 5) for whatever process is waiting on the proxy to exit (the agent's own MCP client teardown).
    - Recommendation: default to two separate commands (this research's Pattern in the Alternatives Considered table), with the proxy printing the exact next command to run as its own exit message — cheap to implement, avoids the latency surprise, and is trivially upgradable to auto-chaining later if real usage shows the manual step is friction (consistent with PITFALLS.md Pitfall 7's "don't automate before the manual step has a documented rubric").
+   - **RESOLVED:** the plan set implements the recommended two-script split — `dogfood-run.mjs` (05-02, the recording proxy) and `dogfood-wrapup.mjs` (05-03, the post-run pipeline) — as separate, manually-sequenced commands; the proxy prints the wrap-up command as its own exit hint.
 
 4. **What exactly does "the maintainer's own math project" (PROC-02, REQUIREMENTS.md wording) resolve to, concretely?**
    - What we know: CONTEXT.md's D-02 resolves this to the two named private repos (`emilyriehl/Codex-Homotopy-Group`, `emilyriehl/autoformalizing-hopf`), both already access-gated and both already inventoried in `FUEL-CORPORA.md`.
    - What's unclear: nothing operationally — this is already answered by CONTEXT.md D-02 and does not need further plan-phase resolution. Listed here only to make explicit that this research did not find a THIRD, undocumented "maintainer's math project" corpus to add.
    - Recommendation: no action needed; the fuel-pointer manifest sketch (Pattern 4) already reflects the D-02-resolved set of exactly four corpora.
+   - **RESOLVED:** self-closed — no plan action needed; the fuel-pointer manifest (05-01) implements exactly the D-02-resolved set of four corpora.
 
 ## Environment Availability
 
