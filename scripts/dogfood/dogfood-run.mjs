@@ -180,15 +180,43 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     }
   });
 
-  // Finalize exactly once, whichever fires first: the child exiting on
-  // its own, or the agent disconnecting (process.stdin ending, which
-  // node:readline surfaces as fromAgent's own "close" event).
+  // Resolves once the child's stdout has fully drained: readline
+  // dispatches every buffered line before surfacing "close", so this is
+  // the earliest point at which the recorder is guaranteed to have seen
+  // the final server->agent line (including a tail agda_capture_session
+  // response still sitting in the pipe when the child terminates).
+  const fromServerClosed = new Promise((resolveClosed) => {
+    fromServer.on("close", resolveClosed);
+  });
+
+  // Finalize exactly once, whichever fires first: the child closing on
+  // its own (`close`, not `exit` — `exit` fires when the process
+  // terminates, potentially BEFORE its stdout pipe has drained), or the
+  // agent disconnecting (process.stdin ending, which node:readline
+  // surfaces as fromAgent's own "close" event).
   let finalized = false;
   async function finalize() {
     if (finalized) return;
     finalized = true;
 
     try {
+      if (child.exitCode === null && child.signalCode === null) {
+        // Never leak an orphaned Agda process — mirrors
+        // cold-agda-session.mjs / mcp-local-client.mjs's convention.
+        // Killing FIRST (the agent-disconnect path) also ends the
+        // child's stdout, which is what lets the drain below complete.
+        child.kill();
+      }
+
+      // Snapshot the report only AFTER the child's stdout has fully
+      // drained, so a tail response recorded to the transcript is never
+      // omitted from run-report.json's stagedCaptures. Bounded so a
+      // wedged child that never closes its pipe cannot hang finalize.
+      await Promise.race([
+        fromServerClosed,
+        new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2000).unref()),
+      ]);
+
       const report = recorder.getReport({ runId, startedAt, corpusRoot, manifestPath });
       await writeRunReport(runDir, report);
       process.stderr.write(
@@ -201,16 +229,21 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         `dogfood-run: failed to write run report: ${err instanceof Error ? err.message : String(err)}\n`,
       );
     } finally {
-      if (child.exitCode === null) {
-        // Never leak an orphaned Agda process — mirrors
-        // cold-agda-session.mjs / mcp-local-client.mjs's convention.
-        child.kill();
+      const exitCode = child.exitCode ?? 0;
+      // process.exit() does not wait for queued asynchronous stdout
+      // writes, which would truncate tail lines still being forwarded
+      // to the agent. Stream writes are FIFO, so this empty write's
+      // callback fires only after every earlier queued chunk has been
+      // flushed to the pipe.
+      try {
+        process.stdout.write("", () => process.exit(exitCode));
+      } catch {
+        process.exit(exitCode);
       }
-      process.exit(child.exitCode ?? 0);
     }
   }
 
-  child.on("exit", () => {
+  child.on("close", () => {
     void finalize();
   });
   fromAgent.on("close", () => {
