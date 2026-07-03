@@ -180,6 +180,24 @@ test("classifyFlakiness: replays the SAME tool+args as the artifact's own last l
   }
 });
 
+// ── All-null observations: replay-inconclusive, never mislabeled flaky ──
+
+test("classifyFlakiness: N replays that ALL fail to produce a classification report replay-inconclusive, not flaky", async () => {
+  const action = loadAction("agda_load", { file: "Main.agda" }, "Main.agda", "ok-complete");
+  const artifact = baseArtifact([action]);
+
+  const materializeSpy = vi.fn(async () => ({ tmpDir: "/fake", cleanup: vi.fn() }));
+  const harness = fakeHarnessReturning([null, null, null]);
+  const createHarnessSpy = vi.fn(async () => harness);
+
+  const result = await classifyFlakiness(artifact, 3, {
+    deps: { materializeCaptureEnvironment: materializeSpy, createMcpHarness: createHarnessSpy },
+  });
+
+  expect(result.classification).toBe("replay-inconclusive");
+  expect(result.observedClassifications).toEqual([null, null, null]);
+});
+
 // ── Faithful scan: a trailing FAILED load-family call never displaces the gated action ──
 
 test("classifyFlakiness: skips a trailing load-family action whose response lacks file/classification (a failed call), replaying the same action findWarmLoadTuple gated on", async () => {

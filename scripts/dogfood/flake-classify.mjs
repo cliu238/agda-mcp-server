@@ -125,8 +125,12 @@ function findLastLoadFamilyAction(artifact) {
  *   real callers.
  * @returns {Promise<
  *   { classification: "not-applicable" }
- *   | { classification: "deterministic" | "flaky", observedClassifications: (string | null)[] }
- * >}
+ *   | { classification: "deterministic" | "flaky" | "replay-inconclusive", observedClassifications: (string | null)[] }
+ * >} `"replay-inconclusive"` means EVERY replay failed to produce a
+ *   domain classification (all-null observations — e.g. a broken
+ *   replay environment): "cannot judge", mirroring ORCL-01's own
+ *   inconclusive-vs-diverges distinction, never conflated with
+ *   `"flaky"`.
  */
 export async function classifyFlakiness(artifact, n = 3, options = {}) {
   const warm = findWarmLoadTuple(artifact);
@@ -164,6 +168,18 @@ export async function classifyFlakiness(artifact, n = 3, options = {}) {
       await harness.close();
       materialized.cleanup();
     }
+  }
+
+  // Every replay failed to produce a domain classification (error
+  // envelopes carry `classification` at the ENVELOPE level, not in
+  // `data`, so failed replays observe `null`): the replay environment
+  // could not reproduce the session at all. That is "cannot judge" —
+  // NOT evidence of timing nondeterminism — so it gets its own
+  // outcome, mirroring ORCL-01's inconclusive-vs-diverges distinction,
+  // instead of mislabeling a possibly perfectly deterministic replay
+  // failure as "flaky".
+  if (observedClassifications.every((c) => c === null)) {
+    return { classification: "replay-inconclusive", observedClassifications };
   }
 
   const allAgree =

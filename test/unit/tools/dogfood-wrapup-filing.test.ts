@@ -176,6 +176,30 @@ test("wrapUpCapture: a server-false-green-candidate that N-reruns as flaky is ne
   expect(appendFlakyFn).toHaveBeenCalledTimes(1);
 });
 
+// ── Test 4b: replay-inconclusive -> side-channel with the distinct replay-failed tag ──
+
+test("wrapUpCapture: a server-false-green-candidate whose replays are all inconclusive is side-channeled with a replay-failed tag, never filed and never tagged timing/nondeterministic", async () => {
+  const artifact = baseArtifact();
+  const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }));
+  const classifyFn = vi.fn(async () => ({ classification: "replay-inconclusive", observedClassifications: [null, null, null] }));
+  const upsertFn = vi.fn();
+  const appendFlakyFn = vi.fn();
+
+  const result = await wrapUpCapture("fake-capture.json", artifact, {
+    queueJsonPath: throwawayQueuePath(),
+    flakyLogPath: throwawayFlakyLogPath(),
+    deps: { runOracle: runOracleFn, classifyFlakiness: classifyFn, upsertQueueEntry: upsertFn, appendFlakyLog: appendFlakyFn },
+  });
+
+  expect(result.filed).toBe(false);
+  expect(result.classification).toBe("replay-inconclusive");
+  expect(result.tag).toBe("replay-failed");
+  expect(upsertFn).not.toHaveBeenCalled();
+  expect(appendFlakyFn).toHaveBeenCalledTimes(1);
+  // The 5th argument is the side-channel tag — distinct from the flaky path's default.
+  expect(appendFlakyFn.mock.calls[0][4]).toBe("replay-failed");
+});
+
 // ── Test 5: ORCL-02 cheat-flagged alone -> filed WITHOUT ever calling classifyFlakiness ──
 
 test("wrapUpCapture: an orcl02 cheat-flagged verdict (orcl01=skip) is filed directly, without ever calling classifyFlakiness", async () => {

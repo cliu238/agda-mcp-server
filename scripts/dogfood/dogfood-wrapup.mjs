@@ -116,11 +116,15 @@ export function buildQueueEntryFromVerdict(artifact, artifactPath, verdict) {
  * single-writer, out-of-band — `appendFileSync` (not `writeFileAtomic`)
  * matches `scripts/oracle/run-oracle.mjs`'s own `oracle-metrics.jsonl`
  * precedent for this exact category of file. The literal
- * `"timing/nondeterministic"` tag matches ROADMAP criterion 4's / D-04's
- * own wording verbatim, so the success criterion is mechanically
- * greppable straight from this persisted side-channel file.
+ * `"timing/nondeterministic"` default tag matches ROADMAP criterion 4's
+ * / D-04's own wording verbatim, so the success criterion is
+ * mechanically greppable straight from this persisted side-channel
+ * file. A `"replay-inconclusive"` outcome (every replay failed to
+ * produce a classification — a broken replay environment, not observed
+ * nondeterminism) is appended with the distinct `"replay-failed"` tag
+ * instead, so triage never reads a replay failure as flakiness.
  */
-export async function appendFlakyLog(flakyLogPath, artifactPath, verdict, flake) {
+export async function appendFlakyLog(flakyLogPath, artifactPath, verdict, flake, tag = "timing/nondeterministic") {
   appendFileSync(
     flakyLogPath,
     `${JSON.stringify({
@@ -128,7 +132,7 @@ export async function appendFlakyLog(flakyLogPath, artifactPath, verdict, flake)
       artifactPath,
       fingerprint: verdict.fingerprint,
       orcl01Kind: verdict.orcl01.kind,
-      tag: "timing/nondeterministic",
+      tag,
       observedClassifications: flake.observedClassifications,
     })}\n`,
     "utf8",
@@ -152,6 +156,7 @@ export async function appendFlakyLog(flakyLogPath, artifactPath, verdict, flake)
  * @returns {Promise<
  *   | { filed: false, classification: "not-a-candidate", verdict: object }
  *   | { filed: false, classification: "flaky", tag: "timing/nondeterministic", verdict: object, flake: object }
+ *   | { filed: false, classification: "replay-inconclusive", tag: "replay-failed", verdict: object, flake: object }
  *   | { filed: true, classification: "deterministic", verdict: object }
  * >}
  */
@@ -182,6 +187,16 @@ export async function wrapUpCapture(artifactPath, artifact, config = {}) {
     if (flake.classification === "flaky") {
       await appendFlakyFn(config.flakyLogPath, artifactPath, verdict, flake);
       return { filed: false, classification: "flaky", tag: "timing/nondeterministic", verdict, flake };
+    }
+    if (flake.classification === "replay-inconclusive") {
+      // Every replay failed to produce a classification at all — the
+      // replay ENVIRONMENT could not reproduce the session ("cannot
+      // judge"), which is neither observed timing nondeterminism nor a
+      // confirmed deterministic defect. Persisted to the same side
+      // channel, but under the distinct "replay-failed" tag so triage
+      // never reads a replay failure as flakiness.
+      await appendFlakyFn(config.flakyLogPath, artifactPath, verdict, flake, "replay-failed");
+      return { filed: false, classification: "replay-inconclusive", tag: "replay-failed", verdict, flake };
     }
     shouldFile = true;
   } else {
@@ -285,6 +300,7 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     totalCaptures: results.length,
     filed: results.filter((r) => r.filed).length,
     flaky: results.filter((r) => r.classification === "flaky").length,
+    replayInconclusive: results.filter((r) => r.classification === "replay-inconclusive").length,
     notACandidate: results.filter((r) => r.classification === "not-a-candidate").length,
     results,
   };
@@ -293,7 +309,9 @@ export async function scriptMain(argv = process.argv.slice(2)) {
 
   process.stdout.write(
     `[dogfood-wrapup] run ${runId}: ${summary.totalCaptures} capture(s) judged — `
-      + `${summary.filed} filed, ${summary.flaky} flaky, ${summary.notACandidate} not-a-candidate.\n`,
+      + `${summary.filed} filed, ${summary.flaky} flaky, `
+      + `${summary.replayInconclusive} replay-inconclusive, `
+      + `${summary.notACandidate} not-a-candidate.\n`,
   );
 }
 
