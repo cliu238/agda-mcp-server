@@ -5,9 +5,9 @@
 **Current-main commit:** `a8e1512278c6424719b41b59f35815a0e166c381` (branch `main`; plan 06-02's base)
 **Node/tsx used for driver:** Node `v22.22.0` via `npx tsx v4.22.4` (per D-06, the driver connects THROUGH `scripts/dogfood/dogfood-run.mjs`, never a bare `node` harness)
 **Build:** `npm run build` completed with exit 0 before any session ran.
-**Pipeline used:** every RT session below was driven live through `scripts/dogfood/dogfood-run.mjs` (recording proxy) -> `agda_capture_session` -> `scripts/dogfood/dogfood-wrapup.mjs` (oracle triad + N=3 flake gate), per D-06 — not an ad-hoc harness script. Fixtures are small, disposable, gitignored Agda files under `tmp/rt-reverify/` (D-05 — reusing `test/fixtures/agda/{HoleQuestionMark,NavigationQueries,WriteCaseSplit,WriteGiveSimple,MixedGoalsErrors,MixedVisibleInvisible}.agda`, never the CHG corpus).
+**Pipeline used:** every RT session below was driven live through `scripts/dogfood/dogfood-run.mjs` (recording proxy) -> `agda_capture_session` -> `scripts/dogfood/dogfood-wrapup.mjs` (oracle triad + N=3 flake gate), per D-06 — not an ad-hoc harness script. Fixtures are small, disposable, gitignored Agda files under `tmp/rt-reverify/` (D-05 — reusing `test/fixtures/agda/{HoleQuestionMark,NavigationQueries,WriteCaseSplit,WriteGiveSimple,MixedGoalsErrors,MixedVisibleInvisible}.agda` and the committed `test/fixtures/agda/FixtureDeps/TransitiveStaleness/` tree, never the CHG corpus).
 
-Plan 06-02 covered **RT1-RT4** (below). Plan 06-03 (base commit `2fbbab4a68305305e6ac9bab15fe8db068a12b08`, same Agda/Node/tsx versions, same rig reused verbatim per the 06-02 handoff) is completing **RT5-RT8** in this same file, per the 06-02 handoff instruction to extend rather than replace this report. This commit covers RT5+RT6; RT7+RT8 follow in the next commit of the same plan.
+Plan 06-02 covered **RT1-RT4** (below). Plan 06-03 (base commit `2fbbab4a68305305e6ac9bab15fe8db068a12b08`, same Agda/Node/tsx versions, same rig reused verbatim per the 06-02 handoff) completes **RT5-RT8** in this same file, per the 06-02 handoff instruction to extend rather than replace this report.
 
 ## Summary
 
@@ -19,11 +19,12 @@ Plan 06-02 covered **RT1-RT4** (below). Plan 06-03 (base commit `2fbbab4a6830530
 | RT4: `agda_auto` must not treat CLI-flag hints as a term or a diagnostic as a solution | `004d161b839ce725` | **CONFIRMED** | `rt4-20260703` | `data.searchPayload` came back as `"-d 5 --list-candidates -h -t 999999 -x --unsafe"` and `hasSolution:true` while `data.solution` is Agda's own NotInScope rejection text — byte-for-byte the same shape as the already-triaged `5abecc959e43fef3` entry. |
 | RT5: a mutation tool that fails to reload must return partial/failure with post-reload diagnostics | `a0ae86c7deb9754e` | **CONFIRMED** | `rt5-20260703` | `agda_apply_edit` wrote an ill-typed replacement and returned `ok:true`/`applied:true`/`"Goal diff: solved ?0, ?1, ?2"` while the reload actually failed with a raw `NotInScope` error — no structured field distinguishes this from a real success. |
 | RT6: `agda_load` must distinguish visible goals/hidden metas/constraints/source holes/file-completeness | `ad2b6d31f58f1759` | **CONFIRMED** (missing-feature) | `rt6-20260703` | Source hole syntax has no field of its own (folded into `hasHoles`, and can go fully invisible — `goalCount:0, hasHoles:false` — when a real hole co-occurs with an unrelated hard error later in the file); `constraints` has no field on `agda_load` at all. |
-| RT7-RT8 | — | — | — | see the next commit's continuation of this file |
+| RT7: a timeout must identify whether Agda exited, is still running, or produced no protocol response | `b6821f42952c6ff8` | **CONFIRMED** | `rt7-20260703` | A 300ms-timeout `agda_load` that had already received 15 real protocol responses (incl. a terminal `InteractionPoints`) still surfaces `nextAction: "The Agda subprocess crashed or could not be started..."` — a specific, wrong causal claim. |
+| RT8: a stale reload must report the previous+new classification together with the reason | `3306edf4c2d01c53` | **CONFIRMED** | `rt8-20260703` | `agda_load_no_metas` hardcodes `reloaded:false`/`staleBeforeLoad:false` and never reports `previousClassification`, even across a genuine dependency-caused regression; `agda_load` on the identical maneuver correctly reports both plus a `session-regression` diagnostic. |
 
 D-08 duplicate sweep (plan 06-02's five runs): `grep -c '"title": "Dogfood-surfaced' test/fixtures/fix-queue.json` returns **0** across all five wrapup runs below (`rt1-20260703`, `rt2-20260703`, `rt3-20260703`, `rt3-20260703b`, `rt4-20260703`). Every `dogfood-wrapup.mjs` run reported `0 filed` (see per-RT Observed sections) — the current oracle triad's two auto-filing predicates (ORCL-01 differential, ORCL-02 soundness scan) are not designed to catch this bug class (a deterministic response-envelope/schema defect that reproduces identically warm and cold, not a staleness differential or an unsanctioned-axiom/flag soundness violation), so nothing was ever staged for the manual-merge procedure D-08 anticipates. This is a legitimate, expected outcome, not a gap in the sweep — the verdicts above come from direct inspection of the driver's printed envelopes (quoted below), which is the mechanism the RT specs themselves require.
 
-D-08 duplicate sweep (plan 06-03's RT5+RT6 runs, `rt5-20260703` and `rt6-20260703`): **this time 2 were auto-filed** (`1b612dfeb1d31ea9` from `rt5-20260703`, `1220f2840142aab8` from `rt6-20260703`) — both are the SAME staged capture their respective manual RT5/RT6 verdicts are based on, independently flagged by ORCL-01's warm/cold differential, not a second incident. Per D-08, neither was left as a disconnected `new` row: both are cross-referenced via `relatedFingerprint` to their originating RT entry (`a0ae86c7deb9754e`, `ad2b6d31f58f1759`) with the mechanism explained in each entry's own `notes`. See RT5's and RT6's sections below for the full detail, including RT6's auto-file turning out to be a genuine fidelity gap in the ORACLE tooling itself (`scripts/oracle/orcl-01-differential.mjs`), not a second independent server defect.
+D-08 duplicate sweep (plan 06-03's four runs, `rt5-20260703` through `rt8-20260703`): **this time 2 were auto-filed** (`1b612dfeb1d31ea9` from `rt5-20260703`, `1220f2840142aab8` from `rt6-20260703`; `rt7-20260703` and `rt8-20260703` filed nothing) — both are the SAME staged capture their respective manual RT5/RT6 verdicts are based on, independently flagged by ORCL-01's warm/cold differential, not a second incident. Per D-08, neither was left as a disconnected `new` row: both are cross-referenced via `relatedFingerprint` to their originating RT entry (`a0ae86c7deb9754e`, `ad2b6d31f58f1759`) with the mechanism explained in each entry's own `notes`. See RT5's and RT6's sections below for the full detail, including RT6's auto-file turning out to be a genuine fidelity gap in the ORACLE tooling itself (`scripts/oracle/orcl-01-differential.mjs`), not a second independent server defect.
 
 ---
 
@@ -236,6 +237,97 @@ This LIVE reproduces the UX report's Finding #4 symptom exactly: the file genuin
 
 ---
 
+## RT7: a timeout must identify whether Agda exited, is still running, or produced no protocol response
+
+**Fingerprint:** `b6821f42952c6ff8`
+**Verdict:** CONFIRMED
+
+**v0.6.7 claim:** Per the UX report's Finding #6 ("Timeout/process errors were real but diagnostics were too coarse", 9 of 10 observed timeout diagnostics suggested the subprocess may have crashed or failed to start, even though the direct evidence was a command timeout with no protocol response). Affected tools in evidence: `agda_load`, `agda_typecheck`, `agda_auto_all`. The suggested fix distinguishes: subprocess failed to start; subprocess exited; protocol produced no response before timeout; Agda is still running; Agda is checking a specific file; user/client cancelled.
+
+**Repro:** Corpus `tmp/rt-reverify/rt7/` (gitignored), fixture `test/fixtures/agda/HoleQuestionMark.agda`. Task manifest: `{ target: "RT7 timeout identification", expectedSignature: "question : Nat", corpus: "rt-local-fixture" }`. Driver (`RT_SPEC=rt7`, run-id `rt7-20260703`) spawned with `AGDA_MCP_COMMAND_TIMEOUT_MS=300` set ONLY on that one-off shell invocation (never exported globally, per T-06-09's mitigation) — the plan's suggested starting value (300ms) reliably timed out on the first attempt, so the fallback to 50ms was not needed. `agda_load { file: "HoleQuestionMark.agda" }` -> `agda_capture_session` (direct capture succeeded; the reload-then-capture fallback branch was not needed).
+
+**Observed (current main):**
+
+```json
+{
+  "tool": "agda_load", "ok": false, "classification": "process-error",
+  "summary": "Agda load failed: sendCommand timed out after 300ms (received 15 responses: {\"Status\":2,\"ClearRunningInfo\":1,\"ClearHighlighting\":1,\"RunningInfo\":1,\"HighlightingInfo\":8,\"DisplayInfo\":1,\"InteractionPoints\":1})",
+  "diagnostics": [{
+    "severity": "error", "code": "process-error",
+    "message": "Agda load failed: sendCommand timed out after 300ms (received 15 responses: ...)",
+    "nextAction": "The Agda subprocess crashed or could not be started. Run `agda --version` to confirm it is installed and on PATH (or set AGDA_BIN), then retry the load."
+  }]
+}
+```
+
+The server's own debug log (stderr, `AGDA_MCP_DEBUG` trace-independent `logger.warn`) confirms the process was alive and actively progressing: `responseCount:15`, `sawStatusDone:true`, `lastResponseKind:"InteractionPoints"` (a TERMINAL goal-state event), `msSinceLastResponse:96` — the last response arrived only 96ms before the 300ms deadline. Despite this, the surfaced `nextAction` asserts **"The Agda subprocess crashed or could not be started"** — a specific, wrong causal claim directly contradicted by the response's own evidence. `classification: "process-error"` cannot distinguish "timed out while alive and progressing" from "crashed on its own" from "never started" from "produced no protocol response at all" — all four collapse to the identical classification and (in three of the four cases, misleading) diagnostic. Root cause: `processErrorResult()` (`src/session/load-tool-shared.ts`) hardcodes this crash/startup `nextAction` text for EVERY `session.load()` throw, including the timeout `Error` thrown by `AgdaTransport.sendCommand` (`src/session/agda-transport.ts`) — which itself already calls `terminateAgdaProcess(proc)` on timeout, a fact never communicated to the caller either.
+
+`dogfood-wrapup.mjs rt7-20260703` (run with `AGDA_MCP_COMMAND_TIMEOUT_MS` unset, normal env, per T-06-09): `orcl01=skip` (a `process-error` classification has no load-family completeness tuple to diff against — `judgeOrcl01`'s own `COMPLETENESS_CLASSIFICATIONS` check), `orcl02=no-policy`, `orcl03=conformance-flagged`, `0 filed`. The pipeline pass itself is fully documented in `.agda-mcp/runs/rt7-20260703/wrapup-report.json` even though nothing was auto-filed — satisfying D-06 (a failed load legitimately leaves no load-family tuple for the flake gate to act on; the RT7 evidence is the recorded envelope above, not an auto-filed queue row).
+
+**Implication:** CONFIRMED -> `needsReverify: false`, `status: "new" -> "triaged"`. This is byte-for-byte the same shape the UX report's Finding #6 recorded in v0.6.7 — still alive on current main, same wrong "crashed or could not be started" framing, now surfaced via the generic `process-error` path. Fix direction (future wave): a dedicated `timeout` classification (or a `processState` field distinguishing alive/exited/never-started/no-response) fed from the actual `responseCount`/`sawStatusDone` evidence `AgdaTransport` already collects and logs, rather than a hardcoded crash-assuming `nextAction`.
+
+---
+
+## RT8: a stale reload must report the previous and new classification together with the reason
+
+**Fingerprint:** `3306edf4c2d01c53` (relatedFingerprint: `e6f0c1169032b9d5`, the flagship — stays `locked` and untouched)
+**Verdict:** CONFIRMED
+
+**v0.6.7 claim:** Per the UX report's Finding #8 ("Reload/staleness transitions were hard to interpret", observed count 63) and RT8's own cross-reference to the re-verified flagship transitive-staleness false-green: re-verify whether `agda_load_no_metas` and related tools in this family still lack a combined previous+new classification report, given current-main `agda_load` already attaches a `session-regression` diagnostic with `previousClassification` (per `.planning/research/CHG-REVERIFY.md` Defect 1's own warm-inject baseline).
+
+**Repro:** Corpus `tmp/rt-reverify/rt8/` (gitignored), the committed `test/fixtures/agda/FixtureDeps/TransitiveStaleness/{Main,Dep,Dep.broken}.agda` tree copied in with its `FixtureDeps/TransitiveStaleness/` nesting preserved. Task manifest: `{ target: "RT8 stale-reload combined classification...", expectedSignature: "useValue : Nat", corpus: "rt-local-fixture" }`. Driver (`RT_SPEC=rt8`, run-id `rt8-20260703`), all in one session:
+
+1. `agda_load_no_metas Main.agda` (clean `Dep.agda`) -> `ok-complete`.
+2. Out-of-band: `writeFileSync` overwrites `Dep.agda` with `Dep.broken.agda`'s content (mirrors CHG-REVERIFY's raw-`writeFileSync` convention).
+3. `agda_load_no_metas Main.agda` again -> `type-error` (the RT8 probe proper).
+4. Out-of-band: `Dep.agda` restored to its clean content.
+5. `agda_load Main.agda` (comparison row A) -> `ok-complete`, `reloaded:true`.
+6. Out-of-band: `Dep.agda` overwritten with `Dep.broken.agda`'s content again.
+7. `agda_load Main.agda` (comparison row B) -> `type-error`, `reloaded:true`.
+8. `agda_capture_session`.
+
+**Observed (current main):**
+
+`agda_load_no_metas`, call 3 (Dep.agda broken):
+```json
+{
+  "classification": "type-error",
+  "data": {
+    "success": false, "classification": "type-error",
+    "errors": [".../Main.agda:10.12-20: error: [UnequalTerms]\nBool !=< Nat\nwhen checking that the expression getValue has type Nat"],
+    "reloaded": false, "staleBeforeLoad": false
+  },
+  "diagnostics": [{ "severity": "error", "code": "agda-error", "message": "...UnequalTerms..." }]
+}
+```
+
+No `previousClassification` field anywhere in `data` (the field doesn't even exist on `agda_load_no_metas`'s constructed response object), and `reloaded`/`staleBeforeLoad` are hardcoded `false` — factually wrong here, since this genuinely is a reload of an already-loaded file whose dependency just regressed. No diagnostic of any kind hints at the regression.
+
+`agda_load`, call 7 (identical corruption maneuver, comparison row B):
+```json
+{
+  "classification": "type-error",
+  "data": {
+    "success": false, "classification": "type-error",
+    "reloaded": true, "staleBeforeLoad": false,
+    "previousClassification": "ok-complete", "previousLoadedAtMs": 1783128758174
+  },
+  "diagnostics": [
+    { "severity": "error", "code": "agda-error", "message": "...UnequalTerms..." },
+    { "severity": "info", "code": "session-regression", "message": "Regression: this file loaded as ok-complete 0s ago. It may have been modified since, or a dependency may have changed." },
+    { "severity": "info", "code": "scope-check-extent", "message": "Earliest diagnostic location in this load: line 10. ..." }
+  ]
+}
+```
+
+`agda_load`, on the IDENTICAL corruption maneuver applied to the IDENTICAL fixture in the SAME session, correctly reports `previousClassification`, `reloaded:true`, AND fires the `session-regression` diagnostic naming the reason. Root cause confirmed by source inspection: `registerAgdaLoadNoMetas` (`src/session/register-agda-load-no-metas.ts`) hardcodes `reloaded: false, staleBeforeLoad: false` unconditionally and never calls `session.getLastClassification()`/`getLastLoadedAt()` at all — unlike `agda_load`'s own registration. This is a 100% deterministic code-path gap, not a timing-dependent one. (`staleBeforeLoad` stays `false` for `agda_load` too, throughout — `Main.agda`'s own mtime never changed, only `Dep.agda`'s did; the naive same-file mtime check cannot detect transitive-only staleness, consistent with CHG-REVERIFY.md Defect 1's own finding. `previousClassification` + the `session-regression` diagnostic carry the real signal instead, independent of that check.)
+
+`dogfood-wrapup.mjs rt8-20260703`: `orcl01=pass orcl02=clean orcl03=conformance-flagged trueGreen=true` — `0 filed` (the final on-disk state at capture time was already correctly reported broken by the last-recorded load-family action, so ORCL-01's differential agrees warm-vs-cold; no D-08 manual-merge needed for this run).
+
+**Implication:** CONFIRMED -> `needsReverify: false`, `status: "new" -> "triaged"`. Fix direction (future wave): `registerAgdaLoadNoMetas` should read and report the same `previousClassification`/`previousLoadedAtMs`/`reloaded`/`staleBeforeLoad`/`session-regression` fields `agda_load` already computes — the underlying `session.lastClassification`/`session.lastLoadedAt` state is set identically by `runLoadNoMetas()` (`src/agda/session-load-impl.ts`), so the fix is a report-side change only, no new session-state tracking required. The flagship (`e6f0c1169032b9d5`) stays `locked` and untouched, per the plan's instruction — this entry documents a distinct, still-open gap in a sibling tool, not a regression of the flagship's own fix.
+
+---
+
 ## Methodology notes
 
 - **RT3's first-attempt control probe was not ill-typed as originally worded.** The plan's own action text suggested "give a Nat-typed goal the expr `true`" as an ill-typed control, but `WriteCaseSplit.agda`'s two goals both have `Bool` return type, so `true` is well-typed in either. Caught and corrected in-session (`rt3-20260703b`, using `zero` — a genuine `Nat`-into-`Bool` mismatch) rather than reporting a misleading "control probe passed" data point. Both run-ids' pipeline artifacts remain on disk as evidence.
@@ -243,6 +335,19 @@ This LIVE reproduces the UX report's Finding #4 symptom exactly: the file genuin
 - **D-08 manual-merge sweep result: nothing to merge.** `grep -c '"title": "Dogfood-surfaced' test/fixtures/fix-queue.json` is 0 both before and after this plan's five wrapup runs — no disconnected duplicate rows were ever staged, so there was nothing to cross-reference into the seeded RT1-RT4 entries beyond the run-ids recorded directly in this report and in each entry's own `notes` field.
 - Raw driver output (`tmp/rt-driver.mjs`, gitignored), corpus fixtures, and pipeline run artifacts (`.agda-mcp/runs/rt{1,2,3,4}-20260703{,b}/`, including `wrapup-report.json` for each) all live under gitignored paths per the established evidence convention; only this report and the `test/fixtures/fix-queue.json` transitions are committed.
 
+### Plan 06-03 additions (RT5-RT8)
+
+- **The oracle triad auto-filed 2 of the 4 RT5-RT8 sessions this time** (`rt5-20260703` -> `1b612dfeb1d31ea9`, `rt6-20260703` -> `1220f2840142aab8`), unlike 06-02's clean `0 filed` across all five of its runs. Both were investigated per D-08 rather than assumed to be independent new defects: RT5's auto-file is a genuine, on-topic corroboration of the same session's manual finding (ORCL-01's warm-tuple lookup only tracks load-family-*named* tools, so `agda_apply_edit`'s own internal reload left the recorder's "warm" reference stale); RT6's auto-file turned out to be a fidelity gap inside the ORACLE's own cold-replay reimplementation (`scripts/oracle/orcl-01-differential.mjs` does not replicate `runLoad()`'s `needsExplicitHoleScan` gate), not a second independent client-facing defect. Both are cross-referenced via `relatedFingerprint` into their originating RT5/RT6 entries rather than left as disconnected `new` rows — see each entry's own section above and `notes` field for the full analysis.
+- **RT7's timeout-injection env var (`AGDA_MCP_COMMAND_TIMEOUT_MS=300`) was set ONLY on the single one-off shell invocation that ran the `rt7` driver spec**, verified unset (`env | grep` returned nothing) before running `dogfood-wrapup.mjs rt7-20260703` in a fresh command — per T-06-09's mitigation, so the fault-injection lever never leaked into the oracle's own cold-spawn probes for that run or any other.
+- **RT8's driver performs the out-of-band `Dep.agda` corruption maneuver twice** (once for `agda_load_no_metas`, once for `agda_load`) in the same session, rather than only once, specifically so the "previous+new+reason" comparison is apples-to-apples: both tools are tested against the byte-identical corruption on the byte-identical fixture, in the same session, rather than inferring `agda_load`'s behavior from a separate historical measurement (CHG-REVERIFY.md's Defect 1) alone.
+- **Verdicts for RT5-RT8 were reached the same way as RT1-RT4**: direct inspection of the driver's printed `structuredContent` envelopes against each spec's literal predicate, corroborated in three of four cases (RT5, RT6, RT8) by matching source-code inspection of the exact function responsible (`reloadAndDiagnose`/`registerTextTool`, `classifyLoadResult`/`needsExplicitHoleScan`, `registerAgdaLoadNoMetas`) — every verdict above is reproducible by a future maintainer from source alone, independent of this specific session's timing.
+
 ---
 
-*Investigation artifacts (driver script, fixture corpora, raw run/wrapup JSON) live under gitignored `tmp/rt-reverify/`, `tmp/rt-driver.mjs`, and `.agda-mcp/runs/`; only this report and the fix-queue.json transitions are committed. RT5-RT8: see continuation (plan 06-03).*
+## REVERIFY-01 acceptance
+
+All 8 `needsReverify` RT defect specs (RT1-RT8) now have a definitive, pipeline-measured, evidence-backed verdict against current main: RT1 `cannot-reproduce`; RT2, RT3, RT4, RT5, RT7, RT8 `CONFIRMED`; RT6 `CONFIRMED` as `missing-feature`. The mechanical gate is green: `grep -c '"needsReverify": true' test/fixtures/fix-queue.json` returns **0** (verified after plan 06-03's edits), and `npx vitest run test/unit/fixtures/fix-queue.test.ts` passes (10/10). Every formerly-`needsReverify` entry now sits in a schema-valid terminal-for-this-phase state: `rejected`/`cannot-reproduce`/`closedAt` set (RT1) or `triaged`/`needsReverify:false` (RT2-RT8). Two additional entries (`1b612dfeb1d31ea9`, `1220f2840142aab8`) were auto-filed by the oracle triad during RT5/RT6's live sessions and are cross-referenced per D-08, not double-counted against the 8-spec gate. REVERIFY-01 is complete; the D-12 gate for waves 3+ (fix -> lock) is open — all 8 pre-fix measurements are on record, per D-09's confirmed set now standing at the 4 named entries (`5abecc959e43fef3`, `bfcba437f5426fd6`, `eb7439cb3ed9d6b9`, `fdc90bfde12fb938`) plus RT2-RT8's 6 confirmed specs (RT1 excluded as cannot-reproduce) plus the 2 auto-filed oracle-tooling/differential findings, as input to REVERIFY-02's fix-order planning.
+
+---
+
+*Investigation artifacts (driver script, fixture corpora, raw run/wrapup JSON) live under gitignored `tmp/rt-reverify/`, `tmp/rt-driver.mjs`, and `.agda-mcp/runs/`; only this report and the fix-queue.json transitions are committed.*

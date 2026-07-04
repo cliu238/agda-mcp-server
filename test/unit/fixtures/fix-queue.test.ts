@@ -114,9 +114,9 @@ test("the flagship #64/#61 entry is locked and linked to its capture-regression-
   expect(flagship?.issue).toEqual(expect.arrayContaining([64, 61]));
 });
 
-test("exactly 2 entries are flagged needsReverify: true (RT7-RT8; RT1-RT6 re-verified in Phase 6 plans 06-02/06-03)", () => {
+test("zero entries are flagged needsReverify: true (all 8 RT1-RT8 specs re-verified: RT1-RT4 in Phase 6 plan 06-02, RT5-RT8 in plan 06-03)", () => {
   const needsReverifyCount = fixQueue.filter((entry) => entry.needsReverify === true).length;
-  expect(needsReverifyCount).toBe(2);
+  expect(needsReverifyCount).toBe(0);
 });
 
 test("classifyAgdaError on each grounded entry's own raw error text matches its seeded triageClass/triageConfidence", () => {

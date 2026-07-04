@@ -214,6 +214,45 @@
     "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT6 (v0.6.7 measurement). Cross-references the agda_proof_status mislabeling entry for its sub-case; the broader five-state-conflation ask remains its own tracked item. Re-verified 2026-07-04 (run-id rt6-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED as missing-feature. Of the five asked-for distinctions (visible goals, hidden metas, constraints, source hole syntax, file completeness), agda_load's response schema (loadDataSchema) exposes visible goals (goalCount/goalIds) and hidden metas (invisibleGoalCount) directly, and file completeness via isComplete/classification -- but TWO remain conflated: (1) source hole syntax has no field of its own; classifyLoadResult() (src/agda/session-load-helpers.ts) folds a text-scanned sourceHoleCount into the single derived boolean hasHoles, with no way for a client to see the count or distinguish it from a protocol-reported goal. Live probe on MixedGoalsErrors.agda (one valid {!!} hole plus one unrelated hard type error later in the file) reproduced finding #4's exact historical symptom LIVE: the response reports goalCount:0, invisibleGoalCount:0, hasHoles:false, classification:'type-error' -- the file's own genuinely-present, syntactically-valid hole is completely invisible to the client, because runLoad's needsExplicitHoleScan gate (src/agda/session-load-impl.ts) only runs countExplicitSourceHoles when parsed.success is true, so a hole co-occurring with an unrelated hard error is never scanned for at all. (2) constraints has no field on agda_load's own response schema whatsoever -- it exists only on a different tool, agda_proof_status (cross-referenced via fdc90bfde12fb938, not double-counted here per the plan's instruction). Second fixture (MixedVisibleInvisible.agda) confirms goalCount/invisibleGoalCount work correctly for the visible/hidden-metas distinction when Agda's own protocol actually reports both goals as visible (both do, on Agda 2.8.0 -- see the fixture's own comment). ADDITIONAL FINDING (oracle-tooling, not this spec): dogfood-wrapup auto-filed this session's MixedGoalsErrors.agda capture as fingerprint 1220f2840142aab8 (an ORCL-01 server-false-green-candidate on the SAME hasHoles field) -- root-cause analysis (see that entry's own notes) shows this stems from scripts/oracle/orcl-01-differential.mjs's runColdLoadAndDiff calling countExplicitSourceHoles UNCONDITIONALLY, unlike the live server's own needsExplicitHoleScan gate, i.e. a fidelity gap in the ORACLE's cold-replay reimplementation, not an independent live-server defect beyond what is already recorded here. The plausible fix for THIS entry (RT6 itself) is the UX report's 'Suggested Schema Direction' response-schema rework -- a deferred-ideas re-triage candidate (D-10); the disposition (fix vs re-triage) belongs to plan 06-06, not here. Full envelopes in .planning/research/RT-REVERIFY.md."
   },
   {
+    "fingerprint": "b6821f42952c6ff8",
+    "status": "triaged",
+    "needsReverify": false,
+    "defectKind": "missing-feature",
+    "triageClass": null,
+    "triageConfidence": null,
+    "recurrence": 1,
+    "title": "RT7: a timeout must identify whether Agda exited, is still running, or produced no protocol response",
+    "summary": "On a command timeout, the response does not distinguish whether the underlying Agda process exited, is still running, or simply produced no protocol response in the window (v0.6.7 measurement).",
+    "affectedTool": "agda_load",
+    "capturePath": null,
+    "verdictPath": null,
+    "matrixEntryId": null,
+    "createdAt": "2026-07-02T00:00:00.000Z",
+    "closedAt": null,
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT7 (v0.6.7 measurement). affectedTool is best-inferred (most timeout-prone command family) - confirm the exact tool during re-verification. Re-verified 2026-07-04 (run-id rt7-20260703) through dogfood-run/dogfood-wrapup against current main with AGDA_MCP_COMMAND_TIMEOUT_MS=300 (the driver-env fault-injection lever, set only on the one-off shell invocation, never exported globally): CONFIRMED -- agda_load timed out after receiving 15 real protocol responses (Status x2, HighlightingInfo x8, RunningInfo, ClearRunningInfo, ClearHighlighting, DisplayInfo, and a terminal InteractionPoints), with the last response only 96ms before the 300ms deadline -- i.e. Agda was demonstrably alive and actively mid-flight, not crashed and not failed to start. The surfaced envelope is ok:false/classification:'process-error' with diagnostics[0].nextAction verbatim: 'The Agda subprocess crashed or could not be started. Run agda --version to confirm it is installed and on PATH (or set AGDA_BIN), then retry the load.' -- a specific, wrong causal claim directly contradicted by the response's own responseCount/responseKinds evidence. Root cause: processErrorResult() (src/session/load-tool-shared.ts) hardcodes this crash/startup nextAction text for EVERY session.load() throw, including the timeout Error thrown by AgdaTransport.sendCommand (src/session/agda-transport.ts), which itself already terminates the Agda process on timeout (terminateAgdaProcess(proc)) -- a fact never communicated to the caller either. classification 'process-error' cannot distinguish 'timed out while alive' from 'crashed on its own' from 'never started' from 'produced no protocol response at all' -- all four collapse to one classification and one (misleading, in the timed-out-while-alive case) diagnostic. This is byte-for-byte the same shape CHG's finding #6 recorded in v0.6.7 (still alive on current main, same wrong nextAction framing, just now surfaced via the generic process-error path rather than whatever v0.6.7 called it). dogfood-wrapup correctly skipped the oracle triad for this capture (orcl01=skip: a failed/process-error load leaves no load-family completeness tuple to diff), 0 filed -- the pipeline pass itself is documented in .agda-mcp/runs/rt7-20260703/wrapup-report.json even though nothing was auto-filed, satisfying D-06. wrapup was re-run with AGDA_MCP_COMMAND_TIMEOUT_MS unset (normal env) per T-06-09's mitigation, so the low-timeout lever never leaked into the oracle's own probes. Full envelope in .planning/research/RT-REVERIFY.md."
+  },
+  {
+    "fingerprint": "3306edf4c2d01c53",
+    "status": "triaged",
+    "needsReverify": false,
+    "defectKind": "false-green",
+    "triageClass": null,
+    "triageConfidence": null,
+    "recurrence": 1,
+    "title": "RT8: a stale reload must report the previous+new classification together with the reason",
+    "summary": "Same family as the re-verified flagship transitive-staleness false-green (see relatedFingerprint): re-verify whether agda_load_no_metas and related tools in this family still lack a combined previous+new classification report.",
+    "affectedTool": "agda_load_no_metas",
+    "capturePath": null,
+    "verdictPath": null,
+    "matrixEntryId": null,
+    "relatedFingerprint": [
+      "e6f0c1169032b9d5"
+    ],
+    "createdAt": "2026-07-02T00:00:00.000Z",
+    "closedAt": null,
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT8. Cross-references the flagship entry - current-main agda_load already attaches a session-regression diagnostic with previousClassification; re-verify whether this spec's ask is already satisfied or still gapped for agda_load_no_metas specifically. Re-verified 2026-07-04 (run-id rt8-20260703) through dogfood-run/dogfood-wrapup against current main using the FixtureDeps/TransitiveStaleness fixture set (Main/Dep/Dep.broken, nested dirs preserved): CONFIRMED as still gapped for agda_load_no_metas specifically. In one session: (1) agda_load_no_metas on clean Main.agda -> ok-complete, reloaded:false, staleBeforeLoad:false (correct, a genuine first load); (2) out-of-band overwrite of Dep.agda with Dep.broken.agda's content (raw writeFileSync, mirrors CHG-REVERIFY's convention); (3) agda_load_no_metas on Main.agda again -> type-error (UnequalTerms, Bool !=< Nat) -- STILL reloaded:false, staleBeforeLoad:false (now factually wrong: this genuinely is a reload of an already-loaded file) and NO previousClassification field anywhere in data, and no regression-style diagnostic of any kind. Root cause confirmed by source inspection: registerAgdaLoadNoMetas (src/session/register-agda-load-no-metas.ts) hardcodes reloaded:false/staleBeforeLoad:false unconditionally and never reads session.getLastClassification()/getLastLoadedAt() at all, unlike agda_load's own registration -- this is a 100% deterministic gap, not a timing-dependent one. In-session comparison via agda_load on the IDENTICAL corruption maneuver (Dep.agda restored then re-broken a second time): agda_load correctly reports previousClassification:'type-error' then previousClassification:'ok-complete' across the two reloads, and on the second (success -> failure) transition fires the diagnostic 'Regression: this file loaded as ok-complete 0s ago. It may have been modified since, or a dependency may have changed.' (code: session-regression) -- confirming CHG-REVERIFY.md Defect 1's finding still holds for agda_load specifically, side by side with agda_load_no_metas's total silence on the identical maneuver. staleBeforeLoad stayed false throughout for agda_load too (Main.agda's own mtime never changed, only Dep.agda's did -- the naive same-file mtime check cannot detect transitive-only staleness; previousClassification + the session-regression diagnostic carry the real signal instead, independent of that check). dogfood-wrapup reported orcl01=pass/trueGreen=true (the final on-disk state at capture time was already correctly reported broken by the last-recorded load-family action, so no differential to flag) -- 0 filed, no D-08 manual-merge needed for this run. Full envelopes in .planning/research/RT-REVERIFY.md."
+  },
+  {
     "fingerprint": "1b612dfeb1d31ea9",
     "status": "new",
     "defectKind": "false-green",
@@ -252,44 +291,5 @@
     "createdAt": "2026-07-04T01:29:53.336Z",
     "closedAt": null,
     "notes": "AUTO-FILED by dogfood-wrapup.mjs (run-id rt6-20260703, Phase 6 plan 06-03) during RT6 re-verification -- D-08 manual-merge, and IMPORTANT CORRECTION to the auto-derived title/summary: this is NOT independent evidence of a live agda_load response defect beyond what ad2b6d31f58f1759 (RT6) already records. warmTuple and coldTuple AGREE on success (false), goalCount (0), invisibleGoalCount (0), and classification ('type-error') -- the ONLY differing field is hasHoles (warm:false, cold:true). Root-cause analysis: scripts/oracle/orcl-01-differential.mjs's runColdLoadAndDiff computes `sourceHoleCount = countExplicitSourceHoles(materializedPath)` UNCONDITIONALLY (line ~481), then feeds it into classifyLoadResult() to derive coldTuple.hasHoles -- but the LIVE server's own runLoad() (src/agda/session-load-impl.ts) only ever calls countExplicitSourceHoles behind a needsExplicitHoleScan gate (`parsed.success && goals.length===0 && invisibleGoalCount===0`), i.e. it deliberately skips the source-hole text scan on a failed load. Since this capture's load failed (parsed.success:false), the REAL live server never scans for source holes at all here and reports hasHoles:false either warm OR on any hypothetical fresh reload -- the oracle's own cold-side reimplementation simply does not replicate this gate, producing a spurious mismatch. This is a genuine, newly-discovered fidelity gap in the ORACLE TOOLING (scripts/oracle/orcl-01-differential.mjs), not a second independent client-facing agda_load defect -- ad2b6d31f58f1759's own notes already record the real, client-facing hasHoles/sourceHoleCount conflation this queue entry is a side effect of investigating. Flagged loudly for 06-06: the likely fix is a one-line change to runColdLoadAndDiff to gate countExplicitSourceHoles the same way runLoad does (scripts/ change, out of this plan's committed file scope); triageClass/triageConfidence (from classifyAgdaError on the UnequalTerms error text, which IS identical warm vs cold) are independently accurate and left as auto-derived."
-  },
-  {
-    "fingerprint": "b6821f42952c6ff8",
-    "status": "new",
-    "needsReverify": true,
-    "defectKind": "missing-feature",
-    "triageClass": null,
-    "triageConfidence": null,
-    "recurrence": 1,
-    "title": "RT7: a timeout must identify whether Agda exited, is still running, or produced no protocol response",
-    "summary": "On a command timeout, the response does not distinguish whether the underlying Agda process exited, is still running, or simply produced no protocol response in the window (v0.6.7 measurement).",
-    "affectedTool": "agda_load",
-    "capturePath": null,
-    "verdictPath": null,
-    "matrixEntryId": null,
-    "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT7 (v0.6.7 measurement). affectedTool is best-inferred (most timeout-prone command family) - confirm the exact tool during re-verification."
-  },
-  {
-    "fingerprint": "3306edf4c2d01c53",
-    "status": "new",
-    "needsReverify": true,
-    "defectKind": "false-green",
-    "triageClass": null,
-    "triageConfidence": null,
-    "recurrence": 1,
-    "title": "RT8: a stale reload must report the previous+new classification together with the reason",
-    "summary": "Same family as the re-verified flagship transitive-staleness false-green (see relatedFingerprint): re-verify whether agda_load_no_metas and related tools in this family still lack a combined previous+new classification report.",
-    "affectedTool": "agda_load_no_metas",
-    "capturePath": null,
-    "verdictPath": null,
-    "matrixEntryId": null,
-    "relatedFingerprint": [
-      "e6f0c1169032b9d5"
-    ],
-    "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT8. Cross-references the flagship entry - current-main agda_load already attaches a session-regression diagnostic with previousClassification; re-verify whether this spec's ask is already satisfied or still gapped for agda_load_no_metas specifically."
   }
 ]
