@@ -142,7 +142,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion — shares dogfood-run.mjs with 09-01)*
 
-- [ ] 09-05-PLAN.md — DEBT-04: IN-01 (argv/run-id sanitization) + IN-02 (skill-installer dangling-symlink) + IN-04 (its test's exit-status precision) + IN-05 (wrapup catch-handler safety)
+- [x] 09-05-PLAN.md — DEBT-04: IN-01 (argv/run-id sanitization) + IN-02 (skill-installer dangling-symlink) + IN-04 (its test's exit-status precision) + IN-05 (wrapup catch-handler safety)
 
 **Wave 3** *(blocked on Waves 1–2 completion — the phase finale)*
 
@@ -163,4 +163,4 @@ Plans:
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
-| 9. Residual v1.0 Debt Sweep | v1.1 | 4/6 | In Progress|  |
+| 9. Residual v1.0 Debt Sweep | v1.1 | 5/6 | In Progress|  |
