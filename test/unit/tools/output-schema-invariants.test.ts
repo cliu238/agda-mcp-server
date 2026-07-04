@@ -139,12 +139,13 @@ describe("completeness invariants — load/typecheck agreement", () => {
       success: true,
       errors: [] as string[],
       warnings: [] as string[],
-      goals: [] as Array<{ goalId: number; type: string; context: unknown[] }>,
+      goals: [] as Array<{ goalId: number; type: string; context: string[] }>,
       invisibleGoalCount: 0,
       goalCount: 0,
       hasHoles: false,
       isComplete: true,
       classification: "ok-complete" as const,
+      profiling: null,
     };
 
     const loadStatus = completenessFromLoadResult({ ...baseline, allGoalsText: "" });
@@ -171,6 +172,7 @@ describe("completeness invariants — load/typecheck agreement", () => {
       hasHoles: true,
       isComplete: false,
       classification: "ok-with-holes",
+      profiling: null,
     });
     const typecheckStatus = completenessFromTypeCheckResult({
       success: true,
@@ -182,6 +184,7 @@ describe("completeness invariants — load/typecheck agreement", () => {
       hasHoles: true,
       isComplete: false,
       classification: "ok-with-holes",
+      profiling: null,
     });
 
     expect(loadStatus).toEqual(typecheckStatus);
@@ -216,6 +219,7 @@ describe("completeness invariants — load/typecheck agreement", () => {
       hasHoles: true,
       isComplete: false,
       classification: "ok-with-holes",
+      profiling: null,
     });
 
     // The completeness helper round-trips the protocol-derived counts;
@@ -243,12 +247,13 @@ describe("completeness invariants — load/typecheck agreement", () => {
       success: false,
       errors: ["expected Nat, got Bool"],
       warnings: [] as string[],
-      goals: [] as Array<{ goalId: number; type: string; context: unknown[] }>,
+      goals: [] as Array<{ goalId: number; type: string; context: string[] }>,
       invisibleGoalCount: 0,
       goalCount: 0,
       hasHoles: false,
       isComplete: false,
       classification: "type-error" as const,
+      profiling: null,
     };
     const loadStatus = completenessFromLoadResult({ ...baseline, allGoalsText: "" });
     const typecheckStatus = completenessFromTypeCheckResult(baseline);

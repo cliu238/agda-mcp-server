@@ -17,12 +17,17 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   buildQueueEntryFromVerdict,
   resolveWrapupPolicyKey,
   wrapUpCapture,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/dogfood/dogfood-wrapup.mjs";
+
+// W5 fold-in: validate the mocked upsertQueueEntry payload against the
+// real fixQueueEntrySchema so a future required-field addition breaks
+// this suite instead of only surfacing at runtime (audit finding W5).
+import { fixQueueEntrySchema } from "../../fixtures/fix-queue.js";
 
 let tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
@@ -157,6 +162,9 @@ test("wrapUpCapture: a server-false-green-candidate that N-reruns as determinist
   expect(entry.status).toBe("new");
   expect(entry.defectKind).toBe("false-green");
   expect(entry.fingerprint).toBe(artifact.dedup.fingerprint);
+  // W5: the filed entry must conform to the real fix-queue schema, not
+  // just this file's own locally-defined FakeQueueEntry surface.
+  expect(() => fixQueueEntrySchema.parse(upsertFn.mock.calls[0][0])).not.toThrow();
 });
 
 // ── Test 4: flaky ORCL-01 candidate -> not filed, appended to side-channel ──
@@ -255,13 +263,16 @@ test("wrapUpCapture: an orcl02 cheat-flagged signal files even when a co-occurri
   expect(upsertFn).toHaveBeenCalledTimes(1);
   expect(classifyFn).not.toHaveBeenCalled();
   expect(appendFlakyFn).not.toHaveBeenCalled();
+  // W5: schema-validate this second, distinct filing path (co-occurring
+  // ORCL-01 + ORCL-02 cheat precedence) too, not just Test 3's plain path.
+  expect(() => fixQueueEntrySchema.parse(upsertFn.mock.calls[0][0])).not.toThrow();
 });
 
 // ── Test 7 (POLICY-01, key_links wiring): config.policyKey reaches runOracleFn ──
 
 test("wrapUpCapture: config.policyKey reaches runOracleFn as { policyKey } (the exact key_links wiring)", async () => {
   const artifact = baseArtifact();
-  const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
+  const runOracleFn = vi.fn(async (_capturePath?: string, _options?: unknown) => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
 
   await wrapUpCapture("fake-capture.json", artifact, {
     queueJsonPath: throwawayQueuePath(),
@@ -277,7 +288,7 @@ test("wrapUpCapture: config.policyKey reaches runOracleFn as { policyKey } (the 
 
 test("wrapUpCapture: an omitted config.policyKey reaches runOracleFn as {} (judgeOrcl02's own .agda-lib-derived default)", async () => {
   const artifact = baseArtifact();
-  const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
+  const runOracleFn = vi.fn(async (_capturePath?: string, _options?: unknown) => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
 
   await wrapUpCapture("fake-capture.json", artifact, {
     queueJsonPath: throwawayQueuePath(),

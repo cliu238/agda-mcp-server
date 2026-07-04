@@ -14,13 +14,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   composeEntry,
   judgeRefusal,
   materializeFixtureFiles,
   matchesExpected,
   writeMatrixEntry,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/emit-regression.mjs";
 
 let tempDirs: string[] = [];

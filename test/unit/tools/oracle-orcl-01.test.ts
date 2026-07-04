@@ -14,12 +14,12 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   extractErrorCategory,
   judgeOrcl01,
   materializeCaptureEnvironment,
   runProbeGate,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/oracle/orcl-01-differential.mjs";
 
 import { AgdaSession } from "../../../src/agda-process.js";
@@ -27,6 +27,7 @@ import { buildReplayManifest } from "../../../src/agda/session-capture/manifest-
 import { hashImportClosure, inlineFirstPartySources } from "../../../src/agda/session-capture/import-closure-hash.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../helpers/agda-version.js";
+import type { ReplayManifest } from "../../../src/agda/session-capture/artifact-types.js";
 
 const agdaVersion = detectAgdaVersion();
 const agdaAvailable = agdaVersion !== undefined;
@@ -63,14 +64,14 @@ function findFilesRecursive(dir: string): string[] {
 
 interface FakeArtifact {
   capturedAt: string;
-  manifest: Record<string, unknown>;
+  manifest: ReplayManifest;
   recordedActions: unknown[];
   oracleSubstrate: null;
   dedup: { kind: string; fingerprint: string; recurrence: number };
 }
 
 function baseArtifact(overrides: {
-  manifest?: Record<string, unknown>;
+  manifest?: Partial<ReplayManifest>;
   recordedActions?: unknown[];
 } = {}): FakeArtifact {
   return {

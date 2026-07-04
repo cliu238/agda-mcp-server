@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   diffAgainstWhitelist,
   judgeOrcl02,
@@ -13,6 +12,7 @@ import {
   scanOptionsFlags,
   scanPragmaVocabulary,
   walkClosureFiles,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/oracle/orcl-02-soundness-scan.mjs";
 
 const FIXTURES_DIR = join(process.cwd(), "test", "fixtures", "agda");

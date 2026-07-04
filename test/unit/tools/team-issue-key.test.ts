@@ -14,7 +14,6 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   CONSENT_STATEMENT,
   hashKey,
@@ -24,6 +23,7 @@ import {
   revokeKey,
   scriptMain,
   verifyBearerToken,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/team/issue-key.mjs";
 
 let tempDirs: string[] = [];

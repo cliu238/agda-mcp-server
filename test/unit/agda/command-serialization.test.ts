@@ -299,7 +299,11 @@ test("session.abort() while a regular command is in flight forwards armEscalatio
   session["versionDetectionAttempts"] = AgdaSession.VERSION_DETECTION_MAX_ATTEMPTS;
 
   let capturedOptions: { armEscalation?: boolean } | undefined;
-  session["transport"].sendFireAndForgetCommand = (async (_proc, _cmd, options) => {
+  session["transport"].sendFireAndForgetCommand = (async (
+    _proc: unknown,
+    _cmd: unknown,
+    options: { armEscalation?: boolean } | undefined,
+  ) => {
     capturedOptions = options;
     return [];
   }) as unknown as typeof session["transport"]["sendFireAndForgetCommand"];
@@ -334,7 +338,11 @@ test("session.abort() on an idle session forwards armEscalation:false (round-11 
   session["versionDetectionAttempts"] = AgdaSession.VERSION_DETECTION_MAX_ATTEMPTS;
 
   let capturedOptions: { armEscalation?: boolean } | undefined;
-  session["transport"].sendFireAndForgetCommand = (async (_proc, _cmd, options) => {
+  session["transport"].sendFireAndForgetCommand = (async (
+    _proc: unknown,
+    _cmd: unknown,
+    options: { armEscalation?: boolean } | undefined,
+  ) => {
     capturedOptions = options;
     return [];
   }) as unknown as typeof session["transport"]["sendFireAndForgetCommand"];
@@ -363,7 +371,11 @@ test("session.exit() forwards armEscalation:true even on an idle session (round-
   session["versionDetectionAttempts"] = AgdaSession.VERSION_DETECTION_MAX_ATTEMPTS;
 
   let capturedOptions: { armEscalation?: boolean } | undefined;
-  session["transport"].sendFireAndForgetCommand = (async (_proc, _cmd, options) => {
+  session["transport"].sendFireAndForgetCommand = (async (
+    _proc: unknown,
+    _cmd: unknown,
+    options: { armEscalation?: boolean } | undefined,
+  ) => {
     capturedOptions = options;
     return [];
   }) as unknown as typeof session["transport"]["sendFireAndForgetCommand"];

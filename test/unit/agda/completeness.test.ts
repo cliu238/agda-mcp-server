@@ -54,6 +54,7 @@ test("completeness helpers preserve load/typecheck semantics", () => {
     hasHoles: false,
     isComplete: false,
     classification: "type-error",
+    profiling: null,
   });
   const typecheckStatus = completenessFromTypeCheckResult({
     success: true,
@@ -65,6 +66,7 @@ test("completeness helpers preserve load/typecheck semantics", () => {
     hasHoles: true,
     isComplete: false,
     classification: "ok-with-holes",
+    profiling: null,
   });
 
   expect(loadStatus.classification).toBe("type-error");

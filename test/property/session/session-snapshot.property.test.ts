@@ -35,6 +35,7 @@ const arbSnapshotInput: fc.Arbitrary<SnapshotInput> = fc.record({
   phase: arbPhase,
   loadedFile: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: null }),
   projectRoot: fc.string({ minLength: 1, maxLength: 30 }),
+  projectRootExists: fc.boolean(),
   stale: fc.boolean(),
   goalIds: arbGoalIds,
   invisibleGoalCount: fc.nat({ max: 20 }),

@@ -12,11 +12,11 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   selectClaudeCodeLogs,
   selectCodexSessionLogs,
   slugifyCorpusRoot,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/dogfood/agent-log-selection.mjs";
 
 let tempDirs: string[] = [];
