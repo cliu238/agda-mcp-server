@@ -7,8 +7,12 @@
 // `tools/call` for `agda_capture_session` — proving the proxy
 // transparently wraps the ONE real spawned server process without
 // ever constructing a second `AgdaSession` (#39) itself. The observed
-// capture must also be auto-persisted (dedup index bumped) and
-// recorded into a run report, with no separate manual step.
+// capture must also be recorded into a run report, with no separate
+// manual step. (The proxy's prior auto-persist-into-dedup-index step,
+// scripts/promote-capture.mjs, was retired 2026-07 — DEBT-02, see
+// PROJECT.md Key Decisions — since Phase 4 repointed readDedupIndex()
+// to test/fixtures/fix-queue.json, leaving that index with zero
+// readers.)
 //
 // This test intentionally does NOT reuse `createMcpHarness`
 // (test/helpers/mcp-harness.ts): `buildHarnessServerParameters`
@@ -194,26 +198,6 @@ it("calling agda_capture_session through the proxy succeeds and returns a staged
   } finally {
     await close();
   }
-});
-
-it("auto-persists the observed agda_capture_session result into the corpus-root's dedup index after the connection closes", async () => {
-  const { client, close } = await connectThroughDogfoodProxy({ manifestPath, corpusRoot, runId: RUN_ID });
-  let fingerprint: string;
-  try {
-    const result = await client.callTool({ name: "agda_capture_session", arguments: {} });
-    const data = (result.structuredContent as { data?: { fingerprint?: unknown } } | undefined)?.data;
-    expect(typeof data?.fingerprint).toBe("string");
-    fingerprint = data!.fingerprint as string;
-  } finally {
-    // The proxy finalizes (writes the run report AND auto-persists any
-    // staged capture via promoteCapture) as part of shutting down —
-    // the assertion below only makes sense AFTER close() returns.
-    await close();
-  }
-
-  const indexPath = join(corpusRoot, ".agda-mcp", "captures", "index.json");
-  const index = JSON.parse(readFileSync(indexPath, "utf8")) as Record<string, unknown>;
-  expect(index[fingerprint]).toBeTruthy();
 });
 
 it("writes a run report under the runs-root recording the staged capture after the connection closes", async () => {

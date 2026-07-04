@@ -6,13 +6,11 @@
 // It gates every run behind PROC-01's mechanical hard gate
 // (loadTaskManifest — Plan 05-01), unconditionally sets
 // AGDA_MCP_CAPTURE=1 on the child so the in-server recorder is never
-// silently a no-op, records an unbounded transcript + per-tool-call
-// run report (scripts/dogfood/transcript-writer.mjs), and auto-
-// persists every observed agda_capture_session result via the
-// existing scripts/promote-capture.mjs — all without EVER
-// constructing or importing a second AgdaSession itself (#39): this
-// module wraps the one child server process; it never reaches into
-// src/agda/ at all.
+// silently a no-op, and records an unbounded transcript + per-tool-
+// call run report (scripts/dogfood/transcript-writer.mjs) — all
+// without EVER constructing or importing a second AgdaSession itself
+// (#39): this module wraps the one child server process; it never
+// reaches into src/agda/ at all.
 //
 // Ships as a scripts/ + repo-data-dir artifact per D-05 — no new MCP
 // verb, no new src/ tool surface. Must be launched via `npx tsx` or a
@@ -32,7 +30,6 @@ import { createInterface } from "node:readline";
 import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
 import { buildHarnessServerParameters } from "../../test/helpers/mcp-harness.js";
 import { isMainModule } from "../test-with-sentinel.mjs";
-import { promoteCapture } from "../promote-capture.mjs";
 import { loadTaskManifest } from "./task-manifest.mjs";
 import { createRunRecorder, resolveRunsRoot, writeRunReport } from "./transcript-writer.mjs";
 
@@ -371,33 +368,6 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
       // incremental checkpoint, one snapshot per recorded action.
       // Errors are caught and logged inside scheduleReportWrite itself.
       void scheduleReportWrite(buildReportSnapshot());
-    }
-
-    if (event?.isCaptureSession) {
-      // Promote exactly the capture THIS response staged: a failed
-      // capture call yields stagedCapture === null and stages nothing —
-      // inferring via stagedCaptures.at(-1) here would silently
-      // re-promote the PREVIOUS successful capture instead.
-      const staged = event.stagedCapture;
-      if (staged) {
-        // Best-effort relative to the proxy's own liveness: a
-        // promote-capture failure is reported but never crashes the
-        // proxy or blocks forwarding subsequent lines.
-        void (async () => {
-          try {
-            await promoteCapture(staged.stagedPath);
-          } catch (err) {
-            process.stderr.write(
-              `dogfood-run: auto-persist failed for ${staged.stagedPath}: `
-                + `${err instanceof Error ? err.message : String(err)}\n`,
-            );
-          }
-        })();
-      } else {
-        process.stderr.write(
-          "dogfood-run: observed a failed agda_capture_session response — nothing staged to auto-persist.\n",
-        );
-      }
     }
   });
 
