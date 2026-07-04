@@ -28,7 +28,7 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
 - [x] **Phase 6: Backlog Digestion (Policy Fix + Reverify)** - The ORCL-02 policy-key bug is fixed and case-sensitive-filesystem-verified; all 8 backlog defects reach a definitive verdict and confirmed defects reach `locked` (completed 2026-07-04)
 - [x] **Phase 7: Team Feedback Channel — Local Wiring** - A teammate's session flows end-to-end through consent, fail-open upload, local ingest, and unattended judging into the fix queue, proven entirely on localhost — with a live session on the pinned CHG corpus as the acceptance payload (E2E-01, zero fixture shortcuts) (completed 2026-07-04)
 - [ ] **Phase 8: Pinned-Environment Distribution + Thin k8s Deployment** - Zero-to-uploading teammate onboarding via git install, plus the ingest endpoint and cron judge running for real on the arrived k8s server
-- [ ] **Phase 9: Residual v1.0 Debt Sweep** - Every P2 item from the v1.0 audit is resolved — deleted, fixed, or explicitly decided-and-recorded
+- [x] **Phase 9: Residual v1.0 Debt Sweep** - Every P2 item from the v1.0 audit is resolved — deleted, fixed, or explicitly decided-and-recorded (completed 2026-07-04)
 
 ## Phase Details
 
@@ -146,7 +146,7 @@ Plans:
 
 **Wave 3** *(blocked on Waves 1–2 completion — the phase finale)*
 
-- [ ] 09-06-PLAN.md — DEBT-06 (part B) + DEBT-07: agda-transport.test.ts's remaining type errors, full-repo tsc-clean verification, permanent `typecheck:test` CI gate, DEBT-07's `/gsd:map-codebase` deferral recorded
+- [x] 09-06-PLAN.md — DEBT-06 (part B) + DEBT-07: agda-transport.test.ts's remaining type errors, full-repo tsc-clean verification, permanent `typecheck:test` CI gate, DEBT-07's `/gsd:map-codebase` deferral recorded
 
 **Research**: Skip — standard pattern. A fixed, already-itemized P2 checklist from the v1.0 audit, not new capability work.
 
@@ -163,4 +163,4 @@ Plans:
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
-| 9. Residual v1.0 Debt Sweep | v1.1 | 5/6 | In Progress|  |
+| 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete   | 2026-07-04 |
