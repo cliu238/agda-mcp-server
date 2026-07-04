@@ -224,6 +224,19 @@ export interface InferResult {
 
 export interface AutoResult {
   solution: string;
+  /**
+   * True when Agda rejected/errored the auto-search (an Error
+   * DisplayInfo response with no genuine GiveAction) rather than
+   * producing a solution. Without this, the raw error text can be
+   * written into the goal's hole as a fabricated "solution" — see
+   * hasGiveActionResponse() in proof-actions.ts (CR-03). Note this
+   * only covers the Error-kind half of the gap; an Auto-kind "no
+   * solution found" message is a separate, still-open sub-case (see
+   * autoOne()'s doc comment).
+   */
+  rejected?: boolean;
+  /** Agda's rejection text when `rejected` is true, else null. */
+  rejectionText?: string | null;
 }
 
 export interface SolveResult {

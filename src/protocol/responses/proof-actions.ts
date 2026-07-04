@@ -116,6 +116,20 @@ export function decodeGiveLikeResponse(responses: AgdaResponse[]): string {
   return result || displayMessages.at(-1) || "";
 }
 
+/**
+ * True iff `responses` contains at least one schema-conformant
+ * GiveAction response — i.e. Agda actually accepted/produced a term
+ * (give, refine-like, or a successful auto-solve), as opposed to
+ * decodeGiveLikeResponse()'s raw-DisplayInfo fallback (which fires on
+ * a rejected/errored command too). autoOne() uses this to require
+ * BOTH an Error display AND no genuine GiveAction response before
+ * classifying a result as rejected — the same two-sided guard
+ * give()/refine() use via hasReplacementText() (CR-03).
+ */
+export function hasGiveActionResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => parseResponseWithSchema(giveActionResponseSchema, resp) !== null);
+}
+
 /** Extract structured solutions from SolveAll responses. */
 export function decodeSolveRawSolutions(
   responses: AgdaResponse[],

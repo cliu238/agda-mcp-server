@@ -18,6 +18,7 @@ import { decodeGoalDisplayResponses } from "../protocol/responses/goal-display.j
 import {
   decodeCaseSplitResponses,
   decodeGiveLikeResponse,
+  hasGiveActionResponse,
   hasMakeCaseResponse,
   hasReplacementText,
   resolveGiveReplacementText,
@@ -276,7 +277,23 @@ export async function intro(
   };
 }
 
-/** Auto-solve a single goal. */
+/**
+ * Auto-solve a single goal.
+ *
+ * decodeGiveLikeResponse() falls back to the last DisplayInfo event's
+ * text whenever no GiveAction response is present — both Error-kind
+ * and Auto-kind DisplayInfo responses decode to non-empty text
+ * through that same fallback, so a rejection/internal-failure result
+ * (e.g. a NotInScope hint — the exact shape empirically observed in
+ * fix-queue.json fingerprints 5abecc959e43fef3/004d161b839ce725) can
+ * otherwise be written into the goal's hole as a fabricated
+ * "solution" (CR-03). rejected requires BOTH an Error display AND no
+ * genuine GiveAction response, the same two-sided guard give() uses
+ * via hasReplacementText(). This closes only the Error-kind half of
+ * the gap; an Auto-kind "no solution found" message still flows
+ * through the fallback as a truthy `solution` — see REVIEW.md CR-03
+ * for why that sub-case is deferred pending a live-Agda probe.
+ */
 export async function autoOne(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -288,7 +305,13 @@ export async function autoOne(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
-  return { solution: decodeGiveLikeResponse(responses) };
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasGiveActionResponse(responses);
+  return {
+    solution: decodeGiveLikeResponse(responses),
+    rejected,
+    rejectionText: rejected ? errorText : null,
+  };
 }
 
 /** List all unsolved metavariables (goals). */

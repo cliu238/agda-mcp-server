@@ -327,6 +327,7 @@ export function register(
         hints: hints as string[] | undefined,
       });
       const result = await session.goal.autoOne(goalId, payload);
+      throwIfWriteRejected("agda_auto", goalId, payload, result);
       let output = `## Auto-solve ?${goalId}\n\n`;
       output += result.solution ? `**Solution:** \`${result.solution}\`\n` : `No automatic solution found.\n`;
       if (payload.length > 0) {

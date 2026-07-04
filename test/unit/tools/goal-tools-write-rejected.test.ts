@@ -37,6 +37,7 @@ function fakeSession(
     refineExact?: any;
     intro?: any;
     caseSplit?: any;
+    autoOne?: any;
   } = {},
 ) {
   return {
@@ -50,6 +51,7 @@ function fakeSession(
       refineExact: overrides.refineExact ?? vi.fn(),
       intro: overrides.intro ?? vi.fn(),
       caseSplit: overrides.caseSplit ?? vi.fn(),
+      autoOne: overrides.autoOne ?? vi.fn(),
     },
   } as any;
 }
@@ -201,4 +203,55 @@ test("agda_case_split still returns an ok envelope and writes clauses for a succ
   expect(result.isError).toBe(false);
   expect(result.structuredContent.classification).toBe("ok");
   expect(result.structuredContent.data.clauses).toEqual(["f zero = ?", "f (suc n) = ?"]);
+});
+
+// ── CR-03: agda_auto (Error-kind rejection, distinct from the ─────
+// pre-existing flag-injection coverage in goal-tools-give.test.ts) ─
+
+test("agda_auto surfaces an Agda rejection (e.g. NotInScope) as ok:false / auto-rejected, without writing to the file", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const rejectionMessage = "1.1-24: error: [NotInScope]\nNot in scope:\n  someHint at 1.1-24";
+  const autoOne = vi.fn().mockResolvedValue({
+    solution: rejectionMessage,
+    rejected: true,
+    rejectionText: rejectionMessage,
+  });
+  const session = fakeSession({ autoOne });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  // writeToFile left at its default (true) so a regression that skips
+  // the rejection check would fall through to the real
+  // applyEditAndReload() against an incompatible fake session.
+  const result = await server.get("agda_auto")!.callback({
+    goalId: 0,
+    hints: ["someHint"],
+  });
+
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent.classification).toBe("auto-rejected");
+  expect(result.structuredContent.diagnostics[0].message).toContain("NotInScope");
+  expect(result.structuredContent.data.written).toBe(false);
+});
+
+test("agda_auto still returns an ok envelope and writes the solution for a successful auto-solve", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const autoOne = vi.fn().mockResolvedValue({
+    solution: "refl",
+    rejected: false,
+    rejectionText: null,
+  });
+  const session = fakeSession({ autoOne });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  const result = await server.get("agda_auto")!.callback({
+    goalId: 0,
+    writeToFile: false,
+  });
+
+  expect(result.isError).toBe(false);
+  expect(result.structuredContent.classification).toBe("ok");
+  expect(result.structuredContent.data.solution).toBe("refl");
+  expect(result.structuredContent.data.hasSolution).toBe(true);
 });
