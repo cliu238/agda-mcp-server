@@ -80,7 +80,27 @@ Plans:
   4. Running the cron-judge script against local storage safely extracts each archive (materialize-pattern path-sandboxing, never bare tar trust), drives it through the oracle triad + N-rerun flake gate, and intakes it into the fix queue as `new` — resolving each bundle's `policyKey` correctly via Phase 6's fix so a bundle from another machine never silently abstains — and the run summary surfaces the per-run INCONCLUSIVE/abstention rate. (TEAM-04)
   5. The full loop is proven **live** on the pinned CHG corpus with zero fixture shortcuts: a fresh agent proof session through `dogfood-run.mjs` → auto-capture → TEAM-02 upload → TEAM-03 ingest → TEAM-04 judge → fix-queue intake reaches a definitive per-capture verdict with correct dedup against existing CHG entries; any confirmed defect continues into the REVERIFY-02 fix→lock flow. Acceptance is loop-to-verdict, not "must find a new defect". Documented precondition: CHG's vendored agda-unimath built locally once (overnight, corpus's own tooling). (E2E-01)
 
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 07-01-PLAN.md — TEAM-01: key registry (hash-only, mode 0600) + issue/revoke/list CLI + consent statement
+- [ ] 07-02-PLAN.md — TEAM-02 core: Claude Code/Codex agent-log selection + upload-run.mjs (staged tar.gz pack, fail-open POST, bounded NDJSON retry queue)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 07-03-PLAN.md — TEAM-03: `node:http` ingest endpoint (Bearer auth via 07-01's registry, streamed size-cap guard, sandboxed person/date/runId storage)
+- [ ] 07-04-PLAN.md — Pipeline integration: `taskManifestCorpora` additive run-report.json field + D-12 unconditional upload-chain tail in dogfood-wrapup.mjs
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 07-05-PLAN.md — TEAM-04: sandboxed archive extraction (pre-list + post-extraction realpath containment) + unattended cron judge (reuses wrapUpCapture unchanged) + abstention-rate summary + git write-back
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 07-06-PLAN.md — E2E-01: live CHG acceptance run — build-readiness probe, human-driven Codex proving session, automated post-session verification against the real tracked fix queue
+
 **Research**: Discuss-phase needed during planning — the fix-queue write-back mechanism (direct push to `main` vs. PR-per-batch from the cron) is an open architecture decision the research explicitly left unresolved. Concrete payload-size-cap, local-retry-queue bound, and archive-retention numbers also need deciding here (the underlying "a bound must exist" pattern is settled; the numbers are not).
 
 ### Phase 8: Pinned-Environment Distribution + Thin k8s Deployment
@@ -124,6 +144,6 @@ Plans:
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
+| 7. Team Feedback Channel — Local Wiring | v1.1 | 0/6 | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
