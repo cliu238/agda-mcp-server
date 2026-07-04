@@ -12,7 +12,13 @@
 //   (1) PRE-extraction: `tar -tf` lists every entry BEFORE any bytes
 //       are extracted; an absolute path or a `..` path segment
 //       anywhere in the listing rejects the WHOLE archive, before
-//       `tar -x` is ever invoked.
+//       `tar -x` is ever invoked. A SECOND, verbose (`-tvf`) listing
+//       (WR-04) additionally rejects any hard-link-type entry — a
+//       hard link's OWN name can look perfectly safe while its header
+//       linkname points at an arbitrary pre-existing file on the same
+//       filesystem, which the plain name-only listing above cannot see
+//       and which never manifests as a symlink for layer (2) below to
+//       catch either (it appears as an ordinary same-inode file).
 //   (2) POST-extraction: every extracted entry's canonical (symlink-
 //       resolved) path is re-verified to stay within the scratch
 //       directory via src/repo-root.ts's resolveExistingPathWithinRoot
@@ -260,6 +266,45 @@ export async function extractArchiveSafely(archivePath, options = {}) {
   const unsafe = entries.find((entry) => entry.startsWith("/") || entry.split("/").includes(".."));
   if (unsafe) {
     return { ok: false, reason: "unsafe-entry-path", detail: unsafe };
+  }
+
+  // WR-04: the plain `-tf` listing above prints ONLY each entry's own
+  // NAME, never its type or (for a hard-link entry) its link target — a
+  // hard-link entry whose header linkname points OUTSIDE the sandbox is
+  // invisible to that check (it can only ever reject based on the new
+  // link's own name). It also does not manifest as a symlink for Step
+  // C's post-extraction resolveExistingPathWithinRoot check to catch
+  // either: a hard link shares an inode with its target and appears to
+  // stat/realpath as an ORDINARY file already inside scratchDir. A
+  // separate verbose listing (`-tvf`) is required to see entry
+  // types/link targets — kept as a second pass (rather than parsing
+  // -tvf for everything) because its columnar, whitespace-separated
+  // format is far less robust to parse for a bare entry name than -tf's
+  // own one-name-per-line output above. Both GNU tar and bsdtar print a
+  // hard-link entry's mode string starting with the type flag `h`
+  // (verified empirically against this repo's own system tar/bsdtar).
+  // A legitimate capture-bundle archive (produced by this project's own
+  // upload-run.mjs packStagingDir, a plain directory tar with no hard
+  // links) never contains one, so this check has zero false-positive
+  // risk against real dogfooding uploads.
+  let verboseListing;
+  try {
+    verboseListing = execFile("tar", ["-tvf", archivePath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "listing-failed",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  const hardLinkEntry = verboseListing.split("\n").find((line) => line.startsWith("h"));
+  if (hardLinkEntry) {
+    return { ok: false, reason: "unsafe-entry-path", detail: hardLinkEntry.trim() };
   }
 
   // Step B: extract into a disposable scratch dir, bounded (see

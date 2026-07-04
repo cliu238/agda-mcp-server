@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -181,6 +182,52 @@ test("extractArchiveSafely: a listing at or under maxEntryCount is unaffected by
 
   expect(result.ok).toBe(true);
   tempDirs.push(result.scratchDir);
+  result.cleanup();
+});
+
+// ── WR-04: tar hard-link gap ───────────────────────────────────────────
+
+test("extractArchiveSafely: a REAL tar containing a hard-link entry is rejected pre-extraction (unsafe-entry-path), without ever attempting extraction (WR-04, from-RED)", async () => {
+  const sourceDir = makeTempDir("agda-mcp-archive-extract-hardlink-src-");
+  writeFileSync(join(sourceDir, "a.txt"), "hello", "utf8");
+  // The exact recipe that produces a genuine tar hard-link entry:
+  // linking a second name to the same inode before archiving — the
+  // system tar (bsdtar on macOS, GNU tar on Linux CI) both detect the
+  // shared inode and emit the SECOND name as a hard-link-type entry
+  // (mode string starting with `h`) pointing at the first, rather than
+  // storing its content twice (empirically verified against this
+  // repo's own system tar during this fix's own development).
+  linkSync(join(sourceDir, "a.txt"), join(sourceDir, "b.txt"));
+
+  const archiveDir = makeTempDir("agda-mcp-archive-extract-hardlink-archive-");
+  const archivePath = join(archiveDir, "hardlink.tar.gz");
+  buildRealTarGz(archivePath, sourceDir);
+
+  const spawnSpy = vi.fn();
+  const result = await extractArchiveSafely(archivePath, { deps: { spawn: spawnSpy } });
+
+  expect(result.ok).toBe(false);
+  expect(result.reason).toBe("unsafe-entry-path");
+  // Extraction (spawn("tar", ["-x", ...])) must never be reached once
+  // the verbose listing itself already found a hard-link entry.
+  expect(spawnSpy).not.toHaveBeenCalled();
+});
+
+test("extractArchiveSafely: an archive with no hard links is unaffected by the WR-04 check (happy path already covered above, this asserts the verbose listing itself is called)", async () => {
+  const sourceDir = makeTempDir("agda-mcp-archive-extract-no-hardlink-src-");
+  writeFileSync(join(sourceDir, "a.txt"), "hello", "utf8");
+  const archiveDir = makeTempDir("agda-mcp-archive-extract-no-hardlink-archive-");
+  const archivePath = join(archiveDir, "no-hardlink.tar.gz");
+  buildRealTarGz(archivePath, sourceDir);
+
+  const execFileSpy = vi.fn((...args: Parameters<typeof execFileSync>) => (execFileSync as any)(...args));
+  const result = await extractArchiveSafely(archivePath, { deps: { execFileSync: execFileSpy } });
+
+  expect(result.ok).toBe(true);
+  tempDirs.push(result.scratchDir);
+  // Both the plain (-tf) and verbose (-tvf) listings were consulted.
+  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-tf")).toBe(true);
+  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-tvf")).toBe(true);
   result.cleanup();
 });
 
