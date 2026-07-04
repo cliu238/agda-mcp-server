@@ -55,3 +55,27 @@ test("autoOne() does not mark a successful auto-solve (GiveAction present) as re
   expect(result.rejectionText ?? null).toBeNull();
   expect(result.solution).toBe("refl");
 });
+
+// WR-04: hasGiveActionResponse() must check payload non-emptiness, not
+// just kind presence — an Error DisplayInfo co-occurring with a
+// schema-conformant-but-empty-payload GiveAction response must still
+// be classified as rejected. Pre-WR-04, hasGiveActionResponse() would
+// have reported true for the empty-payload GiveAction (kind presence
+// only), making this compute rejected: false.
+test("autoOne() marks a result as rejected even when an empty-payload GiveAction co-occurs with an Error DisplayInfo", async () => {
+  const responses: AgdaResponse[] = [
+    {
+      kind: "DisplayInfo",
+      info: {
+        kind: "Error",
+        message: "1.1-24: error: [NotInScope]\nNot in scope:\n  someHint at 1.1-24",
+      },
+    },
+    { kind: "GiveAction", giveResult: "" },
+  ];
+
+  const result = await autoOne(fakeCtx(responses), 0, "-h someHint");
+
+  expect(result.rejected).toBe(true);
+  expect(result.rejectionText).toContain("NotInScope");
+});

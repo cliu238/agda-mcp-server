@@ -147,16 +147,29 @@ export function decodeGiveLikeResponse(responses: AgdaResponse[]): string {
 
 /**
  * True iff `responses` contains at least one schema-conformant
- * GiveAction response — i.e. Agda actually accepted/produced a term
- * (give, refine-like, or a successful auto-solve), as opposed to
- * decodeGiveLikeResponse()'s raw-DisplayInfo fallback (which fires on
- * a rejected/errored command too). autoOne() uses this to require
- * BOTH an Error display AND no genuine GiveAction response before
- * classifying a result as rejected — the same two-sided guard
- * give()/refine() use via hasReplacementText() (CR-03).
+ * GiveAction response WITH a non-empty payload — i.e. Agda actually
+ * accepted/produced a term (give, refine-like, or a successful
+ * auto-solve), as opposed to decodeGiveLikeResponse()'s raw-DisplayInfo
+ * fallback (which fires on a rejected/errored command too). autoOne()/
+ * autoAll() use this to require BOTH an Error display AND no genuine
+ * GiveAction response before classifying a result as rejected — the
+ * same two-sided guard give()/refine() use via hasReplacementText()
+ * (CR-03/CR-04).
+ *
+ * Checks payload non-emptiness (`giveResult`/`result`), not just
+ * response-kind presence: `giveActionResponseSchema` permits both
+ * fields to be absent/empty, and decodeGiveLikeResponse() only treats
+ * the response as a real result when `val` (`giveResult ?? result`) is
+ * truthy — mirroring that same check here closes a gap where a
+ * schema-conformant-but-empty-payload GiveAction could co-occur with
+ * an Error DisplayInfo in the same batch and be misread as "a genuine
+ * action is present" (WR-04).
  */
 export function hasGiveActionResponse(responses: AgdaResponse[]): boolean {
-  return responses.some((resp) => parseResponseWithSchema(giveActionResponseSchema, resp) !== null);
+  return responses.some((resp) => {
+    const give = parseResponseWithSchema(giveActionResponseSchema, resp);
+    return give !== null && Boolean(give.giveResult ?? give.result);
+  });
 }
 
 /** Extract structured solutions from SolveAll responses. */
@@ -230,15 +243,28 @@ export function decodeCaseSplitResponses(responses: AgdaResponse[]): string[] {
 
 /**
  * True iff `responses` contains at least one schema-conformant
- * MakeCase response — i.e. Agda actually produced new clauses, as
- * opposed to decodeCaseSplitResponses()'s raw-DisplayInfo fallback
- * (which fires on a rejected/invalid Cmd_make_case too — a rejected
- * case-split has no MakeCase response at all, only an Error
- * DisplayInfo). caseSplit() uses this to require BOTH an Error
- * display AND no genuine MakeCase response before classifying a
- * result as rejected, the same two-sided guard give()/refine() use
- * via hasReplacementText() (CR-02).
+ * MakeCase response WITH at least one non-empty clause — i.e. Agda
+ * actually produced new clauses, as opposed to
+ * decodeCaseSplitResponses()'s raw-DisplayInfo fallback (which fires
+ * on a rejected/invalid Cmd_make_case too — a rejected case-split has
+ * no MakeCase response at all, only an Error DisplayInfo). caseSplit()
+ * uses this to require BOTH an Error display AND no genuine MakeCase
+ * response before classifying a result as rejected, the same
+ * two-sided guard give()/refine() use via hasReplacementText()
+ * (CR-02).
+ *
+ * Checks clause non-emptiness, not just response-kind presence:
+ * `makeCaseResponseSchema` permits `clauses` to be absent/empty, and
+ * decodeCaseSplitResponses() only treats the response as real clauses
+ * when at least one survives its own `.filter(Boolean)` — mirroring
+ * that same check here closes a gap where a schema-conformant-but-
+ * empty-clauses MakeCase response could co-occur with an Error
+ * DisplayInfo in the same batch and be misread as "a genuine split is
+ * present" (WR-04).
  */
 export function hasMakeCaseResponse(responses: AgdaResponse[]): boolean {
-  return responses.some((resp) => parseResponseWithSchema(makeCaseResponseSchema, resp) !== null);
+  return responses.some((resp) => {
+    const makeCase = parseResponseWithSchema(makeCaseResponseSchema, resp);
+    return makeCase !== null && (makeCase.clauses ?? []).some(Boolean);
+  });
 }
