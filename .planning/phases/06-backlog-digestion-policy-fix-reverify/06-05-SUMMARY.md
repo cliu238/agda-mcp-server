@@ -130,3 +130,14 @@ None - no external service configuration required.
 ---
 *Phase: 06-backlog-digestion-policy-fix-reverify*
 *Completed: 2026-07-04*
+
+## Self-Check: PASSED
+
+- FOUND: src/tools/analysis-tools.ts
+- FOUND: src/tools/file/search-definitions.ts
+- FOUND: test/unit/tools/analysis-tools.test.ts
+- FOUND: test/unit/tools/file-tools.test.ts
+- FOUND: .planning/phases/06-backlog-digestion-policy-fix-reverify/06-05-SUMMARY.md
+- FOUND: commit 6caa279 (Task 1: agda_proof_status fix)
+- FOUND: commit 67d40a6 (Task 2: agda_search_definitions fix)
+- FOUND: commit 42e7326 (this SUMMARY.md)
