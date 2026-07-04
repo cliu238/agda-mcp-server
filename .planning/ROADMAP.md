@@ -95,7 +95,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-05-PLAN.md — TEAM-04: sandboxed archive extraction (pre-list + post-extraction realpath containment) + unattended cron judge (reuses wrapUpCapture unchanged) + abstention-rate summary + git write-back
+- [x] 07-05-PLAN.md — TEAM-04: sandboxed archive extraction (pre-list + post-extraction realpath containment) + unattended cron judge (reuses wrapUpCapture unchanged) + abstention-rate summary + git write-back
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -144,6 +144,6 @@ Plans:
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 7. Team Feedback Channel — Local Wiring | v1.1 | 4/6 | In Progress|  |
+| 7. Team Feedback Channel — Local Wiring | v1.1 | 5/6 | In Progress|  |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
