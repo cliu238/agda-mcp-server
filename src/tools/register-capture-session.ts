@@ -45,11 +45,13 @@ import {
 
 // Per-process monotonic sequence counter appended to every staged
 // capture filename for intra-process ordering. Two captures in the same
-// session can share the identical fingerprint/recurrence pair (the dedup
-// index only advances via the manual, out-of-band
-// scripts/promote-capture.mjs) - without this counter both would collide
-// on the same stagedPath and writeFileAtomic's rename would silently
-// clobber the first artifact (closes 01-VERIFICATION.md CR-03 BLOCKER).
+// session can share the identical fingerprint/recurrence pair — recurrence
+// is computed inline at capture time via routeDedup(index, fingerprint)
+// against the in-repo dedup index (dedup-index.ts's readDedupIndex, a
+// read-only lookup with no separate external advancement step) - without
+// this counter both would collide on the same stagedPath and
+// writeFileAtomic's rename would silently clobber the first artifact
+// (closes 01-VERIFICATION.md CR-03 BLOCKER).
 //
 // The counter alone is per-process and resets to 0 on every restart, so
 // two SEPARATE server processes that each hit the same fingerprint first
@@ -113,11 +115,10 @@ export function registerCaptureSession(
         // just used internally to compute the fingerprint.
         const sessionClassification = session.getLastClassification() ?? null;
 
-        // Drain-then-reset: each capture gets a fresh recording window
-        // going forward, so two captures in the same session never
-        // double-report the same actions (Task 1 spec).
+        // Drain now; the reset is deliberately deferred until after a
+        // successful write (WR-01, see below) — a write failure in
+        // this window must never silently discard the drained log.
         const { actions, truncated, droppedCount } = drainRecordedActions();
-        resetRecordedActions();
 
         // QUEUE-03/D-10: derive triage + richer fingerprint identity
         // fields from the last load-family action's recorded error
@@ -194,6 +195,14 @@ export function registerCaptureSession(
           `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`,
         );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
+        // Reset only after the artifact is durably staged (WR-01): a
+        // write failure above (disk full, permissions, or the
+        // mkdirSync above throwing) must leave the drained action log
+        // intact so a retry - or manual recovery - never starts from
+        // an empty log. Each successful capture still gets a fresh
+        // recording window going forward, so two captures in the same
+        // session never double-report the same actions.
+        resetRecordedActions();
 
         const data: CaptureReference = {
           stagedPath,
