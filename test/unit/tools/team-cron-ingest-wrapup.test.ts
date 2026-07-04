@@ -452,6 +452,147 @@ test("processArchive: extracted.cleanup() is always called, even on the unexpect
   expect(cleanupFn).toHaveBeenCalledTimes(1);
 });
 
+// ── processArchive: CR-01 (fingerprint-collision terminal-entry guard) ──
+
+/** A fake runOracle that always returns an ORCL-02 cheat-flagged
+ *  verdict — reaches wrapUpCapture's UNCONDITIONAL, flake-gate-skipping
+ *  filing branch with zero need to also fake classifyFlakiness. */
+function fakeCheatFlaggedRunOracle() {
+  return vi.fn(async () => ({
+    orcl01: { kind: "skip", reason: "no load-family recorded action to diff against" },
+    orcl02: {
+      kind: "cheat-flagged",
+      findings: [{ file: "Postulates.agda", line: 4, kind: "postulate", detail: "unsafeAxiom", sanctioned: false }],
+    },
+  }));
+}
+
+function lockedQueueEntry(overrides: Record<string, unknown> = {}) {
+  return {
+    fingerprint: "locked-fp-cr01",
+    status: "locked",
+    defectKind: "false-green",
+    triageClass: null,
+    triageConfidence: null,
+    recurrence: 1,
+    title: "Pre-existing locked flagship entry",
+    summary: "A real, previously-resolved defect.",
+    affectedTool: "agda_load",
+    capturePath: null,
+    verdictPath: null,
+    matrixEntryId: "matrix-locked-entry",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    closedAt: "2025-06-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+test("processArchive: a colliding dedup.fingerprint from an untrusted archive is REFUSED against a locked entry — status/closedAt/matrixEntryId/recurrence all survive unchanged (CR-01, from-RED)", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  writeFileSync(queueJsonPath, JSON.stringify([lockedQueueEntry()], null, 2), "utf8");
+
+  const originalStagedPath = "/uploader/only/staged/attack-capture.json";
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: [originalStagedPath],
+    artifacts: { "attack-capture.json": baseArtifact({ fingerprint: "locked-fp-cr01" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+  // Assert BEFORE mockRestore(): vitest's mockRestore() also resets the
+  // call history (like mockReset()), so checking toHaveBeenCalled()
+  // after restoring would always report false regardless of what
+  // actually happened (see the same note on the append-count test above).
+  expect(stderrSpy).toHaveBeenCalled();
+  stderrSpy.mockRestore();
+
+  // Never reported as a genuine filing.
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].filed).toBe(false);
+  expect(result.results[0].classification).toBe("terminal-conflict");
+
+  // The persisted queue entry is BYTE-FOR-BYTE unchanged on every
+  // terminal-status field — no regression, no cleared closedAt/matrixEntryId.
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(queueAfter).toHaveLength(1);
+  expect(queueAfter[0].status).toBe("locked");
+  expect(queueAfter[0].closedAt).toBe("2025-06-01T00:00:00.000Z");
+  expect(queueAfter[0].matrixEntryId).toBe("matrix-locked-entry");
+  expect(queueAfter[0].recurrence).toBe(1);
+  expect(queueAfter[0].title).toBe("Pre-existing locked flagship entry");
+  // Loud: a new evidence note IS appended, and the run summary tallies it.
+  expect(queueAfter[0].notes).toContain("CONFLICT");
+  expect(summarizeArchiveResults(1, [result]).terminalConflicts).toBe(1);
+});
+
+test("processArchive: a colliding fingerprint against a REJECTED entry is refused the same way as locked (CR-01)", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  writeFileSync(
+    queueJsonPath,
+    JSON.stringify([lockedQueueEntry({ status: "rejected", rejectedReason: "not-a-bug" })], null, 2),
+    "utf8",
+  );
+
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: ["/uploader/attack-2.json"],
+    artifacts: { "attack-2.json": baseArtifact({ fingerprint: "locked-fp-cr01" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+  stderrSpy.mockRestore();
+
+  expect(result.results[0].classification).toBe("terminal-conflict");
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(queueAfter[0].status).toBe("rejected");
+});
+
+test("processArchive: a NON-colliding (brand-new fingerprint) filing is unaffected by the CR-01 guard and still succeeds", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  writeFileSync(queueJsonPath, JSON.stringify([lockedQueueEntry()], null, 2), "utf8");
+
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: ["/uploader/brand-new.json"],
+    artifacts: { "brand-new.json": baseArtifact({ fingerprint: "brand-new-fp" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+
+  expect(result.results[0].filed).toBe(true);
+  expect(result.results[0].classification).not.toBe("terminal-conflict");
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(queueAfter).toHaveLength(2);
+  const newEntry = queueAfter.find((entry: { fingerprint: string }) => entry.fingerprint === "brand-new-fp");
+  expect(newEntry.status).toBe("new");
+});
+
 // ── processArchive: CR-02 (malformed run-report.json) ─────────────────
 
 test("processArchive: a malformed run-report.json is marked processed as a terminal failure instead of throwing — never re-processed on the next tick (CR-02, from-RED)", async () => {

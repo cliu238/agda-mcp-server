@@ -62,7 +62,7 @@ import { isMainModule } from "../test-with-sentinel.mjs";
 import { extractArchiveSafely } from "./archive-extract.mjs";
 import { resolveTeamStorageDir } from "./ingest-server.mjs";
 import { wrapUpCapture } from "../dogfood/dogfood-wrapup.mjs";
-import { upsertQueueEntry } from "../queue/intake.mjs";
+import { readQueueFile, upsertQueueEntry } from "../queue/intake.mjs";
 
 import { writeFileAtomic } from "../../src/session/safe-source-io.js";
 import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
@@ -137,6 +137,73 @@ export function resolveCronPolicyKey(taskManifestCorpora) {
   }
   const entry = fuelCorpora.find((candidate) => candidate.key === corpora[0]);
   return entry?.policyKey;
+}
+
+// ── wrapCronUpsertQueueEntry ────────────────────────────────────────────
+
+/**
+ * CR-01: wraps the real upsertQueueEntry for the ONE call site this
+ * exposes to wrapUpCapture's own internal filing path (threaded in via
+ * config.deps when processArchive calls wrapUpFn, below — this wrapper
+ * is NEVER applied to dogfood-wrapup.mjs's own shared local CLI
+ * invocation, nor to scripts/queue/intake.mjs itself, so the local
+ * human-driven wrapup path keeps its current, unattended-write-back-free
+ * semantics).
+ *
+ * Refuses to let an automated, unattended write-back regress an existing
+ * locked/rejected entry's status (or clear its closedAt/matrixEntryId)
+ * via a colliding, attacker-influenced dedup.fingerprint — publicly
+ * visible fingerprints like this queue's own locked flagship entry make
+ * this trivially targetable by anyone holding a valid upload key. A
+ * collision against a terminal entry is NEVER a silent skip and NEVER a
+ * silent overwrite: it is refused with a loud stderr warning, the
+ * existing entry is left untouched except for one new evidence note
+ * appended to its own `notes` field (a metadata-only upsertQueueEntry
+ * call, bumpRecurrence:false — the SAME annotation idiom this module
+ * already uses for its version-skew note below), and
+ * `conflictState.conflict` is flipped so processArchive's own
+ * per-capture result records classification:"terminal-conflict" instead
+ * of a genuine filing — surfaced in the run summary via
+ * summarizeArchiveResults, never silently reported as `filed`. The
+ * frozen fix-queue schema gains no new status value, only a free-text
+ * annotation the schema already allows.
+ */
+function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, conflictState }) {
+  return async (entryData, targetQueueJsonPath, options) => {
+    const effectiveQueueJsonPath = targetQueueJsonPath ?? queueJsonPath;
+
+    const existing = readQueueFile(effectiveQueueJsonPath).find((entry) => entry.fingerprint === entryData.fingerprint);
+    const isTerminal = existing?.status === "locked" || existing?.status === "rejected";
+    const attemptsRegression = isTerminal && entryData.status !== undefined && entryData.status !== existing.status;
+
+    if (attemptsRegression) {
+      process.stderr.write(
+        `cron-ingest-wrapup: SECURITY WARNING — refusing to move fix-queue entry ${entryData.fingerprint} `
+          + `(currently "${existing.status}") to status "${entryData.status}" via an unattended cron write-back; `
+          + "a colliding dedup.fingerprint from an untrusted archive must never silently reopen a "
+          + "locked/rejected defect. The existing entry is left unchanged; this conflict is recorded on it "
+          + "and counted in the run summary instead.\n",
+      );
+      await realUpsertFn(
+        {
+          fingerprint: entryData.fingerprint,
+          notes: `${existing.notes ? `${existing.notes} ` : ""}CONFLICT ${new Date().toISOString()}: an `
+            + `unattended cron write-back (candidate capturePath ${entryData.capturePath ?? "n/a"}) attempted to `
+            + `move this "${existing.status}" entry to status "${entryData.status}" via a colliding `
+            + "dedup.fingerprint; the attempt was refused and this entry's own status/closedAt/matrixEntryId "
+            + "were left untouched.",
+        },
+        effectiveQueueJsonPath,
+        { bumpRecurrence: false },
+      );
+      if (conflictState) {
+        conflictState.conflict = true;
+      }
+      return { ...existing };
+    }
+
+    return realUpsertFn(entryData, effectiveQueueJsonPath, options);
+  };
 }
 
 // ── processArchive ────────────────────────────────────────────────────
@@ -269,20 +336,35 @@ export async function processArchive({ archivePath }, config = {}) {
         const capturedVersion = artifact?.manifest?.serverVersion;
         const versionSkew = typeof capturedVersion === "string" && capturedVersion !== judgeVersion;
 
+        // CR-01: flipped by wrapCronUpsertQueueEntry when this specific
+        // capture's filing attempt collided with an existing
+        // locked/rejected entry and was refused rather than applied.
+        const conflictState = { conflict: false };
+
         const outcome = await wrapUpFn(artifactPath, artifact, {
           queueJsonPath: config.queueJsonPath,
           flakyLogPath: config.flakyLogPath,
           n: config.rerunN ?? 3,
           policyKey,
+          deps: {
+            ...config.deps,
+            upsertQueueEntry: wrapCronUpsertQueueEntry(config.deps?.upsertQueueEntry ?? upsertQueueEntry, {
+              queueJsonPath: config.queueJsonPath,
+              conflictState,
+            }),
+          },
         });
 
-        if (versionSkew && outcome.filed) {
+        if (versionSkew && outcome.filed && !conflictState.conflict) {
           // Metadata-only annotation — mirrors mirror-github.mjs's own
           // backlink-persistence precedent (bumpRecurrence:false):
           // never bumps recurrence, never re-derives any other field,
           // just appends the skew note onto the entry wrapUpCapture's
           // OWN internal upsertQueueEntry call already filed under
-          // this fingerprint.
+          // this fingerprint. Skipped entirely on a terminal conflict —
+          // annotating a version-skew note onto an entry whose filing
+          // was just REFUSED would be confusing noise on top of the
+          // conflict note above, not a genuine re-judged skew.
           await upsertFn(
             {
               fingerprint: artifact.dedup.fingerprint,
@@ -293,7 +375,15 @@ export async function processArchive({ archivePath }, config = {}) {
           );
         }
 
-        results.push({ artifactPath, versionSkew, ...outcome });
+        results.push({
+          artifactPath,
+          versionSkew,
+          ...outcome,
+          // CR-01: a refused terminal-entry collision is never reported
+          // as a genuine filing, regardless of what wrapUpCapture's own
+          // outcome.filed said (it has no visibility into the refusal).
+          ...(conflictState.conflict ? { filed: false, classification: "terminal-conflict" } : {}),
+        });
       } catch (err) {
         results.push({
           artifactPath,
@@ -409,6 +499,11 @@ export function summarizeArchiveResults(totalArchives, allResults) {
     abstained,
     abstentionRate: totalCaptures > 0 ? abstained / totalCaptures : 0,
     versionSkews: flattened.filter((r) => r.versionSkew).length,
+    // CR-01: a fingerprint collision against a terminal (locked/rejected)
+    // entry that this run's write-back guard refused — never silently
+    // folded into `filed` or `notACandidate`, always its own tallied,
+    // loud count.
+    terminalConflicts: flattened.filter((r) => r.classification === "terminal-conflict").length,
   };
 }
 
@@ -509,15 +604,16 @@ export async function scriptMain(argv = process.argv.slice(2), options = {}) {
   process.stdout.write(
     `[cron-ingest-wrapup] processed ${summary.totalArchives} archive(s), ${summary.totalCaptures} capture(s) — `
       + `${summary.filed} filed, ${summary.abstained} abstained (${(summary.abstentionRate * 100).toFixed(1)}%), `
-      + `${summary.errors} error(s).\n`,
+      + `${summary.terminalConflicts} terminal-conflict(s), ${summary.errors} error(s).\n`,
   );
 
-  if (summary.errors > 0 || summary.archiveErrors > 0) {
-    // The summary is complete, but at least one capture or archive
-    // went unjudged — surface that as a non-zero exit so a cron
+  if (summary.errors > 0 || summary.archiveErrors > 0 || summary.terminalConflicts > 0) {
+    // The summary is complete, but at least one capture or archive went
+    // unjudged, OR a fingerprint collision against a terminal entry was
+    // refused (CR-01) — surface that as a non-zero exit so a cron
     // wrapper/CI can notice (mirrors dogfood-wrapup.mjs's own
-    // convention, extended to cover this module's own archive-level
-    // failure modes it alone can produce).
+    // convention, extended to cover this module's own archive-level and
+    // security-relevant failure modes it alone can produce).
     process.exitCode = 1;
   }
 }
