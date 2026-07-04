@@ -105,9 +105,29 @@ export function applyScopedRename(source: string, from: string, to: string): Sco
 }
 
 /**
+ * Reject a hint/excludeHints token that looks like an Agsy CLI flag
+ * (leading `-`) or that contains whitespace (which would split into a
+ * second Agsy token once concatenated). Hints are opaque identifier/
+ * module-name tokens, never raw Agsy flags — see T-06-12 / fingerprint
+ * 5abecc959e43fef3: an unvalidated hint of `"-t 999999"` previously
+ * became two extra `-h`/`-t` flags in the search payload, and Agda's
+ * own rejection of the injected flag was then reported as a solution.
+ */
+function assertValidAutoHint(original: string, trimmed: string): void {
+  if (trimmed.startsWith("-") || /\s/u.test(trimmed)) {
+    throw new Error(
+      `agda_auto hint ${JSON.stringify(original)} is not a valid Agsy hint: ` +
+        `hints must be bare identifier/module names (no leading "-", no whitespace); ` +
+        `refusing to inject it into the search payload.`,
+    );
+  }
+}
+
+/**
  * Build the payload string for `Cmd_auto`. Composes depth, candidate
  * listing, hints, and excludes into the space-separated argv form
- * Agda's auto-search expects.
+ * Agda's auto-search expects. Hints/excludeHints are opaque identifier
+ * tokens, never raw Agsy flags — see assertValidAutoHint.
  */
 export function buildAutoSearchPayload(options: AutoSearchOptions): string {
   const flags: string[] = [];
@@ -118,14 +138,16 @@ export function buildAutoSearchPayload(options: AutoSearchOptions): string {
     flags.push("--list-candidates");
   }
   for (const hint of options.hints ?? []) {
-    if (hint.trim().length > 0) {
-      flags.push(`-h ${hint.trim()}`);
-    }
+    const trimmed = hint.trim();
+    if (trimmed.length === 0) continue;
+    assertValidAutoHint(hint, trimmed);
+    flags.push(`-h ${trimmed}`);
   }
   for (const excluded of options.excludeHints ?? []) {
-    if (excluded.trim().length > 0) {
-      flags.push(`-x ${excluded.trim()}`);
-    }
+    const trimmed = excluded.trim();
+    if (trimmed.length === 0) continue;
+    assertValidAutoHint(excluded, trimmed);
+    flags.push(`-x ${trimmed}`);
   }
   return flags.join(" ").trim();
 }

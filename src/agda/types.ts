@@ -192,6 +192,16 @@ export interface GiveResult {
   result: string;
   /** The text that should replace the hole in the source file, if available. */
   replacementText?: string | null;
+  /**
+   * True when Agda rejected the expression — an Error DisplayInfo
+   * response with no confirmed replacement — rather than accepting
+   * it. Populated by give() only; refine()/refineExact()/intro() do
+   * not populate this field yet (give-only fix, fingerprint
+   * bfcba437f5426fd6).
+   */
+  rejected?: boolean;
+  /** Agda's rejection text when `rejected` is true, else null. */
+  rejectionText?: string | null;
 }
 
 export interface ComputeResult {

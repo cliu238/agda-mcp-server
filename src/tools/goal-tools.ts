@@ -5,7 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { AgdaSession } from "../agda-process.js";
-import { registerGoalTextTool } from "./tool-helpers.js";
+import { registerGoalTextTool, giveRejectedError } from "./tool-helpers.js";
 import { applyEditAndReload } from "../session/reload-and-diagnose.js";
 import { hasReplacementText } from "../protocol/responses/proof-actions.js";
 import { buildAutoSearchPayload } from "../agda/agent-ux.js";
@@ -169,6 +169,9 @@ export function register(
       const exprStr = expr as string;
       const goalIdsBefore = session.getGoalIds();
       const result = await session.goal.give(goalId, exprStr);
+      if (result.rejected) {
+        throw giveRejectedError(goalId, exprStr, result.rejectionText ?? null);
+      }
       let output = `## Give \`${exprStr}\` to ?${goalId}\n\n`;
       output += result.result ? `**Result:** \`${result.result}\`\n` : `Expression accepted.\n`;
 

@@ -64,6 +64,39 @@ export function missingPathToolError(kind: "file" | "directory", path: string): 
   });
 }
 
+/**
+ * A rejected `agda_give`: Agda declined the expression (an Error
+ * DisplayInfo with no confirmed replacement), so the file was left
+ * untouched. Classification `give-rejected` lets callers branch on
+ * this specific outcome instead of a generic `tool-error`
+ * (fingerprint bfcba437f5426fd6).
+ */
+export function giveRejectedError(
+  goalId: number,
+  expr: string,
+  rejectionText: string | null,
+): ToolInvocationError<{
+  goalId: number;
+  expr: string;
+  result: string;
+  replacementText: string | null;
+  written: boolean;
+}> {
+  const message = `Agda rejected \`${expr}\` for goal ?${goalId} — the expression does not satisfy the goal type.`;
+  return new ToolInvocationError({
+    message,
+    classification: "give-rejected",
+    diagnostics: [
+      errorDiagnostic(
+        rejectionText ?? message,
+        "give-rejected",
+        "Inspect the goal with agda_goal_type_context_check, adjust the expression, and retry. The file was not modified.",
+      ),
+    ],
+    data: { goalId, expr, result: rejectionText ?? "", replacementText: null, written: false },
+  });
+}
+
 export function toToolInvocationError(err: unknown): ToolInvocationError {
   if (err instanceof ToolInvocationError) {
     return err;
