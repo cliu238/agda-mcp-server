@@ -211,10 +211,8 @@ export async function wrapUpCapture(artifactPath, artifact, config = {}) {
   const upsertFn = config.deps?.upsertQueueEntry ?? upsertQueueEntry;
   const appendFlakyFn = config.deps?.appendFlakyLog ?? appendFlakyLog;
 
-  const verdict = await runOracleFn(
-    artifactPath,
-    config.policyKey !== undefined ? { policyKey: config.policyKey } : {},
-  );
+  const orcl02Options = config.policyKey !== undefined ? { policyKey: config.policyKey } : {};
+  const verdict = await runOracleFn(artifactPath, orcl02Options);
 
   // STRICT priority order, checked top to bottom, first match wins —
   // see the header comment for why this precedence is itself the
