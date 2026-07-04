@@ -135,10 +135,10 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — DEBT-01/DEBT-02: delete verify-cold-replay.mjs + promote-capture.mjs (and its dogfood-run.mjs call site), fix dangling comment references, record both decisions in PROJECT.md
-- [ ] 09-02-PLAN.md — DEBT-03: WR-01 durability reorder (resetRecordedActions after writeFileAtomic) + WR-12 fixture-tree isolation + WR-08 closure record
-- [ ] 09-03-PLAN.md — DEBT-05: consolidated Phase 5 + Phase 7 threat register (`09-SECURITY.md`), including the plaintext-Bearer-key-in-retry-queue widening
-- [ ] 09-04-PLAN.md — DEBT-06 (part A): mechanical tsconfig.test.json cleanup across 20 files + W5 fix-queue-schema fold-in
+- [x] 09-01-PLAN.md — DEBT-01/DEBT-02: delete verify-cold-replay.mjs + promote-capture.mjs (and its dogfood-run.mjs call site), fix dangling comment references, record both decisions in PROJECT.md
+- [x] 09-02-PLAN.md — DEBT-03: WR-01 durability reorder (resetRecordedActions after writeFileAtomic) + WR-12 fixture-tree isolation + WR-08 closure record
+- [x] 09-03-PLAN.md — DEBT-05: consolidated Phase 5 + Phase 7 threat register (`09-SECURITY.md`), including the plaintext-Bearer-key-in-retry-queue widening
+- [x] 09-04-PLAN.md — DEBT-06 (part A): mechanical tsconfig.test.json cleanup across 20 files + W5 fix-queue-schema fold-in
 
 **Wave 2** *(blocked on Wave 1 completion — shares dogfood-run.mjs with 09-01)*
 
@@ -163,4 +163,4 @@ Plans:
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
-| 9. Residual v1.0 Debt Sweep | v1.1 | 0/6 | Ready to execute | - |
+| 9. Residual v1.0 Debt Sweep | v1.1 | 4/6 | In Progress|  |
