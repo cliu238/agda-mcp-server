@@ -4,7 +4,6 @@
 
 import type {
   AgdaCommandContext,
-  AgdaResponse,
   AgdaGoal,
   GoalInfo,
   GoalTypeResult,
@@ -18,6 +17,7 @@ import { decodeGoalDisplayResponses } from "../protocol/responses/goal-display.j
 import {
   decodeCaseSplitResponses,
   decodeGiveLikeResponse,
+  detectDisplayInfoError,
   hasGiveActionResponse,
   hasMakeCaseResponse,
   hasReplacementText,
@@ -27,10 +27,6 @@ import { decodeDisplayInfoEvents } from "../protocol/responses/display-info.js";
 import { decodeLoadDisplayResponses } from "../protocol/responses/load-display.js";
 import { decodeGoalExpressionDisplayResponses } from "../protocol/responses/goal-expression-display.js";
 import {
-  displayInfoResponseSchema,
-  parseResponseWithSchema,
-} from "../protocol/response-schemas.js";
-import {
   goalCommand,
   modeGoalCommand,
   quoted,
@@ -38,29 +34,6 @@ import {
   rewriteGoalCommand,
 } from "../protocol/command-builder.js";
 import { throwOnFatalProtocolStderr } from "./protocol-errors.js";
-
-/**
- * Scan `responses` for an Agda-reported Error DisplayInfo — the same
- * `info.kind === "Error"` idiom used by parse-load-responses.ts and
- * src/protocol/responses/backend.ts. Returns the decoded error text,
- * or null when no Error display is present.
- *
- * give() uses this because an ill-typed expression arrives as a
- * normal DisplayInfo response, not a fatal stderr line —
- * throwOnFatalProtocolStderr never sees it (fingerprint
- * bfcba437f5426fd6).
- */
-function detectResponseError(responses: AgdaResponse[]): string | null {
-  for (const resp of responses) {
-    if (resp.kind !== "DisplayInfo") continue;
-    const display = parseResponseWithSchema(displayInfoResponseSchema, resp);
-    if (!display) continue;
-    if (display.info.kind === "Error") {
-      return decodeDisplayInfoEvents([resp]).at(-1)?.text ?? "";
-    }
-  }
-  return null;
-}
 
 /** Get the type and local context for a specific goal. */
 export async function goalTypeContext(
@@ -112,7 +85,7 @@ export async function context(
  * `checkedExpr` stays empty, so the caller must reject it explicitly
  * up front instead of decoding a success shape around it (fingerprint
  * eaea6321183bdf7b; same `info.kind === "Error"` idiom as give()'s
- * detectResponseError(), fingerprint bfcba437f5426fd6).
+ * detectDisplayInfoError(), fingerprint bfcba437f5426fd6).
  */
 export async function goalTypeContextCheck(
   ctx: AgdaCommandContext,
@@ -123,7 +96,7 @@ export async function goalTypeContextCheck(
   const responses = await ctx.sendCommand(
     ctx.iotcm(modeGoalCommand("Cmd_goal_type_context_check", "Normalised", goalId, quoted(expr))),
   );
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   if (errorText !== null) {
     throw new Error(errorText);
   }
@@ -157,7 +130,7 @@ export async function caseSplit(
     ctx.iotcm(goalCommand("Cmd_make_case", goalId, quoted(variable))),
   );
   throwOnFatalProtocolStderr(responses);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasMakeCaseResponse(responses);
   return {
     clauses: decodeCaseSplitResponses(responses),
@@ -190,7 +163,7 @@ export async function give(
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
   const replacementText = resolveGiveReplacementText(responses, expr);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
@@ -221,7 +194,7 @@ export async function refine(
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
   const replacementText = resolveGiveReplacementText(responses, expr);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
@@ -244,7 +217,7 @@ export async function refineExact(
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
   const replacementText = resolveGiveReplacementText(responses, expr);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
@@ -267,7 +240,7 @@ export async function intro(
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
   const replacementText = resolveGiveReplacementText(responses, expr);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
@@ -305,7 +278,7 @@ export async function autoOne(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   const rejected = errorText !== null && !hasGiveActionResponse(responses);
   return {
     solution: decodeGiveLikeResponse(responses),

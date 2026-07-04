@@ -17,7 +17,13 @@ import type {
   ShowVersionResult,
 } from "./types.js";
 import { decodeGoalDisplayResponses } from "../protocol/responses/goal-display.js";
-import { decodeGiveLikeResponse, decodeSolveResponses, decodeSolveRawSolutions } from "../protocol/responses/proof-actions.js";
+import {
+  decodeGiveLikeResponse,
+  decodeSolveResponses,
+  decodeSolveRawSolutions,
+  detectDisplayInfoError,
+  hasGiveActionResponse,
+} from "../protocol/responses/proof-actions.js";
 import { decodeSearchAboutResponses } from "../protocol/responses/search-about.js";
 import { decodeGoalExpressionDisplayResponses } from "../protocol/responses/goal-expression-display.js";
 import { decodeDisplayTextResponses } from "../protocol/responses/text-display.js";
@@ -117,7 +123,16 @@ export async function whyInScopeTopLevel(
   return { explanation: decodeDisplayTextResponses(responses).text };
 }
 
-/** Elaborate an expression in a goal context. */
+/**
+ * Elaborate an expression in a goal context.
+ *
+ * Same rejection-detection shape as goalTypeContextCheck() (CR-04): an
+ * ill-typed `expr` arrives as a normal Error DisplayInfo response, not
+ * a fatal stderr line — decodeGiveLikeResponse()'s raw-DisplayInfo
+ * fallback would otherwise render that rejection text as if it were
+ * "the fully explicit form" of the expression with ok:true, so a
+ * rejection must be thrown explicitly instead of decoded as a result.
+ */
 export async function elaborate(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -128,6 +143,10 @@ export async function elaborate(
     ctx.iotcm(modeGoalCommand("Cmd_elaborate_give", "Normalised", goalId, quoted(expr))),
   );
   throwOnFatalProtocolStderr(responses);
+  const errorText = detectDisplayInfoError(responses);
+  if (errorText !== null) {
+    throw new Error(errorText);
+  }
   return { elaboration: decodeGiveLikeResponse(responses) };
 }
 
@@ -193,7 +212,18 @@ export async function searchAbout(
   };
 }
 
-/** Auto-solve all goals. */
+/**
+ * Auto-solve all goals.
+ *
+ * Same rejection-detection shape as autoOne() (CR-03): decodeGiveLikeResponse()
+ * falls back to the last DisplayInfo event's text whenever no GiveAction
+ * response is present, so a rejection/internal-failure result can
+ * otherwise be reported as ok:true with Agda's own error text standing
+ * in for a fabricated "solution" (CR-04). rejected requires BOTH an
+ * Error display AND no genuine GiveAction response, the same two-sided
+ * guard autoOne()/give() use via hasGiveActionResponse()/
+ * hasReplacementText().
+ */
 export async function autoAll(ctx: AgdaCommandContext): Promise<AutoResult> {
   ctx.requireFile();
   const responses = await ctx.sendCommand(
@@ -201,7 +231,13 @@ export async function autoAll(ctx: AgdaCommandContext): Promise<AutoResult> {
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
-  return { solution: decodeGiveLikeResponse(responses) };
+  const errorText = detectDisplayInfoError(responses);
+  const rejected = errorText !== null && !hasGiveActionResponse(responses);
+  return {
+    solution: decodeGiveLikeResponse(responses),
+    rejected,
+    rejectionText: rejected ? errorText : null,
+  };
 }
 
 /** Show the running Agda version. */

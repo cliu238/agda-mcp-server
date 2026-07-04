@@ -16,6 +16,7 @@ import {
   registerGoalTextTool,
   registerStructuredTool,
   registerTextTool,
+  throwIfWriteRejected,
   warningDiagnostic,
 } from "./tool-helpers.js";
 import { applyBatchEditAndReload } from "../session/reload-and-diagnose.js";
@@ -183,6 +184,12 @@ export function register(
     }),
     callback: async () => {
       const result = await session.query.autoAll();
+      // CR-04: autoAll() shares autoOne()'s decodeGiveLikeResponse()
+      // raw-DisplayInfo fallback, so a rejected/errored auto-search
+      // must be reported as ok:false instead of a fabricated
+      // `hasSolution: true`. No goalId here — this is a whole-file
+      // operation, unlike agda_auto's per-goal rejection check.
+      throwIfWriteRejected("agda_auto_all", undefined, "", result);
       const text = result.solution
         ? `## Auto-solve all goals\n\n**Result:**\n\`\`\`\n${result.solution}\n\`\`\`\n`
         : `## Auto-solve all goals\n\nNo automatic solutions found.\n`;

@@ -44,6 +44,35 @@ function renderGiveResult(val: string): string {
 }
 
 /**
+ * Scan `responses` for an Agda-reported Error DisplayInfo — the same
+ * `info.kind === "Error"` idiom used by parse-load-responses.ts and
+ * src/protocol/responses/backend.ts. Returns the decoded error text,
+ * or null when no Error display is present.
+ *
+ * Shared across every function that has to distinguish "Agda
+ * rejected/errored the request" from "Agda produced a real result":
+ * give()/refine()/refineExact()/intro()/caseSplit()/autoOne() (all in
+ * goal-operations.ts, fingerprint bfcba437f5426fd6, CR-01/CR-02/
+ * CR-03) and autoAll()/elaborate() (advanced-queries.ts, CR-04) — an
+ * ill-typed expression arrives as a normal DisplayInfo response, not
+ * a fatal stderr line, so throwOnFatalProtocolStderr never sees it.
+ * Promoted from a goal-operations.ts-private helper to this shared
+ * module so advanced-queries.ts can reuse it without duplicating the
+ * scan (CR-04).
+ */
+export function detectDisplayInfoError(responses: AgdaResponse[]): string | null {
+  for (const resp of responses) {
+    if (resp.kind !== "DisplayInfo") continue;
+    const display = parseResponseWithSchema(displayInfoResponseSchema, resp);
+    if (!display) continue;
+    if (display.info.kind === "Error") {
+      return decodeDisplayInfoEvents([resp]).at(-1)?.text ?? "";
+    }
+  }
+  return null;
+}
+
+/**
  * Guard used by every proof-action tool before writing a result to
  * the source file. A write should only happen when the candidate is
  * a non-null, non-empty string. An empty string would remove the

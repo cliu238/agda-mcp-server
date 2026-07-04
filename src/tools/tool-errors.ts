@@ -111,18 +111,24 @@ export function giveRejectedError(
  * for case-split) onto the shared `{ goalId, written: false }` base;
  * the error envelope's `data` is not schema-validated, so this is
  * safe even though each tool's `outputDataSchema` differs.
+ *
+ * `goalId` is `undefined` for whole-file operations that have no
+ * single owning goal (e.g. `agda_auto_all`, CR-04) — the message and
+ * `data` payload omit the goal reference in that case instead of
+ * printing a misleading `?undefined`.
  */
 export function writeActionRejectedError(
   tool: string,
-  goalId: number,
+  goalId: number | undefined,
   attempted: string,
   rejectionText: string | null,
   extraData: Record<string, unknown> = {},
 ): ToolInvocationError<Record<string, unknown>> {
   const classification = `${tool.replace(/^agda_/, "").replace(/_/g, "-")}-rejected`;
+  const target = goalId === undefined ? "" : ` for goal ?${goalId}`;
   const message = attempted.length > 0
-    ? `Agda rejected \`${attempted}\` for goal ?${goalId}.`
-    : `Agda rejected the request for goal ?${goalId}.`;
+    ? `Agda rejected \`${attempted}\`${target}.`
+    : `Agda rejected the request${target}.`;
   return new ToolInvocationError({
     message,
     classification,
@@ -133,7 +139,7 @@ export function writeActionRejectedError(
         "Inspect the goal with agda_goal_type_context_check, adjust the input, and retry. The file was not modified.",
       ),
     ],
-    data: { goalId, written: false, ...extraData },
+    data: { ...(goalId === undefined ? {} : { goalId }), written: false, ...extraData },
   });
 }
 
@@ -143,10 +149,11 @@ export function writeActionRejectedError(
  * each write-capable proof-action callback in goal-tools.ts needs a
  * single call instead of an inline `if` block — goal-tools.ts sits at
  * the project's 500-line-per-file ceiling (CR-01/CR-02/CR-03).
+ * `goalId` may be `undefined` for whole-file operations (CR-04).
  */
 export function throwIfWriteRejected(
   tool: string,
-  goalId: number,
+  goalId: number | undefined,
   attempted: string,
   result: { rejected?: boolean; rejectionText?: string | null },
 ): void {
