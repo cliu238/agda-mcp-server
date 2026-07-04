@@ -186,7 +186,39 @@ export async function processArchive({ archivePath }, config = {}) {
 
     const [runId] = runIds;
     const reportPath = join(runsDir, runId, "run-report.json");
-    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    // CR-02: this read/parse used to be unguarded — a missing or
+    // malformed run-report.json (a truncated/corrupt upload, or the
+    // single entry under runs/ not actually containing one) threw
+    // straight out of processArchive with NO .processed.json marker
+    // ever written (every other branch in this function writes one
+    // either before or after this line; none of them run once this
+    // specific throw fires). discoverUnprocessedArchives treats "no
+    // marker" as "not yet processed", so the exact same archive was
+    // re-discovered and fully re-extracted (sandboxed tar -x,
+    // mid-extraction polling, post-extraction realpath walk) on EVERY
+    // subsequent cron tick, forever — directly contradicting this
+    // function's own documented "never retried forever" contract.
+    // Treating a parse failure as a terminal, marked failure (like
+    // every sibling branch above/below it) closes that gap.
+    let report;
+    try {
+      report = JSON.parse(readFileSync(reportPath, "utf8"));
+    } catch (err) {
+      await writeFileAtomic(
+        `${archivePath}.processed.json`,
+        JSON.stringify(
+          {
+            processedAt: new Date().toISOString(),
+            ok: false,
+            reason: "malformed-run-report",
+            detail: err instanceof Error ? err.message : String(err),
+          },
+          null,
+          2,
+        ),
+      );
+      return { archivePath, error: "malformed-run-report", results: [] };
+    }
 
     const corpora = Array.isArray(report.taskManifestCorpora) ? [...new Set(report.taskManifestCorpora)] : [];
     const policyKey = resolveCronPolicyKey(report.taskManifestCorpora);

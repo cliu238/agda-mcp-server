@@ -452,6 +452,56 @@ test("processArchive: extracted.cleanup() is always called, even on the unexpect
   expect(cleanupFn).toHaveBeenCalledTimes(1);
 });
 
+// ── processArchive: CR-02 (malformed run-report.json) ─────────────────
+
+test("processArchive: a malformed run-report.json is marked processed as a terminal failure instead of throwing — never re-processed on the next tick (CR-02, from-RED)", async () => {
+  const scratchDir = buildFakeScratchDir({ runId: "run-malformed" });
+  writeFileSync(join(scratchDir, "runs", "run-malformed", "run-report.json"), "{ not valid json at all", "utf8");
+  const extractFn = fakeExtractOk(scratchDir);
+  const wrapUpFn = vi.fn();
+  const archivePath = makeArchiveFile();
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath: throwawayQueuePath(),
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, wrapUpCapture: wrapUpFn },
+    },
+  );
+
+  expect(result.error).toBe("malformed-run-report");
+  expect(result.results).toEqual([]);
+  expect(wrapUpFn).not.toHaveBeenCalled();
+  expect(existsSync(`${archivePath}.processed.json`)).toBe(true);
+  const marker = JSON.parse(readFileSync(`${archivePath}.processed.json`, "utf8"));
+  expect(marker.ok).toBe(false);
+  expect(marker.reason).toBe("malformed-run-report");
+  expect(typeof marker.detail).toBe("string");
+  expect(marker.detail.length).toBeGreaterThan(0);
+});
+
+test("processArchive: a MISSING run-report.json (the single runs/ entry lacks the file entirely) is also a terminal, marked failure", async () => {
+  const scratchDir = makeTempDir("agda-mcp-cron-scratch-missing-report-");
+  mkdirSync(join(scratchDir, "runs", "run-1"), { recursive: true });
+  // Deliberately never writes run-report.json under runs/run-1/.
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath: throwawayQueuePath(),
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn },
+    },
+  );
+
+  expect(result.error).toBe("malformed-run-report");
+  const marker = JSON.parse(readFileSync(`${archivePath}.processed.json`, "utf8"));
+  expect(marker.reason).toBe("malformed-run-report");
+});
+
 // ── writeBackQueue ─────────────────────────────────────────────────────
 
 test("writeBackQueue: filedCount > 0 and no --no-push calls execFileSync exactly 3 times in order (add, commit, push), each with shell:false and cwd:SERVER_REPO_ROOT", () => {
