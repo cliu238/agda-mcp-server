@@ -8,6 +8,7 @@ import {
   diffAgainstWhitelist,
   judgeOrcl02,
   loadOraclePolicy,
+  PolicyResolutionError,
   scanClosure,
   scanOptionsFlags,
   scanPragmaVocabulary,
@@ -369,5 +370,87 @@ describe("judgeOrcl02", () => {
     writeFileSync(join(dir, "project.agda-lib"), "name: agda-unimath\ndepend:\ninclude: .\n", "utf8");
     const outcome = await judgeOrcl02(artifactPath, {});
     expect(outcome.kind).toBe("clean");
+  });
+});
+
+// ── Policy resolution is case-exact and loud (POLICY-01) ────────────
+//
+// D-02: never case-normalize — a case-mismatched key is a MISMATCH,
+// not an ABSENCE, and must reject identically on every platform
+// (case-insensitive macOS APFS vs. case-sensitive Linux ext4). D-03:
+// an EXPECTED-but-unresolvable key (explicit --policy, or a derived
+// key whose file exists but fails to load) is a loud hard failure; a
+// genuinely-no-policy-anywhere repo keeps v1.0's no-policy outcome.
+// These tests encode the REAL CHG shape (.agda-lib name
+// Codex-Homotopy-Group vs on-disk codex-homotopy-group.json) per
+// REQUIREMENTS.md's own literal wording, and run UNGATED (no
+// integration-test environment gate, no Agda subprocess) so they
+// prove themselves on ubuntu-latest CI's case-sensitive ext4 — the
+// phase's hard acceptance gate (success criterion 2).
+
+describe("policy resolution is case-exact and loud (POLICY-01)", () => {
+  test("Test A: a derived key from a real CHG-shaped .agda-lib name (Codex-Homotopy-Group) rejects with a case-mismatch PolicyResolutionError", async () => {
+    const { dir, artifactPath } = buildClosureFixture("upstreamAxiom");
+    writeFileSync(join(dir, "project.agda-lib"), "name: Codex-Homotopy-Group\ndepend:\ninclude: .\n", "utf8");
+
+    await expect(judgeOrcl02(artifactPath, {})).rejects.toThrow(PolicyResolutionError);
+    await expect(judgeOrcl02(artifactPath, {})).rejects.toThrow(/Codex-Homotopy-Group/);
+    await expect(judgeOrcl02(artifactPath, {})).rejects.toThrow(/codex-homotopy-group\.json/);
+    await expect(judgeOrcl02(artifactPath, {})).rejects.toThrow(/oracle-policy/);
+  });
+
+  test("Test B: an explicit --policy value with the same mismatched case (Codex-Homotopy-Group) rejects the same way as the derived path", async () => {
+    const { artifactPath } = buildClosureFixture("upstreamAxiom");
+
+    await expect(judgeOrcl02(artifactPath, { policyKey: "Codex-Homotopy-Group" })).rejects.toThrow(
+      PolicyResolutionError,
+    );
+    await expect(judgeOrcl02(artifactPath, { policyKey: "Codex-Homotopy-Group" })).rejects.toThrow(
+      /codex-homotopy-group\.json/,
+    );
+    await expect(judgeOrcl02(artifactPath, { policyKey: "Codex-Homotopy-Group" })).rejects.toThrow(/oracle-policy/);
+  });
+
+  test("Test C: an explicit --policy value with the exact on-disk case (codex-homotopy-group) resolves the real policy normally", async () => {
+    const { artifactPath } = buildClosureFixture("univalence");
+    const outcome = await judgeOrcl02(artifactPath, { policyKey: "codex-homotopy-group" });
+    expect(outcome.kind).toBe("clean");
+  });
+
+  test("Test D: an explicit key with no on-disk file and no case variant rejects, naming the key and the oracle-policy dir", async () => {
+    const { artifactPath } = buildClosureFixture("upstreamAxiom");
+
+    await expect(judgeOrcl02(artifactPath, { policyKey: "no-such-policy-zzz" })).rejects.toThrow(
+      PolicyResolutionError,
+    );
+    await expect(judgeOrcl02(artifactPath, { policyKey: "no-such-policy-zzz" })).rejects.toThrow(
+      /no-such-policy-zzz/,
+    );
+    await expect(judgeOrcl02(artifactPath, { policyKey: "no-such-policy-zzz" })).rejects.toThrow(/oracle-policy/);
+  });
+
+  test("Test E (v1.0 semantics preserved): a derived key with no on-disk file and no case variant returns kind no-policy, never a throw", async () => {
+    const { dir, artifactPath } = buildClosureFixture("upstreamAxiom");
+    writeFileSync(
+      join(dir, "project.agda-lib"),
+      "name: totally-unknown-project-zzz\ndepend:\ninclude: .\n",
+      "utf8",
+    );
+
+    const outcome = await judgeOrcl02(artifactPath, {});
+    expect(outcome.kind).toBe("no-policy");
+    expect(outcome.findings.length).toBeGreaterThan(0);
+  });
+
+  test("Test F (CR-01 upgrade): an explicit traversal-shaped key rejects loudly; a derived traversal-shaped name still degrades to no-policy (unchanged)", async () => {
+    const { artifactPath: explicitArtifactPath } = buildClosureFixture("upstreamAxiom");
+    await expect(judgeOrcl02(explicitArtifactPath, { policyKey: "../evil" })).rejects.toThrow(
+      PolicyResolutionError,
+    );
+
+    const { dir, artifactPath } = buildClosureFixture("upstreamAxiom");
+    writeFileSync(join(dir, "project.agda-lib"), "name: ../evil\ndepend:\ninclude: .\n", "utf8");
+    const outcome = await judgeOrcl02(artifactPath, {});
+    expect(outcome.kind).toBe("no-policy");
   });
 });
