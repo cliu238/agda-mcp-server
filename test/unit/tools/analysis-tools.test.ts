@@ -136,3 +136,40 @@ test("agda_proof_status lists open goals and omits the completeness taglines whi
   expect(text).not.toContain("NOT confirmed complete");
 });
 
+// ── WR-01: whitespace-only constraints.text must not contradict data.hasConstraints ──
+//
+// This exact function uses two different emptiness checks on the same
+// constraints.text value: the prose branches originally tested raw
+// truthiness while data.hasConstraints used a trimmed check. A
+// whitespace-only Cmd_constraints response (plausible: just a trailing
+// newline) is truthy-but-not-"has content", reproducing the same
+// text/data self-contradiction class fingerprint fdc90bfde12fb938
+// targeted for this function's other branch.
+
+test("agda_proof_status treats a whitespace-only constraints.text as no constraints, matching data.hasConstraints", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const session = {
+    getGoalIds: () => [],
+    getLastClassification: () => null,
+    getLoadedFile: () => "/repo/Example.agda",
+    isFileStale: () => false,
+    goal: {
+      metas: async () => ({ goals: [] }),
+    },
+    query: {
+      constraints: async () => ({ text: "   \n" }),
+    },
+  } as any;
+
+  registerAnalysisTools(server as unknown as McpServer, session, "/repo");
+  const result = await server.get("agda_proof_status")!.callback({});
+
+  expect(result.isError).toBe(false);
+  const text: string = result.content[0].text;
+  expect(text).toContain("All goals solved.");
+  expect(text).not.toContain("NOT confirmed complete");
+  expect(text).not.toContain("**Constraints:** yes");
+  expect(result.structuredContent.data.hasConstraints).toBe(false);
+});
+

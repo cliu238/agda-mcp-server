@@ -56,11 +56,19 @@ export function register(
 
       const metas = await session.goal.metas();
       const constraints = await session.query.constraints();
+      // Single trimmed-emptiness definition shared by every branch below
+      // (text body AND structured data) so a whitespace-only
+      // constraints.text (e.g. a Cmd_constraints response whose decoded
+      // body is just a trailing newline) can never make the prose
+      // contradict data.hasConstraints — the same text/data
+      // self-contradiction class fingerprint fdc90bfde12fb938 targeted
+      // for this function's other branch (WR-01).
+      const hasConstraints = constraints.text.trim().length > 0;
 
       let output = `## Proof Status\n\n`;
       output += `**File:** ${file}\n`;
       output += `**Goals:** ${metas.goals.length} unsolved\n`;
-      if (constraints.text) {
+      if (hasConstraints) {
         output += `**Constraints:** yes\n`;
       }
       output += "\n";
@@ -73,13 +81,13 @@ export function register(
         output += "\n";
       }
 
-      if (constraints.text) {
+      if (hasConstraints) {
         output += `### Constraints\n\n\`\`\`\n${constraints.text}\n\`\`\`\n`;
       }
 
-      if (metas.goals.length === 0 && !constraints.text) {
+      if (metas.goals.length === 0 && !hasConstraints) {
         output += "All goals solved.\n";
-      } else if (metas.goals.length === 0 && constraints.text) {
+      } else if (metas.goals.length === 0 && hasConstraints) {
         output += "No visible goals, but constraints remain — the file is NOT confirmed complete. See the Constraints section above.\n";
       }
 
@@ -88,7 +96,7 @@ export function register(
         data: {
           loadedFile: file,
           goalCount: metas.goals.length,
-          hasConstraints: constraints.text.trim().length > 0,
+          hasConstraints,
           goals: metas.goals.map((g) => ({ goalId: g.goalId, type: g.type })),
           constraintsText: constraints.text,
         },
