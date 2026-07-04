@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agda-mcp-ingest
+  namespace: llm-gateway
+  labels:
+    app: agda-mcp-ingest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agda-mcp-ingest
+  template:
+    metadata:
+      labels:
+        app: agda-mcp-ingest
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2231 # Must match Ceph directory owner for write access
+        fsGroup: 2231
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: agda-mcp-ingest
+          image: ghcr.io/cliu238/agda-mcp-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+          env:
+            - name: AGDA_MCP_TEAM_STORAGE_DIR
+              value: /data/team-uploads
+            - name: AGDA_MCP_TEAM_INGEST_PORT
+              value: "4000"
+            - name: AGDA_MCP_TEAM_INGEST_HOST
+              # Deliberate override of the script's loopback-only default:
+              # inside a pod's own network namespace, binding all interfaces
+              # is correct and expected — the pod is only reachable via the
+              # Service/Ingress below, both namespace/cluster-scoped, so this
+              # is not a public exposure.
+              value: "0.0.0.0"
+            - name: AGDA_MCP_TEAM_INGEST_MAX_BYTES
+              value: "536870912"
+            - name: AGDA_MCP_TEAM_KEYS_PATH
+              value: /etc/agda-mcp-team/team-keys.json
+          volumeMounts:
+            - name: team-storage
+              mountPath: /data/team-uploads
+              subPath: agda-mcp/team-storage
+            - name: team-keys
+              mountPath: /etc/agda-mcp-team
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+      volumes:
+        - name: team-storage
+          persistentVolumeClaim:
+            # Reuse the existing PVC (do NOT create a new PVC) — see
+            # .claude/skills/agda-mcp-k8s-deploy/SKILL.md Verified Facts.
+            claimName: sciserver-datavolumes-01-rw
+        - name: team-keys
+          secret:
+            secretName: agda-mcp-team-keys
+            defaultMode: 0400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agda-mcp-ingest
+  namespace: llm-gateway
+  labels:
+    app: agda-mcp-ingest
+spec:
+  type: ClusterIP
+  selector:
+    app: agda-mcp-ingest
+  ports:
+    - port: 4000
+      targetPort: 4000
+      protocol: TCP
