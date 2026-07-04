@@ -18,11 +18,16 @@ import { decodeGoalDisplayResponses } from "../protocol/responses/goal-display.j
 import {
   decodeCaseSplitResponses,
   decodeGiveLikeResponse,
+  hasReplacementText,
   resolveGiveReplacementText,
 } from "../protocol/responses/proof-actions.js";
 import { decodeDisplayInfoEvents } from "../protocol/responses/display-info.js";
 import { decodeLoadDisplayResponses } from "../protocol/responses/load-display.js";
 import { decodeGoalExpressionDisplayResponses } from "../protocol/responses/goal-expression-display.js";
+import {
+  displayInfoResponseSchema,
+  parseResponseWithSchema,
+} from "../protocol/response-schemas.js";
 import {
   goalCommand,
   modeGoalCommand,
@@ -31,6 +36,29 @@ import {
   rewriteGoalCommand,
 } from "../protocol/command-builder.js";
 import { throwOnFatalProtocolStderr } from "./protocol-errors.js";
+
+/**
+ * Scan `responses` for an Agda-reported Error DisplayInfo — the same
+ * `info.kind === "Error"` idiom used by parse-load-responses.ts and
+ * src/protocol/responses/backend.ts. Returns the decoded error text,
+ * or null when no Error display is present.
+ *
+ * give() uses this because an ill-typed expression arrives as a
+ * normal DisplayInfo response, not a fatal stderr line —
+ * throwOnFatalProtocolStderr never sees it (fingerprint
+ * bfcba437f5426fd6).
+ */
+function detectResponseError(responses: AgdaResponse[]): string | null {
+  for (const resp of responses) {
+    if (resp.kind !== "DisplayInfo") continue;
+    const display = parseResponseWithSchema(displayInfoResponseSchema, resp);
+    if (!display) continue;
+    if (display.info.kind === "Error") {
+      return decodeDisplayInfoEvents([resp]).at(-1)?.text ?? "";
+    }
+  }
+  return null;
+}
 
 /** Get the type and local context for a specific goal. */
 export async function goalTypeContext(
@@ -103,7 +131,18 @@ export async function caseSplit(
   return { clauses: decodeCaseSplitResponses(responses) };
 }
 
-/** Give (fill) a goal with an expression. */
+/**
+ * Give (fill) a goal with an expression.
+ *
+ * An ill-typed `expr` is rejected by Agda via a normal DisplayInfo
+ * response, not a thrown protocol error — `rejected`/`rejectionText`
+ * surface that outcome so callers (agda_give) can report ok:false
+ * instead of silently wrapping the rejection text in a success
+ * envelope (fingerprint bfcba437f5426fd6). A rejection requires BOTH
+ * an Error display AND no confirmed replacement text — a successful
+ * give that merely emitted an unrelated warning display must not be
+ * misclassified as rejected.
+ */
 export async function give(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -115,9 +154,14 @@ export async function give(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
+  const replacementText = resolveGiveReplacementText(responses, expr);
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
-    replacementText: resolveGiveReplacementText(responses, expr),
+    replacementText,
+    rejected,
+    rejectionText: rejected ? errorText : null,
   };
 }
 

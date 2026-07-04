@@ -40,6 +40,7 @@ export {
 
 export {
   ToolInvocationError,
+  giveRejectedError,
   makeTextToolErrorResult,
   missingPathToolError,
   toToolInvocationError,
