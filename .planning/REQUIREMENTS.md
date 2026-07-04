@@ -35,13 +35,13 @@ Note: the former CACHE theme (build script, image cache prebake, cluster build j
 
 ### Residual Debt Sweep (DEBT) — from `milestones/v1.0-MILESTONE-AUDIT.md`
 
-- [ ] **DEBT-01**: `scripts/verify-cold-replay.mjs` is resolved: deleted (default — superseded by ORCL-01, zero importers) or hardened per unexecuted plan 01-07 (CR-01 path traversal, CR-02 false-PASS); the decision and evidence are recorded.
-- [ ] **DEBT-02**: The dead-ended `.agda-mcp/captures/index.json` write in `promote-capture.mjs` is retired and its stale header comment fixed (W1 — Phase 4 repointed `readDedupIndex` to the fix queue).
-- [ ] **DEBT-03**: WR-01 durability edge: `resetRecordedActions()` moves to after successful `writeFileAtomic` in `register-capture-session.ts`.
-- [ ] **DEBT-04**: Phase-5 Info findings fixed: IN-01 argv/run-id sanitization; IN-02 dangling-symlink handling in `install-dogfood-skill.mjs`; IN-04 `git check-ignore` exit-status ambiguity in its test; IN-05 wrapup catch-handler re-dereference.
-- [ ] **DEBT-05**: Retroactive security review (`/gsd:secure-phase` → SECURITY.md) covering Phase 5's process-spawning scripts and extended to v1.1's new network surfaces (ingest endpoint, upload client).
-- [ ] **DEBT-06**: `tsc -p tsconfig.test.json` seam errors fixed (ReplayManifest index signatures, `structuredContent` unknown) — the `.mjs` ↔ `.ts` fixture seams get compile-time enforcement.
-- [ ] **DEBT-07**: `.planning/codebase/` map refreshed (24 drifted structural elements) via `/gsd:map-codebase`.
+- [x] **DEBT-01**: `scripts/verify-cold-replay.mjs` is resolved: deleted (default — superseded by ORCL-01, zero importers) or hardened per unexecuted plan 01-07 (CR-01 path traversal, CR-02 false-PASS); the decision and evidence are recorded.
+- [x] **DEBT-02**: The dead-ended `.agda-mcp/captures/index.json` write in `promote-capture.mjs` is retired and its stale header comment fixed (W1 — Phase 4 repointed `readDedupIndex` to the fix queue).
+- [x] **DEBT-03**: WR-01 durability edge: `resetRecordedActions()` moves to after successful `writeFileAtomic` in `register-capture-session.ts`.
+- [x] **DEBT-04**: Phase-5 Info findings fixed: IN-01 argv/run-id sanitization; IN-02 dangling-symlink handling in `install-dogfood-skill.mjs`; IN-04 `git check-ignore` exit-status ambiguity in its test; IN-05 wrapup catch-handler re-dereference.
+- [x] **DEBT-05**: Retroactive security review (`/gsd:secure-phase` → SECURITY.md) covering Phase 5's process-spawning scripts and extended to v1.1's new network surfaces (ingest endpoint, upload client).
+- [x] **DEBT-06**: `tsc -p tsconfig.test.json` seam errors fixed (ReplayManifest index signatures, `structuredContent` unknown) — the `.mjs` ↔ `.ts` fixture seams get compile-time enforcement.
+- [x] **DEBT-07**: `.planning/codebase/` map refreshed (24 drifted structural elements) via `/gsd:map-codebase`.
 
 ## v2 Requirements
 
@@ -92,13 +92,13 @@ The entire theme was removed from v1.1 after a consumer audit found zero v1.1 us
 | E2E-01 | Phase 7 | Complete |
 | TEAM-05 | Phase 8 | Pending |
 | DEPLOY-01 | Phase 8 | Pending |
-| DEBT-01 | Phase 9 | Pending |
-| DEBT-02 | Phase 9 | Pending |
-| DEBT-03 | Phase 9 | Pending |
-| DEBT-04 | Phase 9 | Pending |
-| DEBT-05 | Phase 9 | Pending |
-| DEBT-06 | Phase 9 | Pending |
-| DEBT-07 | Phase 9 | Pending |
+| DEBT-01 | Phase 9 | Complete |
+| DEBT-02 | Phase 9 | Complete |
+| DEBT-03 | Phase 9 | Complete |
+| DEBT-04 | Phase 9 | Complete |
+| DEBT-05 | Phase 9 | Complete |
+| DEBT-06 | Phase 9 | Complete |
+| DEBT-07 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total
