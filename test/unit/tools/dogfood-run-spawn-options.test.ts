@@ -1,19 +1,21 @@
 // MIT License — see LICENSE
 //
 // Unit tests for scripts/dogfood/dogfood-run.mjs's pure,
-// side-effect-free functions — buildDogfoodChildOptions and
-// computeProxyExitCode (no dependency injection or mocking needed) —
-// plus the #39 source-text invariant: this proxy must never import
-// AgdaSession. Mirrors test/unit/tools/queue-intake.test.ts's shape
-// (no temp dirs needed here since neither function touches the
-// filesystem).
+// side-effect-free functions — buildDogfoodChildOptions,
+// computeProxyExitCode, and parseDogfoodArgv (no dependency injection
+// or mocking needed) — plus the #39 source-text invariant: this proxy
+// must never import AgdaSession. Mirrors test/unit/tools/queue-intake.
+// test.ts's shape (no temp dirs needed here since none of these
+// functions touch the filesystem). parseDogfoodArgv's own tests cover
+// IN-01: a flag-shaped or path-traversing --run-id value must be
+// rejected before it is ever joined into a filesystem path.
 
 import { expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
-import { buildDogfoodChildOptions, computeProxyExitCode } from "../../../scripts/dogfood/dogfood-run.mjs";
+import { buildDogfoodChildOptions, computeProxyExitCode, parseDogfoodArgv } from "../../../scripts/dogfood/dogfood-run.mjs";
 import { SERVER_REPO_ROOT } from "../../../src/repo-root.js";
 
 const DOGFOOD_RUN_PATH = join(SERVER_REPO_ROOT, "scripts", "dogfood", "dogfood-run.mjs");
@@ -169,6 +171,21 @@ test("computeProxyExitCode: a child that exited on its own passes its exit code 
       proxyKilledChild: false,
     }),
   ).toBe(3);
+});
+
+// ── Behavior 7: IN-01 — parseDogfoodArgv rejects a flag-shaped/path-traversing --run-id ──
+
+test("parseDogfoodArgv throws when --run-id's value is flag-shaped (a missing value silently swallowing the next flag)", () => {
+  expect(() => parseDogfoodArgv(["--run-id", "--corpus-root"])).toThrow(/invalid --run-id/);
+});
+
+test("parseDogfoodArgv throws when --run-id's value could escape the runs root via a path separator", () => {
+  expect(() => parseDogfoodArgv(["--run-id", "../escape-attempt"])).toThrow(/invalid --run-id/);
+});
+
+test("parseDogfoodArgv accepts a normal --run-id value unchanged", () => {
+  const result = parseDogfoodArgv(["--run-id", "my-run-1"]);
+  expect(result.runId).toBe("my-run-1");
 });
 
 test("computeProxyExitCode: a still-UNCONFIRMED child at report time (no code, no signal, no failure) now exits 1, never a false-clean 0 (WR-07, from-RED)", () => {

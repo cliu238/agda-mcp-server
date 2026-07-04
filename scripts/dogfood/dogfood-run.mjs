@@ -98,11 +98,31 @@ export function buildDogfoodChildOptions({ corpusRoot, extraEnv = {} }) {
   };
 }
 
+/**
+ * IN-01: a `--run-id`/positional run-id value is joined unvalidated
+ * into a filesystem path (`join(resolveRunsRoot(), runId)` below, and
+ * again in dogfood-wrapup.mjs) — reject anything that looks like an
+ * accidentally-swallowed flag token (a missing value silently
+ * consuming the NEXT flag, e.g. `--run-id --corpus-root`) or that
+ * could escape the runs root once joined (a leading "..", or an
+ * embedded "/"/"\\" path separator).
+ */
+function assertSafeRunId(runId) {
+  if (runId.startsWith("--") || runId.includes("/") || runId.includes("\\") || runId === "." || runId === "..") {
+    throw new Error(
+      `invalid --run-id value "${runId}": must not start with "--" or contain a path separator`,
+    );
+  }
+}
+
 /** Extracts `--manifest <path>`, `--corpus-root <path>`, and an
  *  optional `--run-id <id>` from a flat `--flag value` argv array.
- *  Validation happens in `scriptMain`, not here — `manifestPath`/
- *  `corpusRoot` may come back `undefined`. */
-function parseDogfoodArgv(argv) {
+ *  Presence validation (`--corpus-root` required) happens in
+ *  `scriptMain`, not here — `manifestPath`/`corpusRoot` may come back
+ *  `undefined`. The resolved run-id's FORMAT (IN-01) is validated
+ *  here, unconditionally, whether it came from an explicit `--run-id`
+ *  or the generated default below. */
+export function parseDogfoodArgv(argv) {
   let manifestPath;
   let corpusRoot;
   let runId;
@@ -126,6 +146,8 @@ function parseDogfoodArgv(argv) {
     // (an 8-char randomUUID slice) default run id.
     runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
   }
+
+  assertSafeRunId(runId);
 
   return { manifestPath, corpusRoot, runId };
 }
@@ -573,7 +595,19 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
 }
 
 export async function scriptMain(argv = process.argv.slice(2)) {
-  const { manifestPath, corpusRoot, runId } = parseDogfoodArgv(argv);
+  let parsedArgs;
+  try {
+    // IN-01: parseDogfoodArgv now throws on a flag-shaped/path-
+    // traversing --run-id value — surfaced here the same way every
+    // other pre-flight failure in this function is, never a raw
+    // stack trace.
+    parsedArgs = parseDogfoodArgv(argv);
+  } catch (err) {
+    process.stderr.write(`dogfood-run: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const { manifestPath, corpusRoot, runId } = parsedArgs;
 
   if (!corpusRoot) {
     process.stderr.write(

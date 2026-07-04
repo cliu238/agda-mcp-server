@@ -422,6 +422,23 @@ export function checkReportFinalized(report, runId) {
   return true;
 }
 
+/**
+ * IN-01: a positional run-id value is joined unvalidated into a
+ * filesystem path (`join(resolveRunsRoot(), runId)` below, and again
+ * in dogfood-run.mjs) — reject anything that looks like an
+ * accidentally-swallowed flag token (e.g. running this CLI with only
+ * `--rerun-n 3` and no runId at all lets "--rerun-n" itself land in
+ * the positional runId slot) or that could escape the runs root once
+ * joined (a leading "..", or an embedded "/"/"\\" path separator).
+ */
+function assertSafeRunId(runId) {
+  if (runId.startsWith("--") || runId.includes("/") || runId.includes("\\") || runId === "." || runId === "..") {
+    throw new Error(
+      `invalid run-id "${runId}": must not start with "--" or contain a path separator`,
+    );
+  }
+}
+
 /** Extracts `--rerun-n <N>` / `--queue-path <path>` / `--policy <key>`
  *  from a flat `--flag value` argv array, positional arg 0 = runId.
  *  Throws on a non-positive-integer rerun count: a typo'd env var or a
@@ -430,9 +447,15 @@ export function checkReportFinalized(report, runId) {
  *  loop would classify every deterministic candidate as "flaky" on an
  *  EMPTY observation list and silently unfile it. `--policy`'s value
  *  is returned as-is (no validation beyond string presence) —
- *  `resolvePolicyStrict` (Task 1) owns key validation. */
-function parseWrapupArgv(argv) {
+ *  `resolvePolicyStrict` (Task 1) owns key validation. A present
+ *  runId's FORMAT (IN-01) is validated unconditionally; an absent
+ *  (`undefined`) runId is left for `scriptMain`'s own usage-message
+ *  branch to handle. */
+export function parseWrapupArgv(argv) {
   const runId = argv[0];
+  if (runId !== undefined) {
+    assertSafeRunId(runId);
+  }
 
   const rerunNFlagIndex = argv.indexOf("--rerun-n");
   const rerunNRaw =
