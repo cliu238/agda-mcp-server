@@ -68,3 +68,54 @@ test("agda_auto rejects a flag-shaped hint before calling session.goal.autoOne",
   expect(result.content[0].text).toMatch(/-t 999999/u);
   expect(autoOne).not.toHaveBeenCalled();
 });
+
+// ── T-06-13: agda_give must surface an Agda rejection as ok:false ──
+
+test("agda_give surfaces a rejected expression as ok:false / give-rejected", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const rejectionText =
+    "1.1-5: error: [UnequalTerms]\nBool !=< Nat\nwhen checking that the expression zero has type Bool";
+  const give = vi.fn().mockResolvedValue({
+    result: rejectionText,
+    replacementText: null,
+    rejected: true,
+    rejectionText,
+  });
+  const session = fakeSession({ give });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  const result = await server.get("agda_give")!.callback({
+    goalId: 0,
+    expr: "zero",
+    writeToFile: false,
+  });
+
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent.classification).toBe("give-rejected");
+  expect(result.structuredContent.diagnostics[0].message).toContain("UnequalTerms");
+  expect(result.structuredContent.data.result).toContain("UnequalTerms");
+});
+
+test("agda_give still returns an ok envelope for an accepted expression", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const give = vi.fn().mockResolvedValue({
+    result: "Term accepted",
+    replacementText: "true",
+    rejected: false,
+    rejectionText: null,
+  });
+  const session = fakeSession({ give });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  const result = await server.get("agda_give")!.callback({
+    goalId: 0,
+    expr: "true",
+    writeToFile: false,
+  });
+
+  expect(result.isError).toBe(false);
+  expect(result.structuredContent.classification).toBe("ok");
+  expect(result.structuredContent.data.replacementText).toBe("true");
+});
