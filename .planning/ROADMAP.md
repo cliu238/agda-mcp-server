@@ -49,8 +49,8 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — POLICY-01: --policy passthrough (run-oracle + wrapup), case-exact loud-fail resolution, real-CHG regression test (ubuntu-latest CI gate)
-- [ ] 06-02-PLAN.md — REVERIFY-01: RT1-RT4 re-verified live through dogfood-run -> capture -> dogfood-wrapup; queue transitions + evidence report
+- [x] 06-01-PLAN.md — POLICY-01: --policy passthrough (run-oracle + wrapup), case-exact loud-fail resolution, real-CHG regression test (ubuntu-latest CI gate)
+- [x] 06-02-PLAN.md — REVERIFY-01: RT1-RT4 re-verified live through dogfood-run -> capture -> dogfood-wrapup; queue transitions + evidence report
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -123,7 +123,7 @@ Plans:
 | 03.1 Flagship false-green fix | v1.0 | 2/2 | Complete | 2026-07-02 |
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
-| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 0/6 | Not started | - |
+| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 2/6 | In Progress|  |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
