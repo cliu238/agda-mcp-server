@@ -1,7 +1,7 @@
 ---
 phase: 09
 slug: residual-v1-0-debt-sweep
-status: draft
+status: verified
 threats_open: 0
 asvs_level: 1
 created: 2026-07-04
@@ -90,7 +90,7 @@ Every threat below was already identified, mitigated, and verified during Phase 
 
 | Risk ID | Threat Ref | Rationale | Accepted By | Date |
 |---------|------------|-----------|-------------|------|
-| AR-01 | T-07-20 | Git write-back credential scope: Phase 7 runs with the operator's own already-trusted local git credential (repo push access to `main`), accepted for **local mode only**. Carried forward verbatim from the source row's own words: "D-01 explicitly notes Phase 8 must scope a service credential minimally (fine-grained PAT/deploy key) — flagged for that phase's DEBT-05 security review, not re-litigated here." **This remains OPEN for Phase 8's k8s deployment (the JHU k8s ingest/cache-build server) — not resolved by this consolidation.** Phase 8's own DEBT-05-equivalent review must scope its service credential before assuming any git-write-back capability. | Phase 7 planning (07-05-PLAN.md); re-affirmed by Phase 9 consolidation | 2026-07-04 |
+| AR-01 | T-07-20 | Git write-back credential scope: Phase 7 runs with the operator's own already-trusted local git credential (repo push access to `main`), accepted for **local mode only**. Carried forward verbatim from the source row's own words: "D-01 explicitly notes Phase 8 must scope a service credential minimally (fine-grained PAT/deploy key) — flagged for that phase's DEBT-05 security review, not re-litigated here." **This remains OPEN for Phase 8's k8s deployment (the JHU k8s ingest/cache-build server) — not resolved by this consolidation.** Phase 8's own equivalent-to-DEBT-05 review must scope its service credential before assuming any git-write-back capability. | Phase 7 planning (07-05-PLAN.md); re-affirmed by Phase 9 consolidation | 2026-07-04 |
 | AR-02 | T-07-08b | Plaintext `AGDA_MCP_TEAM_UPLOAD_KEY` stored in retry-queue NDJSON entries (`scripts/dogfood/upload-run.mjs`) shares T-07-08's already-accepted local, single-user, full-fidelity trust boundary (trusted internal team, one-time consent). Explicitly re-affirmed per 07-02-SUMMARY.md's own Threat Flags note that the original plan's literal field list did not name `key`. | Phase 9 consolidation (this document) | 2026-07-04 |
 
 *Accepted risks do not resurface in future audit runs.*
@@ -101,7 +101,9 @@ Every threat below was already identified, mitigated, and verified during Phase 
 
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
-| {YYYY-MM-DD} | {N} | {N} | {N} | {name / agent} |
+| 2026-07-04 | 40 | 40 | 0 | Claude (DEBT-05 consolidation, Phase 9) |
+
+*Threats Total = 14 Phase-5 rows + 26 Phase-7 rows (25 original, including T-07-SC, + the newly-named T-07-08b widening). Verified via an explicit source-to-output threat-ID diff (see Source Documents below) — zero source IDs missing from this register.*
 
 ---
 
@@ -116,9 +118,9 @@ Every threat below was already identified, mitigated, and verified during Phase 
 
 ## Sign-Off
 
-- [ ] All threats have a disposition (mitigate / accept / transfer)
-- [ ] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed
-- [ ] `status: verified` set in frontmatter
+- [x] All threats have a disposition (mitigate / accept / transfer)
+- [x] Accepted risks documented in Accepted Risks Log
+- [x] `threats_open: 0` confirmed
+- [x] `status: verified` set in frontmatter
 
-**Approval:** pending
+**Approval:** verified 2026-07-04
