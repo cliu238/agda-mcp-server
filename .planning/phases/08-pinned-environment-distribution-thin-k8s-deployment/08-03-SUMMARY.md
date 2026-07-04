@@ -128,3 +128,12 @@ None - no external service configuration required. (The plan's own upload-key se
 ---
 *Phase: 08-pinned-environment-distribution-thin-k8s-deployment*
 *Completed: 2026-07-04*
+
+## Self-Check: PASSED
+
+- FOUND: docs/TEAM-ONBOARDING.md
+- FOUND: test/integration/team/team-onboarding-walkthrough.test.ts
+- FOUND: .planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/08-03-SUMMARY.md
+- FOUND commit: babd7ec (Task 1)
+- FOUND commit: 17fabaa (Task 2)
+- FOUND commit: b0012fa (Summary)
