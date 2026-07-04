@@ -160,24 +160,35 @@ export function resolveCronPolicyKey(taskManifestCorpora) {
  *      archive's own permanent on-disk location (this function's caller
  *      never deletes it) plus the in-archive-relative path.
  *
- *  (2) CR-01: refuses to let an automated, unattended write-back regress
- *      an existing locked/rejected entry's status (or clear its
- *      closedAt/matrixEntryId) via a colliding, attacker-influenced
- *      dedup.fingerprint — publicly-visible fingerprints like this
- *      queue's own locked flagship entry make this trivially targetable
- *      by anyone holding a valid upload key. A collision against a
- *      terminal entry is NEVER a silent skip and NEVER a silent
- *      overwrite: it is refused with a loud stderr warning, the existing
- *      entry is left untouched except for one new evidence note appended
- *      to its own `notes` field (a metadata-only upsertQueueEntry call,
- *      bumpRecurrence:false — the SAME annotation idiom this module
- *      already uses for its version-skew note below), and
- *      `conflictState.conflict` is flipped so processArchive's own
- *      per-capture result records classification:"terminal-conflict"
- *      instead of a genuine filing — surfaced in the run summary via
- *      summarizeArchiveResults, never silently reported as `filed`. The
- *      frozen fix-queue schema gains no new status value, only a
- *      free-text annotation the schema already allows.
+ *  (2) CR-01: refuses to let an automated, unattended write-back touch
+ *      ANY existing entry a human has already looked at — the fix-queue
+ *      status enum (test/fixtures/fix-queue.ts) has exactly ONE value
+ *      ("new") that means "never yet touched by a human"; every other
+ *      value (triaged/fixing/locked/rejected) means a human review has
+ *      already happened (this project's own Phase-4 checkpoint —
+ *      dogfood-wrapup.mjs's header: "new -> triaged" IS the human
+ *      review point), so ALL four are equally protected, not just the
+ *      two terminal ones. Iteration 2's re-review reproduced the
+ *      narrower locked/rejected-only guard being bypassed end to end
+ *      against a "triaged" entry: a colliding, attacker-influenced
+ *      dedup.fingerprint silently reverted its status back to "new",
+ *      wiped its triageClass, and overwrote its title/summary/
+ *      capturePath/verdictPath — publicly-visible fingerprints (this
+ *      queue's own tracked JSON) make any post-"new" entry equally
+ *      targetable by anyone holding a valid upload key. A collision
+ *      against a protected entry is NEVER a silent skip and NEVER a
+ *      silent overwrite: it is refused with a loud stderr warning, the
+ *      existing entry is left completely untouched except for one new
+ *      evidence note appended to its own `notes` field (a metadata-only
+ *      upsertQueueEntry call, bumpRecurrence:false — the SAME
+ *      annotation idiom this module already uses for its version-skew
+ *      note below), and `conflictState.conflict` is flipped so
+ *      processArchive's own per-capture result records
+ *      classification:"terminal-conflict" instead of a genuine filing —
+ *      surfaced in the run summary via summarizeArchiveResults, never
+ *      silently reported as `filed`. The frozen fix-queue schema gains
+ *      no new status value, only a free-text annotation the schema
+ *      already allows.
  */
 function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, stableCapturePath, stableVerdictPath, conflictState }) {
   return async (entryData, targetQueueJsonPath, options) => {
@@ -191,25 +202,50 @@ function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, stableCapturePa
       : entryData;
 
     const existing = readQueueFile(effectiveQueueJsonPath).find((entry) => entry.fingerprint === rewritten.fingerprint);
-    const isTerminal = existing?.status === "locked" || existing?.status === "rejected";
-    const attemptsRegression = isTerminal && rewritten.status !== undefined && rewritten.status !== existing.status;
+    // CR-01 (iteration 2 residual): this used to check ONLY
+    // existing?.status === "locked" || "rejected", which left
+    // "triaged"/"fixing" entries — currently under ACTIVE human
+    // review — completely unprotected against the identical attack
+    // (reproduced end to end by the re-review: a colliding fingerprint
+    // silently reverted a "triaged" entry to "new", wiped triageClass,
+    // and overwrote title/summary/capturePath/verdictPath, reported as
+    // a genuine filed:true rather than even being flagged as a
+    // conflict). The fix-queue's own status enum
+    // (test/fixtures/fix-queue.ts) has exactly ONE value ("new") that
+    // means "never yet touched by a human" — every other value means a
+    // human has already looked at this entry, so the correct guard is
+    // "protect everything except new", not an enumerated allow-list of
+    // terminal statuses.
+    //
+    // Gated on isFilingCall alone — NOT on whether the incoming status
+    // happens to literally differ from the existing one: the ONE real
+    // caller of this wrapped function (wrapUpCapture's own filing call,
+    // ALWAYS capturePath-bearing and ALWAYS status:"new" per
+    // buildQueueEntryFromVerdict) can never legitimately need to write
+    // over a protected entry at all, so ANY filing collision against
+    // one is refused — never only the subset whose incoming status
+    // happens to differ, which would otherwise leave a field-only
+    // overwrite (title/summary/capturePath/verdictPath, same status)
+    // unprotected.
+    const isProtected = existing !== undefined && existing.status !== "new";
+    const attemptsRegression = isProtected && isFilingCall;
 
     if (attemptsRegression) {
       process.stderr.write(
-        `cron-ingest-wrapup: SECURITY WARNING — refusing to move fix-queue entry ${rewritten.fingerprint} `
-          + `(currently "${existing.status}") to status "${rewritten.status}" via an unattended cron write-back; `
-          + "a colliding dedup.fingerprint from an untrusted archive must never silently reopen a "
-          + "locked/rejected defect. The existing entry is left unchanged; this conflict is recorded on it "
-          + "and counted in the run summary instead.\n",
+        `cron-ingest-wrapup: SECURITY WARNING — refusing to write fix-queue entry ${rewritten.fingerprint} `
+          + `(currently "${existing.status}") via an unattended cron write-back; a colliding `
+          + "dedup.fingerprint from an untrusted archive must never silently regress an entry a human has "
+          + "already triaged, started fixing, locked, or rejected. The existing entry is left unchanged; "
+          + "this conflict is recorded on it and counted in the run summary instead.\n",
       );
       await realUpsertFn(
         {
           fingerprint: rewritten.fingerprint,
           notes: `${existing.notes ? `${existing.notes} ` : ""}CONFLICT ${new Date().toISOString()}: an `
             + `unattended cron write-back (candidate capturePath ${rewritten.capturePath ?? "n/a"}) attempted to `
-            + `move this "${existing.status}" entry to status "${rewritten.status}" via a colliding `
-            + "dedup.fingerprint; the attempt was refused and this entry's own status/closedAt/matrixEntryId "
-            + "were left untouched.",
+            + `write over this "${existing.status}" entry (candidate status "${rewritten.status}") via a `
+            + "colliding dedup.fingerprint; the attempt was refused and this entry's own fields were left "
+            + "untouched.",
         },
         effectiveQueueJsonPath,
         { bumpRecurrence: false },

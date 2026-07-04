@@ -565,6 +565,115 @@ test("processArchive: a colliding fingerprint against a REJECTED entry is refuse
   expect(queueAfter[0].status).toBe("rejected");
 });
 
+// ── processArchive: CR-01 residual (iteration 2) — triaged/fixing ──────
+
+/** Mirrors lockedQueueEntry's shape for a NON-terminal, actively
+ *  human-reviewed status ("triaged"/"fixing") — the exact iteration-2
+ *  re-review reproduction: a human has already classified this entry
+ *  (non-null triageClass/triageConfidence) but it is not yet
+ *  locked/rejected. `triageClass` must be a real fixQueueEntrySchema
+ *  enum value (`test/fixtures/fix-queue.ts`) since the CR-01 conflict
+ *  annotation's own write-back re-validates the full merged entry via
+ *  `upsertQueueEntry` -> `fixQueueEntrySchema.parse`. */
+function triagedQueueEntry(overrides: Record<string, unknown> = {}) {
+  return {
+    fingerprint: "triaged-fp-cr01",
+    status: "triaged",
+    defectKind: "false-green",
+    triageClass: "proof-obligation",
+    triageConfidence: 0.9,
+    recurrence: 1,
+    title: "A human already triaged this real defect",
+    summary: "A real, previously-triaged defect awaiting a fix.",
+    affectedTool: "agda_load",
+    capturePath: "/human/verified/capture.json",
+    verdictPath: "/human/verified/capture.verdict.json",
+    matrixEntryId: "matrix-triaged-entry",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    closedAt: null,
+    ...overrides,
+  };
+}
+
+test("processArchive: a colliding dedup.fingerprint from an untrusted archive is REFUSED against a TRIAGED entry — status/triageClass/title/capturePath all survive unchanged, never reverts to \"new\" (CR-01 residual, from-RED)", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  writeFileSync(queueJsonPath, JSON.stringify([triagedQueueEntry()], null, 2), "utf8");
+
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: ["/uploader/only/staged/triaged-attack-capture.json"],
+    artifacts: { "triaged-attack-capture.json": baseArtifact({ fingerprint: "triaged-fp-cr01" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+  // Assert BEFORE mockRestore() — see note on the locked-entry test above.
+  expect(stderrSpy).toHaveBeenCalled();
+  stderrSpy.mockRestore();
+
+  // Never reported as a genuine filing.
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].filed).toBe(false);
+  expect(result.results[0].classification).toBe("terminal-conflict");
+
+  // The EXACT iteration-2 re-review reproduction: pre-fix, this
+  // collision silently reverted status "triaged" -> "new", wiped
+  // triageClass to null, and overwrote title/capturePath/verdictPath
+  // with attacker/oracle-derived content. Byte-for-byte survival now.
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(queueAfter).toHaveLength(1);
+  expect(queueAfter[0].status).toBe("triaged");
+  expect(queueAfter[0].triageClass).toBe("proof-obligation");
+  expect(queueAfter[0].triageConfidence).toBe(0.9);
+  expect(queueAfter[0].title).toBe("A human already triaged this real defect");
+  expect(queueAfter[0].capturePath).toBe("/human/verified/capture.json");
+  expect(queueAfter[0].verdictPath).toBe("/human/verified/capture.verdict.json");
+  expect(queueAfter[0].recurrence).toBe(1);
+  // Loud: a new evidence note IS appended, and the run summary tallies it.
+  expect(queueAfter[0].notes).toContain("CONFLICT");
+  expect(summarizeArchiveResults(1, [result]).terminalConflicts).toBe(1);
+});
+
+test("processArchive: a colliding fingerprint against a FIXING entry is refused the same way as triaged/locked/rejected (CR-01 residual)", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  writeFileSync(
+    queueJsonPath,
+    JSON.stringify([triagedQueueEntry({ fingerprint: "fixing-fp-cr01", status: "fixing" })], null, 2),
+    "utf8",
+  );
+
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: ["/uploader/fixing-attack.json"],
+    artifacts: { "fixing-attack.json": baseArtifact({ fingerprint: "fixing-fp-cr01" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+  stderrSpy.mockRestore();
+
+  expect(result.results[0].filed).toBe(false);
+  expect(result.results[0].classification).toBe("terminal-conflict");
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  expect(queueAfter[0].status).toBe("fixing");
+});
+
 test("processArchive: a NON-colliding (brand-new fingerprint) filing is unaffected by the CR-01 guard and still succeeds", async () => {
   const queueJsonPath = throwawayQueuePath();
   writeFileSync(queueJsonPath, JSON.stringify([lockedQueueEntry()], null, 2), "utf8");
