@@ -42,7 +42,7 @@ afterEach(() => {
 
 test("chainUploadRun spawns npx tsx against the sibling upload-run.mjs with runId as the argument, shell:false", () => {
   const fakeChild = makeFakeChild();
-  const spawnFn = vi.fn(() => fakeChild);
+  const spawnFn = vi.fn((_command: string, _args: string[], _options: { shell?: boolean }) => fakeChild);
 
   const resultPromise = chainUploadRun("run-123", { deps: { spawn: spawnFn } });
 

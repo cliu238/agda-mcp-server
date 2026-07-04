@@ -16,7 +16,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   acquireRetryQueueLock,
   appendRetryQueueEntry,
@@ -33,6 +32,7 @@ import {
   runUploadForRun,
   scriptMain,
   uploadArchive,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/dogfood/upload-run.mjs";
 
 let tempDirs: string[] = [];
@@ -187,14 +187,14 @@ test("buildArchiveStaging: stages runs/<run-id>/*, captures/<basename>, and agen
   const report = writeRunFixture(runsRoot, runId, { stagedCaptures: [{ stagedPath: capturePath }] });
   writeFileSync(join(runsRoot, runId, "extra-artifact.txt"), "hello", "utf8");
 
-  const staged = await withEnvOverride({ AGDA_MCP_DOGFOOD_RUNS_ROOT: runsRoot }, () =>
+  const staged = (await withEnvOverride({ AGDA_MCP_DOGFOOD_RUNS_ROOT: runsRoot }, () =>
     buildArchiveStaging(runId, report, {
       deps: {
         selectClaudeCodeLogs: () => [claudeLogPath],
         selectCodexSessionLogs: () => [codexLogPath],
       },
     }),
-  );
+  )) as { stagingDir: string; cleanup: () => void };
 
   expect(existsSync(join(staged.stagingDir, "runs", runId, "run-report.json"))).toBe(true);
   expect(existsSync(join(staged.stagingDir, "runs", runId, "extra-artifact.txt"))).toBe(true);
@@ -214,11 +214,11 @@ test("buildArchiveStaging: a missing capture file or run directory is logged and
   });
 
   const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  const staged = await withEnvOverride({ AGDA_MCP_DOGFOOD_RUNS_ROOT: runsRoot }, () =>
+  const staged = (await withEnvOverride({ AGDA_MCP_DOGFOOD_RUNS_ROOT: runsRoot }, () =>
     buildArchiveStaging(runId, report, {
       deps: { selectClaudeCodeLogs: () => [], selectCodexSessionLogs: () => [] },
     }),
-  );
+  )) as { stagingDir: string; cleanup: () => void };
   stderrSpy.mockRestore();
 
   expect(existsSync(join(staged.stagingDir, "runs", runId, "run-report.json"))).toBe(true);
@@ -501,7 +501,7 @@ test("flushRetryQueue: drains 2 pending entries using each entry's own stored ke
     { queuePath, pendingDir, maxCount: 20, maxBytes: Number.MAX_SAFE_INTEGER },
   );
 
-  const fetchFn = vi.fn(async () => ({ ok: true, status: 200 }));
+  const fetchFn = vi.fn(async (_url: string, _init?: unknown) => ({ ok: true, status: 200 }));
   const result = await flushRetryQueue({ queuePath, deps: { fetch: fetchFn } });
 
   expect(result).toEqual({ flushed: 2, remaining: 0 });

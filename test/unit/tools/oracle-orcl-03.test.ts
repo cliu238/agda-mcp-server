@@ -17,19 +17,20 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// @ts-expect-error script module lacks types
 import {
   compareSignatures,
   judgeOrcl03,
   normalizeSignatureText,
   parseExpectedSignature,
   runColdInferAndCompare,
+  // @ts-expect-error script module lacks types
 } from "../../../scripts/oracle/orcl-03-conformance.mjs";
 
 import { AgdaSession } from "../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../src/agda/session-capture/manifest-builder.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../helpers/agda-version.js";
+import type { ReplayManifest } from "../../../src/agda/session-capture/artifact-types.js";
 
 const agdaVersion = detectAgdaVersion();
 const agdaAvailable = agdaVersion !== undefined;
@@ -68,14 +69,14 @@ function oracleSubstrateWith(expectedSignature: string | null): FakeOracleSubstr
 
 interface FakeArtifact {
   capturedAt: string;
-  manifest: Record<string, unknown>;
+  manifest: ReplayManifest;
   recordedActions: unknown[];
   oracleSubstrate: FakeOracleSubstrate | null;
   dedup: { kind: string; fingerprint: string; recurrence: number };
 }
 
 function baseArtifact(overrides: {
-  manifest?: Record<string, unknown>;
+  manifest?: Partial<ReplayManifest>;
   recordedActions?: unknown[];
   oracleSubstrate?: FakeOracleSubstrate | null;
 } = {}): FakeArtifact {

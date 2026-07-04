@@ -27,6 +27,7 @@ import { AgdaSession } from "../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../src/agda/session-capture/manifest-builder.js";
 import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
 import { detectAgdaVersion } from "../../helpers/agda-version.js";
+import type { ReplayManifest } from "../../../src/agda/session-capture/artifact-types.js";
 
 const agdaVersion = detectAgdaVersion();
 const agdaAvailable = agdaVersion !== undefined;
@@ -71,14 +72,14 @@ interface FakeDedup {
 
 interface FakeArtifact {
   capturedAt: string;
-  manifest: Record<string, unknown>;
+  manifest: ReplayManifest;
   recordedActions: unknown[];
   oracleSubstrate: FakeOracleSubstrate | null;
   dedup: FakeDedup;
 }
 
 function baseArtifact(overrides: {
-  manifest?: Record<string, unknown>;
+  manifest?: Partial<ReplayManifest>;
   recordedActions?: unknown[];
   oracleSubstrate?: FakeOracleSubstrate | null;
   dedup?: FakeDedup;
