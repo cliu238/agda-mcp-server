@@ -383,6 +383,45 @@ export async function chainUploadRun(runId, options = {}) {
   }
 }
 
+/**
+ * Fix-queue 0bc76d15c2fec8df's acceptance half: a `finalized:false`
+ * report (dogfood-run.mjs's OWN incremental checkpoint, never rewritten
+ * with `finalized:true` because the proxy died hard — a SIGKILL-class
+ * event with zero opportunity to run its own graceful finalize()) is
+ * NOT a reason to refuse the run. Every recorded action in it was
+ * durably written to disk BEFORE the proxy died, so it remains fully
+ * trustworthy evidence — only the run's own terminal exit metadata is
+ * unavailable. This must never be silent: prints a LOUD stderr warning
+ * (mirrors the existing no-policy warning's shape/tone immediately
+ * below) and returns `false` so the caller can also surface it in the
+ * persisted `wrapup-report.json` summary and the printed stdout line —
+ * three independent surfaces, per the "never silent" instruction.
+ *
+ * A report with no `finalized` field at all (every report written by
+ * dogfood-run.mjs before this fix landed) is treated as finalized —
+ * those runs only ever existed on disk because finalize() itself
+ * completed successfully; the field's ABSENCE is not evidence of a
+ * hard death, it just predates this schema addition.
+ *
+ * Exported and pure-ish (its only side effect is the stderr write) so
+ * it is directly unit-testable without invoking the full scriptMain
+ * CLI (which also unconditionally chains a real upload-run.mjs
+ * subprocess spawn).
+ */
+export function checkReportFinalized(report, runId) {
+  if (report?.finalized === false) {
+    process.stderr.write(
+      `dogfood-wrapup: WARNING — run ${runId}'s run-report.json is NOT finalized (finalized:false); `
+        + "the recording proxy likely died before it could shut down gracefully (e.g. a hard kill from "
+        + "its parent agent). The recorded actions below were written incrementally and remain trustworthy "
+        + "(they were persisted to disk before the proxy died) — but this run's own exit metadata is "
+        + "unavailable.\n",
+    );
+    return false;
+  }
+  return true;
+}
+
 /** Extracts `--rerun-n <N>` / `--queue-path <path>` / `--policy <key>`
  *  from a flat `--flag value` argv array, positional arg 0 = runId.
  *  Throws on a non-positive-integer rerun count: a typo'd env var or a
@@ -451,6 +490,7 @@ export async function scriptMain(argv = process.argv.slice(2)) {
   }
 
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  const reportFinalized = checkReportFinalized(report, runId);
   const flakyLogPath = join(runDir, "flaky-captures.jsonl");
   const stagedCaptures = Array.isArray(report.stagedCaptures) ? report.stagedCaptures : [];
   const policyKey = resolveWrapupPolicyKey({ policyFlag, manifestPath: report.manifestPath });
@@ -498,6 +538,12 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     queueJsonPath,
     n: rerunN,
     policyKey: policyKey ?? null,
+    // Fix-queue 0bc76d15c2fec8df: surfaced in the persisted summary
+    // (never only as a transient stderr line) so a later, unattended
+    // reader of wrapup-report.json can still tell this run's own exit
+    // metadata was never recorded, without re-reading run-report.json
+    // itself.
+    reportFinalized,
     totalCaptures: results.length,
     filed: results.filter((r) => r.filed).length,
     flaky: results.filter((r) => r.classification === "flaky").length,
@@ -515,7 +561,8 @@ export async function scriptMain(argv = process.argv.slice(2)) {
       + `${summary.filed} filed, ${summary.flaky} flaky, `
       + `${summary.replayInconclusive} replay-inconclusive, `
       + `${summary.notACandidate} not-a-candidate, ${summary.noPolicy} no-policy, `
-      + `${summary.errors} error(s).\n`,
+      + `${summary.errors} error(s).`
+      + `${reportFinalized ? "" : " [WARNING: run-report.json was not finalized -- proxy likely died hard]"}\n`,
   );
 
   if (summary.errors > 0) {

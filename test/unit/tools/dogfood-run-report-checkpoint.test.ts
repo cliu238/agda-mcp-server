@@ -16,12 +16,32 @@
 // test/integration/mcp/dogfood-proxy-passthrough.test.ts's own
 // invocation shape) and send it REAL SIGKILL/SIGTERM signals — the
 // same style test/unit/agda/process-termination.test.ts already uses
-// for signal-handling correctness elsewhere in this codebase. A
-// SIGKILL cannot be intercepted by definition, so the ONLY way to
-// verify the primary defense (incremental checkpointing) is to prove
-// the report file already exists on disk with the right shape at the
-// moment the signal lands — this suite does that for real, rather
-// than only asserting "our code would have run" in-process.
+// for signal-handling correctness elsewhere in this codebase.
+//
+// PROCESS-GROUP targeting is load-bearing, not cosmetic:
+// `node_modules/.bin/tsx` is itself a thin wrapper that spawns a
+// SEPARATE grandchild Node process (`--require preflight.cjs --import
+// loader.mjs scripts/dogfood/dogfood-run.mjs`) to actually run the
+// target script — verified empirically via `ps` during this suite's
+// own development (three real OS processes: the tsx wrapper, the
+// grandchild running dogfood-run.mjs's actual JS, and its own spawned
+// fake-mcp-child.mjs). Sending SIGKILL to ONLY the top-level spawned
+// PID (the wrapper) kills the wrapper, but the grandchild — running
+// every line of code this suite cares about — is merely orphaned: its
+// own stdin pipe (relayed through the now-dead wrapper) then sees a
+// GRACEFUL EOF, which the pre-existing `fromAgent.on("close",
+// finalize)` handler reacts to, letting a full graceful finalize() run
+// to completion. That is a real, useful resilience property, but it
+// is NOT the failure mode this defect is about: it would make this
+// suite pass even against code with no incremental checkpointing at
+// all, since the OLD close-triggered finalize() path is what would be
+// doing the work. To exercise the genuine "uncatchable, zero-grace"
+// scenario (Codex's own observed behavior — "no stdin close, no
+// signal catchable"), every proxy here is spawned `detached: true`
+// (its own process group) and killed via `process.kill(-pid,
+// signal)`, delivering the signal to the ENTIRE tree (wrapper +
+// grandchild + the grandchild's own fake-mcp-child) simultaneously,
+// with no cascade for any single process to react to.
 //
 // The proxy's own inner child is swapped for
 // test/fixtures/dogfood-fake-mcp-child.mjs via the test-only
@@ -43,6 +63,11 @@ const FAKE_CHILD_PATH = resolve(SERVER_REPO_ROOT, "test/fixtures/dogfood-fake-mc
 const DOGFOOD_RUN_PATH = resolve(SERVER_REPO_ROOT, "scripts/dogfood/dogfood-run.mjs");
 const TSX_BIN = resolve(SERVER_REPO_ROOT, "node_modules/.bin/tsx");
 
+// POSIX-only: process groups (negative-PID kill targeting) and POSIX
+// signal semantics are not meaningful on Windows the same way — mirrors
+// test/unit/agda/process-termination.test.ts's own `testPosix` gate.
+const testPosix = process.platform === "win32" ? test.skip : test;
+
 let tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -52,13 +77,27 @@ function makeTempDir(prefix: string): string {
 
 let spawnedChildren: ChildProcessWithoutNullStreams[] = [];
 
+/** Delivers `signal` to the ENTIRE process group rooted at `child`
+ *  (see the file-header comment for why a plain `child.kill()` — which
+ *  only targets the top-level tsx-wrapper PID — is not sufficient).
+ *  Swallows ESRCH (already-dead group) since this is also used for
+ *  best-effort cleanup in `afterEach`. */
+function killGroup(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  if (typeof child.pid !== "number") return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    // ESRCH (no such process/group) — already dead, nothing to do.
+  }
+}
+
 afterEach(async () => {
   // Belt-and-suspenders: a test that fails an assertion before reaching
-  // its own kill() call must never leak a live proxy process into
-  // later tests/the CI runner.
+  // its own kill() call must never leak a live proxy process (or its
+  // own grandchild/fake-mcp-child) into later tests/the CI runner.
   for (const child of spawnedChildren) {
     if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL");
+      killGroup(child, "SIGKILL");
     }
   }
   spawnedChildren = [];
@@ -105,6 +144,11 @@ function spawnProxy({
         AGDA_MCP_DOGFOOD_TEST_CHILD_ENTRY: FAKE_CHILD_PATH,
       },
       stdio: ["pipe", "pipe", "pipe"],
+      // New, own process group (setsid) — see file header. Every
+      // descendant this spawns (the tsx wrapper's own grandchild, and
+      // in turn ITS OWN spawned fake-mcp-child.mjs) inherits this same
+      // group, since none of them pass `detached` themselves.
+      detached: true,
     },
   ) as ChildProcessWithoutNullStreams;
   spawnedChildren.push(child);
@@ -165,7 +209,7 @@ function readReport(runsRoot: string, runId: string): Record<string, unknown> {
 
 // ── Test: initial checkpoint at startup ──────────────────────────────
 
-test(
+testPosix(
   "writes an initial run-report.json (finalized:false, zero tool calls) immediately at startup, before any tool call is made",
   async () => {
     const corpusRoot = makeTempDir("agda-mcp-checkpoint-corpus-startup-");
@@ -180,7 +224,7 @@ test(
     expect(report.finalized).toBe(false);
     expect(report.totalToolCalls).toBe(0);
 
-    child.kill("SIGKILL");
+    killGroup(child, "SIGKILL");
     await waitForExit(child);
   },
   10_000,
@@ -188,8 +232,8 @@ test(
 
 // ── Test (a): the primary SIGKILL defense ────────────────────────────
 
-test(
-  "a hard SIGKILL after one recorded action still leaves run-report.json on disk with finalized:false (the primary SIGKILL defense)",
+testPosix(
+  "a hard SIGKILL delivered to the whole process group after one recorded action still leaves run-report.json on disk with finalized:false (the primary SIGKILL defense)",
   async () => {
     const corpusRoot = makeTempDir("agda-mcp-checkpoint-corpus-sigkill-");
     const runsRoot = makeTempDir("agda-mcp-checkpoint-runs-sigkill-");
@@ -211,7 +255,7 @@ test(
       return readReport(runsRoot, runId).totalToolCalls === 1;
     });
 
-    child.kill("SIGKILL");
+    killGroup(child, "SIGKILL");
     await waitForExit(child);
 
     const report = readReport(runsRoot, runId);
@@ -223,8 +267,8 @@ test(
 
 // ── Test (b): the graceful SIGTERM path ──────────────────────────────
 
-test(
-  "a graceful SIGTERM finalizes the report (finalized:true) with exit metadata, after killing the still-live inner child",
+testPosix(
+  "a graceful SIGTERM delivered to the whole process group finalizes the report (finalized:true) with exit metadata",
   async () => {
     const corpusRoot = makeTempDir("agda-mcp-checkpoint-corpus-sigterm-");
     const runsRoot = makeTempDir("agda-mcp-checkpoint-runs-sigterm-");
@@ -235,7 +279,7 @@ test(
     await sendOneToolCall(child, 1);
     await waitFor(() => existsSync(join(runsRoot, runId, "run-report.json")));
 
-    child.kill("SIGTERM");
+    killGroup(child, "SIGTERM");
     const { code } = await waitForExit(child);
 
     const report = readReport(runsRoot, runId);

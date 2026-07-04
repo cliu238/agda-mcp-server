@@ -64,9 +64,19 @@ export function buildDogfoodChildOptions({ corpusRoot, extraEnv = {} }) {
     projectRoot: corpusRoot,
     extraEnv: { ...extraEnv, AGDA_MCP_CAPTURE: "1" },
   });
+  // Test-only override (mirrors transcript-writer.mjs's own
+  // AGDA_MCP_DOGFOOD_RUNS_ROOT precedent): substitutes a lightweight
+  // fixture script (test/fixtures/dogfood-fake-mcp-child.mjs) for the
+  // real dist/index.js child so the signal-handling regression suite
+  // (test/unit/tools/dogfood-run-report-checkpoint.test.ts) can spawn
+  // dogfood-run.mjs as a genuine OS subprocess and exercise real
+  // SIGKILL/SIGTERM delivery without needing a real Agda binary or a
+  // full `npm run build`. Unset in every real dogfooding invocation —
+  // has zero effect on the actual dogfood-run.mjs launch path.
+  const testChildEntry = process.env.AGDA_MCP_DOGFOOD_TEST_CHILD_ENTRY?.trim();
   return {
     command: built.command,
-    args: built.args,
+    args: testChildEntry ? [testChildEntry] : built.args,
     cwd: built.cwd,
     env: built.env,
     stdio: ["pipe", "pipe", "pipe"],
@@ -153,6 +163,60 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
 
   const recorder = createRunRecorder({ transcriptPath: join(runDir, "transcript.jsonl") });
 
+  // Distinct corpus values this run's own task manifest referenced —
+  // computed once (the manifest never changes mid-run) and reused by
+  // every report snapshot below, incremental or final.
+  const taskManifestCorpora = [...new Set(manifest.map((entry) => entry.corpus))];
+
+  /**
+   * Builds one full run-report.json-shaped snapshot of the CURRENT
+   * recorder state, synchronously (pure, no I/O) — `extra` overlays
+   * `finalized`/`exit` for the terminal write. Called fresh at every
+   * checkpoint rather than memoized, so each snapshot reflects
+   * whatever `recorder` has observed up to the exact moment it is
+   * built, never a stale earlier picture.
+   */
+  function buildReportSnapshot(extra = {}) {
+    return {
+      ...recorder.getReport({ runId, startedAt, corpusRoot, manifestPath, taskManifestCorpora }),
+      finalized: false,
+      ...extra,
+    };
+  }
+
+  // Fix-queue 0bc76d15c2fec8df (07-06): the SIGKILL defense. A parent
+  // agent (Codex) that hard-kills this proxy's own OS process — the
+  // observed real-world shape on BOTH interactive quit and `codex exec`
+  // completion — gives finalize() below zero chance to run: no signal
+  // is even delivered (SIGKILL cannot be caught), so the only possible
+  // defense is to have ALREADY written a trustworthy report to disk
+  // before the kill arrives. `reportWriteChain` serializes every
+  // scheduled write so rapid back-to-back tool-call responses can never
+  // interleave two overlapping writes to the same file (whichever
+  // completed LAST would otherwise win, which is not necessarily the
+  // most recent one) — and so finalize()'s own terminal write is
+  // guaranteed to run strictly after every incremental write already
+  // queued ahead of it. Never throws to its caller: a failed write is
+  // logged and the chain continues, so one bad write can never wedge
+  // every later checkpoint (or finalize()'s own terminal write).
+  let reportWriteChain = Promise.resolve();
+  function scheduleReportWrite(report) {
+    reportWriteChain = reportWriteChain
+      .then(() => writeRunReport(runDir, report))
+      .catch((err) => {
+        process.stderr.write(
+          `dogfood-run: failed to write incremental run report: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      });
+    return reportWriteChain;
+  }
+
+  // The very first checkpoint: a report exists on disk (finalized:false,
+  // zero tool calls) before the child is even spawned, so a run that
+  // fails before its first recorded action still leaves SOME record
+  // behind instead of nothing at all.
+  await scheduleReportWrite(buildReportSnapshot());
+
   const options = buildDogfoodChildOptions({ corpusRoot });
   const child = spawn(options.command, options.args, {
     cwd: options.cwd,
@@ -215,6 +279,15 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
       process.stdout.write(`${line}\n`);
     }
 
+    if (event) {
+      // Fire-and-forget relative to forwarding above (never delays the
+      // agent-visible response — a live interactive session must not
+      // feel laggy waiting on disk I/O): fingerprint 0bc76d15c2fec8df's
+      // incremental checkpoint, one snapshot per recorded action.
+      // Errors are caught and logged inside scheduleReportWrite itself.
+      void scheduleReportWrite(buildReportSnapshot());
+    }
+
     if (event?.isCaptureSession) {
       // Promote exactly the capture THIS response staged: a failed
       // capture call yields stagedCapture === null and stages nothing —
@@ -269,6 +342,10 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     if (finalized) return;
     finalized = true;
 
+    // Computed unconditionally so the `finally` block below always has
+    // a real value even when the try block throws before reaching its
+    // own assignment further down.
+    let exitCode = 0;
     try {
       if (child.exitCode === null && child.signalCode === null) {
         // Never leak an orphaned Agda process — mirrors
@@ -290,13 +367,29 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2000).unref()),
       ]);
 
-      // Distinct corpus values this run's own task manifest referenced —
-      // the same dedup-and-array-from-Set idiom resolveWrapupPolicyKey
-      // already uses (dogfood-wrapup.mjs), so an unattended judge (07-05)
-      // can resolve a bundle's policyKey without a human typing --policy.
-      const taskManifestCorpora = [...new Set(manifest.map((entry) => entry.corpus))];
-      const report = recorder.getReport({ runId, startedAt, corpusRoot, manifestPath, taskManifestCorpora });
-      await writeRunReport(runDir, report);
+      exitCode = computeProxyExitCode({
+        childExitCode: child.exitCode,
+        childSignalCode: child.signalCode,
+        childFailed,
+        proxyKilledChild,
+      });
+
+      // The terminal checkpoint: finalized:true plus exit metadata.
+      // Scheduled onto the SAME reportWriteChain every incremental
+      // checkpoint above used, so this write is guaranteed to run
+      // strictly after every action recorded before it — never racing
+      // or getting clobbered by an in-flight incremental write.
+      const report = buildReportSnapshot({
+        finalized: true,
+        exit: {
+          childExitCode: child.exitCode,
+          childSignalCode: child.signalCode,
+          proxyExitCode: exitCode,
+          childFailed,
+          proxyKilledChild,
+        },
+      });
+      await scheduleReportWrite(report);
       process.stderr.write(
         `\n[dogfood-run] run ${runId} finished — ${report.totalToolCalls} tool call(s), `
           + `${recorder.stagedCaptures.length} capture(s) staged. To judge them: `
@@ -306,13 +399,13 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
       process.stderr.write(
         `dogfood-run: failed to write run report: ${err instanceof Error ? err.message : String(err)}\n`,
       );
-    } finally {
-      const exitCode = computeProxyExitCode({
+      exitCode = computeProxyExitCode({
         childExitCode: child.exitCode,
         childSignalCode: child.signalCode,
         childFailed,
         proxyKilledChild,
       });
+    } finally {
       // process.exit() does not wait for queued asynchronous stdout
       // writes, which would truncate tail lines still being forwarded
       // to the agent. Stream writes are FIFO, so this empty write's
@@ -343,6 +436,23 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     void finalize();
   });
   fromAgent.on("close", () => {
+    void finalize();
+  });
+
+  // The graceful half of fingerprint 0bc76d15c2fec8df's fix: an
+  // operator/supervisor that sends a CATCHABLE shutdown signal (unlike
+  // Codex's own observed hard-kill behavior) gets a clean, fully
+  // finalized:true report instead of relying solely on the incremental
+  // checkpoints above. `finalize()`'s own `finalized` guard makes this
+  // idempotent with the child-close/child-error/agent-stdin-close paths
+  // above — whichever fires first wins, the rest are no-ops.
+  process.on("SIGTERM", () => {
+    void finalize();
+  });
+  process.on("SIGINT", () => {
+    void finalize();
+  });
+  process.on("SIGHUP", () => {
     void finalize();
   });
 }
