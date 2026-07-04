@@ -37,8 +37,10 @@
 //
 // Run with: npx tsx scripts/dogfood/dogfood-wrapup.mjs <run-id> [--rerun-n <N>] [--queue-path <path>] [--policy <key>]
 
+import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { isMainModule } from "../test-with-sentinel.mjs";
 import { runOracle } from "../oracle/run-oracle.mjs";
@@ -333,6 +335,54 @@ export function resolveWrapupPolicyKey({ policyFlag, manifestPath }) {
   return fuelCorpusEntry.policyKey;
 }
 
+/**
+ * D-12's unconditional upload-chain tail step: spawn upload-run.mjs's
+ * own CLI (`npx tsx <sibling-path> <runId>`) and wait for it to close.
+ * Resolved sibling-relative (`fileURLToPath` + `import.meta.url`, NOT a
+ * `SERVER_REPO_ROOT`-based join) so this works regardless of cwd — both
+ * files live in the same `scripts/dogfood/` directory.
+ *
+ * `spawn` (never `execFileSync`) because the upload itself can be slow
+ * (a multi-GB archive over the network) — a synchronous call would
+ * block this process for the whole upload. `stdio:
+ * ["ignore","inherit","inherit"]` lets upload-run.mjs's own diagnostic
+ * output surface directly on this process's console.
+ *
+ * NEVER throws (T-07-16 / D-12's fail-open contract): a spawn failure
+ * (missing tsx, ENOENT) is caught and logged to stderr, returning
+ * `{ attempted: false, reason: "spawn-failed" }`. A normal close —
+ * REGARDLESS of the child's own exit code, since upload-run.mjs's own
+ * CLI always exits 0 by its own design — returns `{ attempted: true }`.
+ * This return value is informational only: the caller (scriptMain's
+ * tail, below) MUST NEVER read it to set `process.exitCode` — doing so
+ * would violate D-12's "joined with ';' never '&&'" contract, letting
+ * an upload failure/no-op silently mask or override a real judging
+ * error (or vice versa).
+ */
+export async function chainUploadRun(runId, options = {}) {
+  const spawnFn = options.deps?.spawn ?? spawn;
+  const uploadRunPath = fileURLToPath(new URL("./upload-run.mjs", import.meta.url));
+
+  try {
+    const child = spawnFn("npx", ["tsx", uploadRunPath, runId], {
+      stdio: ["ignore", "inherit", "inherit"],
+      shell: false,
+    });
+    await new Promise((resolveClose, rejectClose) => {
+      child.on("error", rejectClose);
+      child.on("close", () => resolveClose(undefined));
+    });
+    return { attempted: true };
+  } catch (err) {
+    process.stderr.write(
+      `dogfood-wrapup: upload chain spawn failed for run ${runId} (continuing — fail-open, `
+        + `see AGDA_MCP_TEAM_UPLOAD_KEY/URL and .agda-mcp/team/upload-queue.jsonl): `
+        + `${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return { attempted: false, reason: "spawn-failed" };
+  }
+}
+
 /** Extracts `--rerun-n <N>` / `--queue-path <path>` / `--policy <key>`
  *  from a flat `--flag value` argv array, positional arg 0 = runId.
  *  Throws on a non-positive-integer rerun count: a typo'd env var or a
@@ -472,6 +522,23 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     // The report is complete, but at least one capture went unjudged —
     // surface that as a non-zero exit so a caller/CI can notice.
     process.exitCode = 1;
+  }
+
+  // D-12: the upload chain runs UNCONDITIONALLY, joined with the same
+  // "always runs regardless of prior errors" semantics as a shell `;`
+  // — never `&&`. This step must stay strictly AFTER the exit-code
+  // branch above (never before or inside it) and must NEVER reassign
+  // process.exitCode itself: chainUploadRun's own contract already
+  // never throws, but this call site does not trust that alone
+  // (belt-and-suspenders — mirrors promoteCapture's best-effort,
+  // log-and-continue shape in scripts/dogfood/dogfood-run.mjs).
+  try {
+    await chainUploadRun(runId);
+  } catch (err) {
+    process.stderr.write(
+      `dogfood-wrapup: upload chain step failed unexpectedly (continuing — fail-open): `
+        + `${err instanceof Error ? err.message : String(err)}\n`,
+    );
   }
 }
 

@@ -201,7 +201,7 @@ export function createRunRecorder({ transcriptPath }) {
      *  capture when the latest capture call failed. */
     stagedCaptures,
 
-    getReport({ runId, startedAt, corpusRoot, manifestPath }) {
+    getReport({ runId, startedAt, corpusRoot, manifestPath, taskManifestCorpora = [] }) {
       let totalToolCalls = 0;
       for (const tally of Object.values(perTool)) {
         totalToolCalls += tally.count;
@@ -213,6 +213,7 @@ export function createRunRecorder({ transcriptPath }) {
         endedAt: new Date().toISOString(),
         corpusRoot,
         manifestPath,
+        taskManifestCorpora,
         totalToolCalls,
         perTool,
         stagedCaptures,
