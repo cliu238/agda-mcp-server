@@ -33,11 +33,36 @@
 // this fixture still dies once escalation fires; it only refuses the
 // FIRST, gentler signal. Off by default — every OTHER test using this
 // fixture is unaffected.
-
+//
+// WR-09 regression fixture support: with
+// AGDA_MCP_DOGFOOD_TEST_CHILD_GRANDCHILD_PIDFILE=<path> set, this
+// fixture spawns a genuine, longer-lived descendant of its OWN — the
+// same shape as the real relationship this fixture otherwise has no
+// equivalent of (`dist/index.js` spawning the real Agda subprocess via
+// `src/agda/agda-process-spawn.ts`). Plain `spawn()`, NO `detached` of
+// its own, mirroring agda-process-spawn.ts's real spawn call exactly:
+// the grandchild inherits ITS immediate parent's (this file's) process
+// group — the SAME group dogfood-run.mjs's WR-09 fix now targets as a
+// whole via `killChildGroup`/`buildDogfoodChildOptions`'s `detached:
+// true`. The grandchild's own PID is written to `pidFile` (plain text)
+// so a test can later assert on whether it is still alive. `sleep 30`
+// deliberately outlives any single test's own timeout and never reads
+// stdin, so — unlike this fixture itself — it cannot exit merely
+// because its piped stdin/stdout happen to close; the ONLY way it
+// stops running within a test's own timeout is if something explicitly
+// signals it (or its whole process group).
+import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 if (process.env.AGDA_MCP_DOGFOOD_TEST_CHILD_IGNORE_SIGTERM === "1") {
   process.on("SIGTERM", () => {});
+}
+
+const grandchildPidFile = process.env.AGDA_MCP_DOGFOOD_TEST_CHILD_GRANDCHILD_PIDFILE?.trim();
+if (grandchildPidFile) {
+  const grandchild = spawn("sleep", ["30"], { stdio: "ignore" });
+  writeFileSync(grandchildPidFile, String(grandchild.pid));
 }
 
 const rl = createInterface({ input: process.stdin });

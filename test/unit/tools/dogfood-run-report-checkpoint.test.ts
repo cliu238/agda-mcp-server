@@ -76,6 +76,13 @@ function makeTempDir(prefix: string): string {
 }
 
 let spawnedChildren: ChildProcessWithoutNullStreams[] = [];
+// WR-09: real, independently-spawned "sleep 30" grandchild PIDs (see
+// dogfood-fake-mcp-child.mjs's own AGDA_MCP_DOGFOOD_TEST_CHILD_GRANDCHILD_PIDFILE
+// support) that a test recorded but did not confirm dead itself —
+// swept here as belt-and-suspenders so a failing assertion mid-test
+// can never leak a real, bounded-but-still-30-second-long process into
+// later tests/the CI runner.
+let extraPidsToReap: number[] = [];
 
 /** Delivers `signal` to the ENTIRE process group rooted at `child`
  *  (see the file-header comment for why a plain `child.kill()` — which
@@ -91,6 +98,18 @@ function killGroup(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals
   }
 }
 
+/** POSIX liveness probe via signal 0 (sends no actual signal, only
+ *  checks deliverability) — mirrors the review's own live reproduction
+ *  methodology for confirming whether a PID is still running. */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 afterEach(async () => {
   // Belt-and-suspenders: a test that fails an assertion before reaching
   // its own kill() call must never leak a live proxy process (or its
@@ -101,6 +120,14 @@ afterEach(async () => {
     }
   }
   spawnedChildren = [];
+  for (const pid of extraPidsToReap) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already dead — fine, this is best-effort cleanup.
+    }
+  }
+  extraPidsToReap = [];
   for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
   tempDirs = [];
 });
@@ -343,6 +370,71 @@ testPosix(
     // 2 seconds with the child still alive and un-escalated.
     expect(exit.proxyExitCode).toBe(0);
     expect(code).toBe(0);
+  },
+  10_000,
+);
+
+// ── Test (d): WR-09's process-group kill reaches a real grandchild ───
+
+testPosix(
+  "finalize()'s SIGKILL escalation kills the WHOLE process group, including a genuine grandchild the inner child spawns itself, not just the immediate child (WR-09, from-RED)",
+  async () => {
+    const corpusRoot = makeTempDir("agda-mcp-checkpoint-corpus-grandchild-");
+    const runsRoot = makeTempDir("agda-mcp-checkpoint-runs-grandchild-");
+    const manifestPath = writeManifest(corpusRoot);
+    const runId = "grandchild-checkpoint-test";
+    const grandchildPidFile = join(makeTempDir("agda-mcp-checkpoint-grandchild-pidfile-"), "grandchild.pid");
+
+    // The fake inner child ALSO ignores SIGTERM here (forcing
+    // finalize()'s own SIGKILL escalation to actually engage, exactly
+    // like test (c) above) AND spawns a real "sleep 30" grandchild of
+    // its own — mirroring the real dist/index.js -> Agda subprocess
+    // relationship (src/agda/agda-process-spawn.ts) this suite
+    // otherwise has no equivalent of.
+    const child = spawnProxy({
+      manifestPath,
+      corpusRoot,
+      runId,
+      runsRoot,
+      extraEnv: {
+        AGDA_MCP_DOGFOOD_TEST_CHILD_IGNORE_SIGTERM: "1",
+        AGDA_MCP_DOGFOOD_TEST_CHILD_GRANDCHILD_PIDFILE: grandchildPidFile,
+      },
+    });
+    await sendOneToolCall(child, 1);
+    await waitFor(() => existsSync(join(runsRoot, runId, "run-report.json")));
+    await waitFor(() => existsSync(grandchildPidFile));
+
+    const grandchildPid = Number(readFileSync(grandchildPidFile, "utf8").trim());
+    expect(Number.isInteger(grandchildPid)).toBe(true);
+    extraPidsToReap.push(grandchildPid);
+    expect(isAlive(grandchildPid)).toBe(true);
+
+    // The OUTER test's own group-wide SIGTERM targets the tsx wrapper +
+    // the node grandchild running dogfood-run.mjs itself — NOT the
+    // inner fake-mcp-child's own SEPARATE group, since WR-09's fix now
+    // spawns it `detached: true` (see file header). dogfood-run.mjs's
+    // own registered SIGTERM handler runs finalize(), which explicitly
+    // signals the inner child's WHOLE group — this is what must reach
+    // both the fake inner child AND its own real "sleep 30" grandchild.
+    killGroup(child, "SIGTERM");
+    const { code } = await waitForExit(child);
+
+    const report = readReport(runsRoot, runId);
+    expect(report.finalized).toBe(true);
+    const exit = report.exit as Record<string, unknown>;
+    // Confirms escalation actually fired, exactly like test (c).
+    expect(exit.childSignalCode).toBe("SIGKILL");
+    expect(exit.childConfirmedDead).toBe(true);
+    expect(exit.proxyExitCode).toBe(0);
+    expect(code).toBe(0);
+
+    // The core WR-09 assertion this test exists for: pre-fix, a
+    // positive-PID-only SIGKILL killed the immediate fake-mcp-child but
+    // left its own "sleep 30" grandchild running, reparented to PID 1 —
+    // reproduced live on the review's own machine. The whole group must
+    // now be gone, not just the immediate child.
+    await waitFor(() => !isAlive(grandchildPid));
   },
   10_000,
 );

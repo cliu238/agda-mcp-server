@@ -57,6 +57,23 @@ import { createRunRecorder, resolveRunsRoot, writeRunReport } from "./transcript
  * real stdio, which would break the tee) rather than
  * `buildHarnessServerParameters`'s own SDK-transport-specific return
  * shape (its `stderr` field is irrelevant here).
+ *
+ * WR-09: `detached: true` makes the child the LEADER of its own new
+ * POSIX process group, rather than inheriting this proxy's own group.
+ * `dist/index.js` in turn spawns the real Agda subprocess itself
+ * (`src/agda/agda-process-spawn.ts`, plain `spawn()`, no `detached` of
+ * its own) — that grandchild therefore joins THIS SAME new group,
+ * since a process with no `detached` option of its own inherits its
+ * immediate parent's group. finalize() below can then signal the
+ * WHOLE group (`process.kill(-child.pid, ...)`) and reach the Agda
+ * grandchild even when `dist/index.js` itself is too wedged to run its
+ * own `SIGINT`/`SIGTERM` cleanup (`src/index.ts`'s own
+ * `session.destroy()` handler) — a plain positive-PID signal, targeting
+ * only `child.pid` itself, NEVER propagates to a process's own
+ * children, confirmed by a live process-tree reproduction (the
+ * grandchild survives, reparented to PID 1). `stdio` stays 3 real
+ * pipes, unaffected — `detached` only changes process-group/session
+ * membership, not file-descriptor inheritance.
  */
 export function buildDogfoodChildOptions({ corpusRoot, extraEnv = {} }) {
   const built = buildHarnessServerParameters({
@@ -80,6 +97,7 @@ export function buildDogfoodChildOptions({ corpusRoot, extraEnv = {} }) {
     cwd: built.cwd,
     env: built.env,
     stdio: ["pipe", "pipe", "pipe"],
+    detached: true,
   };
 }
 
@@ -119,10 +137,10 @@ function parseDogfoodArgv(argv) {
  * Decide the proxy's OWN exit code from the child's terminal state.
  * A child that exited on its own passes its exit code straight
  * through. A child that died via a SIGNAL is confirmed dead, but only
- * the ONE legitimate signal death — the proxy's own `child.kill()`
- * teardown on the agent-disconnect path — is a clean 0; a SPONTANEOUS
- * signal death (OOM kill, an operator's `kill -9` aimed at the server)
- * is a failure -> 1.
+ * the ONE legitimate signal death — the proxy's own kill-group
+ * teardown (killChildGroup) on the agent-disconnect path — is a clean
+ * 0; a SPONTANEOUS signal death (OOM kill, an operator's `kill -9`
+ * aimed at the server) is a failure -> 1.
  *
  * WR-07: `childExitCode`/`childSignalCode` BOTH null means the child's
  * terminal state was NEVER ACTUALLY OBSERVED — either a spawn 'error'
@@ -158,6 +176,38 @@ export function computeProxyExitCode({ childExitCode, childSignalCode, childFail
   // (a spawn 'error', or an unconfirmed-dead child even after finalize()'s
   // own SIGKILL escalation) — always a failure now, see header comment.
   return 1;
+}
+
+/**
+ * WR-09: signal the ENTIRE process group `childProc` leads, not just
+ * its own PID. `buildDogfoodChildOptions` spawns the child `detached:
+ * true`, making `childProc.pid` the leader of its own new POSIX
+ * process group — POSIX targets the whole group when the signalled pid
+ * is NEGATED. A plain positive-PID signal (the pre-fix `child.kill()`)
+ * reaches ONLY the immediate child, never a descendant it spawns itself
+ * (in production, the real Agda subprocess
+ * `src/agda/agda-process-spawn.ts` spawns), so a wedged process
+ * survived even finalize()'s own SIGKILL as a permanent orphan
+ * (reparented to PID 1) — confirmed by a live process-tree
+ * reproduction. Guards for a missing/never-assigned pid (never signal
+ * `-undefined`/`-NaN`) and swallows ESRCH (group already gone) —
+ * mirrors dogfood-run-report-checkpoint.test.ts's own `killGroup`
+ * helper, which targets this exact same process tree from the outside
+ * for the identical reason. Returns true only when the signal was
+ * actually DELIVERABLE, never that every process in the group has
+ * actually died (mirrors `ChildProcess.prototype.kill()`'s own boolean
+ * contract, which this replaces).
+ */
+function killChildGroup(childProc, signal) {
+  if (typeof childProc.pid !== "number") {
+    return false;
+  }
+  try {
+    process.kill(-childProc.pid, signal);
+    return true;
+  } catch {
+    return false; // ESRCH — group already gone.
+  }
 }
 
 /**
@@ -243,6 +293,7 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
     cwd: options.cwd,
     env: options.env,
     stdio: options.stdio,
+    detached: options.detached,
   });
 
   // The agent owns the read ends of THIS process's stdout/stderr
@@ -373,10 +424,22 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         // cold-agda-session.mjs / mcp-local-client.mjs's convention.
         // Killing FIRST (the agent-disconnect path) also ends the
         // child's stdout, which is what lets the drain below complete.
-        // kill() returns true only when the signal was actually
-        // deliverable — a never-spawned child yields false, so a spawn
-        // failure is never mistaken for a proxy-initiated teardown.
-        proxyKilledChild = child.kill();
+        // WR-09: targets the child's WHOLE process group (see
+        // killChildGroup/buildDogfoodChildOptions's own `detached:
+        // true`), reaching the real Agda grandchild dist/index.js
+        // spawns even when dist/index.js itself is too wedged to run
+        // its own SIGINT/SIGTERM cleanup — a plain positive-PID signal
+        // never propagated past the immediate child. Returns true only
+        // when the signal was actually deliverable — a never-spawned
+        // child (no pid) yields false, so a spawn failure is never
+        // mistaken for a proxy-initiated teardown. This is also the
+        // proxy's OWN explicit forwarding step for the graceful
+        // SIGINT/SIGTERM/SIGHUP handlers below: `detached: true` takes
+        // the child out of a TERMINAL's own foreground process group,
+        // so a Ctrl-C no longer reaches it "for free" the way it would
+        // without `detached` — this explicit kill is what still
+        // guarantees delivery.
+        proxyKilledChild = killChildGroup(child, "SIGTERM");
       }
 
       // Snapshot the report only AFTER the child's stdout has fully
@@ -389,14 +452,21 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
       ]);
 
       if (raced === "timeout" && child.exitCode === null && child.signalCode === null) {
-        // WR-07: `child.kill()` above sends a plain SIGTERM, which a
-        // wedged process (or one itself blocked on its own unresponsive
-        // Agda grandchild) can ignore or be slow to act on. The header
-        // comment's "never leak an orphaned Agda process" promise is not
-        // actually kept by SIGTERM alone — escalate to an unignorable
-        // SIGKILL rather than silently giving up once the grace window
-        // elapses.
-        child.kill("SIGKILL");
+        // WR-07: the SIGTERM above can be ignored or slow to act on by
+        // a wedged process (or one itself blocked on its own
+        // unresponsive Agda grandchild). The header comment's "never
+        // leak an orphaned Agda process" promise is not actually kept
+        // by SIGTERM alone — escalate to an unignorable SIGKILL rather
+        // than silently giving up once the grace window elapses.
+        // WR-09: escalating via killChildGroup (the whole process
+        // group, not just child.pid) is what actually makes "never
+        // leak an orphaned Agda process" true — SIGKILL delivered only
+        // to the immediate dist/index.js PID never reaches ITS OWN
+        // spawned Agda subprocess, which survives as a permanent
+        // orphan (confirmed via a live process-tree reproduction: a
+        // positive-PID SIGKILL kills the mid-parent but leaves its own
+        // child reparented to PID 1, still running).
+        killChildGroup(child, "SIGKILL");
       }
 
       // WR-07: wait a further SHORT, bounded moment for Node's OWN
