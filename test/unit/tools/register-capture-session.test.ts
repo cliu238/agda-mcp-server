@@ -11,8 +11,9 @@
 // one full-fidelity artifact with D-02/D-06-mandated warning
 // diagnostics when that substrate is missing.
 
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { test, expect, beforeEach, afterEach } from "vitest";
@@ -23,7 +24,6 @@ import { AgdaSession } from "../../../src/agda-process.js";
 import { classifyAgdaError } from "../../../src/agda/agent-ux.js";
 import { registerCaptureSession } from "../../../src/tools/register-capture-session.js";
 import { getServerVersion } from "../../../src/server-version.js";
-import { TEST_FIXTURE_PROJECT_ROOT } from "../../helpers/repo-root.js";
 import {
   drainRecordedActions,
   resetRecordedActions,
@@ -47,6 +47,19 @@ function makeCapturingServer() {
   };
 }
 
+// WR-12: every test below gets its own throwaway repoRoot via
+// makeTempDir() rather than the shared, tracked test/fixtures/agda/
+// tree — this file never calls session.load(), so no real .agda
+// fixture content is needed, only a valid-looking directory path.
+// Mirrors team-issue-key.test.ts's exact tempDirs/makeTempDir/afterEach
+// shape.
+let tempDirs: string[] = [];
+function makeTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
 let originalCaptureEnv: string | undefined;
 
 beforeEach(() => {
@@ -62,19 +75,22 @@ afterEach(() => {
     delete process.env.AGDA_MCP_CAPTURE;
   }
   resetRecordedActions();
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+  tempDirs = [];
 });
 
 test("agda_capture_session is state-agnostic, returns a reference (not the artifact), routes new-bug dedup, and warns when recording/expectedSignature are absent", async () => {
   const server = makeCapturingServer();
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
   // State-agnostic per D-01: constructed but never loaded/sent a
   // command — capture must still work with zero prior interaction.
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  const session = new AgdaSession(repoRoot);
 
   try {
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     // AGDA_MCP_CAPTURE unset (beforeEach) and no expectedSignature —
@@ -137,7 +153,8 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
   clearToolManifest();
 
   const server = makeCapturingServer();
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
 
   try {
     // Register a couple of other tools through the same
@@ -173,7 +190,7 @@ test("agda_capture_session drains real recorded actions when AGDA_MCP_CAPTURE=1 
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     const result = await server.get("agda_capture_session")!.callback({
@@ -209,7 +226,8 @@ test("agda_capture_session embeds a real triage classification from the last loa
   clearToolManifest();
 
   const server = makeCapturingServer();
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
 
   try {
     const errorText = "Parse error: could not parse the expression";
@@ -242,7 +260,7 @@ test("agda_capture_session embeds a real triage classification from the last loa
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     const result = await server.get("agda_capture_session")!.callback({});
@@ -265,13 +283,14 @@ test("agda_capture_session never collides on stagedPath for two same-session, sa
   clearToolManifest();
 
   const server = makeCapturingServer();
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
 
   try {
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     // No `note` on either call - both calls share the identical
@@ -325,15 +344,16 @@ test("agda_capture_session leaves the recorded-action buffer intact when the sta
   clearToolManifest();
 
   const server = makeCapturingServer();
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
-  const blockedPath = join(TEST_FIXTURE_PROJECT_ROOT, ".agda-mcp");
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
+  const blockedPath = join(repoRoot, ".agda-mcp");
 
   try {
-    // The shared fixture root accumulates a real populated .agda-mcp/
-    // directory from this file's other tests; without this cleanup
-    // writeFileSync below would throw EISDIR (overwriting a
-    // directory) instead of the ENOTDIR this test needs, and the
-    // capture callback would never reach its own mkdirSync failure.
+    // Belt-and-suspenders: repoRoot is now a fresh per-test temp dir
+    // (WR-12), so blockedPath cannot already exist as a populated
+    // directory the way the shared fixture root once could - but this
+    // cleanup stays harmless (rmSync with force:true no-ops on an
+    // absent path) and keeps this test's control flow unchanged.
     rmSync(blockedPath, { recursive: true, force: true });
     // Pre-create .agda-mcp as a plain FILE (not a directory) so the
     // callback's mkdirSync(captureDir, { recursive: true }) throws
@@ -356,7 +376,7 @@ test("agda_capture_session leaves the recorded-action buffer intact when the sta
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     const result = await server.get("agda_capture_session")!.callback({});
@@ -379,7 +399,8 @@ test("agda_capture_session still resets the recorded-action buffer after a succe
   clearToolManifest();
 
   const server = makeCapturingServer();
-  const session = new AgdaSession(TEST_FIXTURE_PROJECT_ROOT);
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
 
   try {
     registerStructuredTool({
@@ -402,7 +423,7 @@ test("agda_capture_session still resets the recorded-action buffer after a succe
     registerCaptureSession(
       server as unknown as McpServer,
       session,
-      TEST_FIXTURE_PROJECT_ROOT,
+      repoRoot,
     );
 
     const result = await server.get("agda_capture_session")!.callback({});
