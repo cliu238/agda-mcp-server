@@ -25,7 +25,7 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
 
 **Milestone Goal:** Feed the shipped Loop ② pipeline its first real cargo and wire up its permanent fuel inlets — backlog re-verified through the pipeline, teammates' sessions uploaded and auto-judged — while sweeping v1.0's residual debt. Phase numbering continues from v1.0 (which ended at Phase 5, plus inserted 03.1); v1.1 starts at Phase 6. (The former CACHE theme was deleted 2026-07-03 by consumer audit — zero v1.1 users; see REQUIREMENTS.md v2 section.)
 
-- [ ] **Phase 6: Backlog Digestion (Policy Fix + Reverify)** - The ORCL-02 policy-key bug is fixed and case-sensitive-filesystem-verified; all 8 backlog defects reach a definitive verdict and confirmed defects reach `locked`
+- [x] **Phase 6: Backlog Digestion (Policy Fix + Reverify)** - The ORCL-02 policy-key bug is fixed and case-sensitive-filesystem-verified; all 8 backlog defects reach a definitive verdict and confirmed defects reach `locked` (completed 2026-07-04)
 - [ ] **Phase 7: Team Feedback Channel — Local Wiring** - A teammate's session flows end-to-end through consent, fail-open upload, local ingest, and unattended judging into the fix queue, proven entirely on localhost — with a live session on the pinned CHG corpus as the acceptance payload (E2E-01, zero fixture shortcuts)
 - [ ] **Phase 8: Pinned-Environment Distribution + Thin k8s Deployment** - Zero-to-uploading teammate onboarding via git install, plus the ingest endpoint and cron judge running for real on the arrived k8s server
 - [ ] **Phase 9: Residual v1.0 Debt Sweep** - Every P2 item from the v1.0 audit is resolved — deleted, fixed, or explicitly decided-and-recorded
@@ -63,7 +63,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-06-PLAN.md — REVERIFY-02: queue ledger closeout — named-4 locked, RT confirms fixed-or-deferred-with-reason, acceptance sweep
+- [x] 06-06-PLAN.md — REVERIFY-02: queue ledger closeout — named-4 locked, RT confirms fixed-or-deferred-with-reason, acceptance sweep
 
 **Research**: Skip — standard pattern. Root cause and fix location are already identified (`judgeOrcl02` already accepts an override; this is pure CLI/options plumbing). The hard acceptance gate is a case-sensitive-filesystem test, not another Mac-only run.
 
@@ -123,7 +123,7 @@ Plans:
 | 03.1 Flagship false-green fix | v1.0 | 2/2 | Complete | 2026-07-02 |
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
-| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 5/6 | In Progress|  |
+| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete   | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
