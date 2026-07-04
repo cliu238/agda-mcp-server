@@ -59,6 +59,17 @@ import {
 // (WR-03). A randomUUID() suffix makes the filename cross-process unique.
 let stagedFileSequence = 0;
 
+// Serialize agda_capture_session itself: commitDrainedActions(N)'s
+// "remove exactly the first N entries" contract (WR-01 concurrent-drop
+// fix) is only sound while at most ONE capture holds a drained-but-
+// uncommitted prefix. MCP dispatch is not serialized across tool calls,
+// so two concurrently in-flight captures would each drain an
+// overlapping prefix and double-commit — over-slicing actions recorded
+// in the window. A capture arriving while another is in flight gets an
+// explicit `capture-busy` error instead (human-signed WR-01 closure,
+// 09-VERIFICATION).
+let captureInFlight = false;
+
 const captureReferenceDataSchema = z.object({
   stagedPath: z.string(),
   fingerprint: z.string(),
@@ -108,6 +119,20 @@ export function registerCaptureSession(
       expectedSignature?: string;
       beforeSource?: string;
     }) => {
+      if (captureInFlight) {
+        const message =
+          "Another agda_capture_session call is already in flight - captures are serialized to protect the recorded-action buffer. Retry after it returns.";
+        return makeToolResult(
+          errorEnvelope({
+            tool: "agda_capture_session",
+            summary: message,
+            classification: "capture-busy",
+            data: {},
+          }),
+          message,
+        );
+      }
+      captureInFlight = true;
       try {
         const manifest = buildReplayManifest(session);
         // D-10 guardrail: the underlying session's load/typecheck
@@ -244,6 +269,8 @@ export function registerCaptureSession(
           }),
           message,
         );
+      } finally {
+        captureInFlight = false;
       }
     },
   });

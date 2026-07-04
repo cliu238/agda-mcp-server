@@ -552,3 +552,54 @@ test("agda_capture_session preserves an action recorded concurrently between dra
     await session.destroy();
   }
 });
+
+test("agda_capture_session rejects a second concurrently in-flight capture with capture-busy (WR-01 double-drain guard)", async () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  clearToolManifest();
+
+  const server = makeCapturingServer();
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
+
+  try {
+    registerCaptureSession(
+      server as unknown as McpServer,
+      session,
+      repoRoot,
+    );
+
+    // Hold C1 open inside its write so C2 genuinely overlaps the
+    // drain-to-commit window (the only interleaving where a second
+    // drain + double commit could over-slice the live buffer).
+    let releaseC1: () => void;
+    const c1Gate = new Promise<void>((resolve) => {
+      releaseC1 = resolve;
+    });
+    vi.mocked(writeFileAtomic).mockImplementationOnce(async (...args) => {
+      await c1Gate;
+      return realWriteFileAtomic(...args);
+    });
+
+    const capture = server.get("agda_capture_session")!;
+    const c1 = capture.callback({});
+    // Let C1 advance to its awaited write before firing C2.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Pre-guard, this second call would drain the same prefix and
+    // later double-commit; post-guard it must fail fast and loudly.
+    const c2Result = await capture.callback({});
+    expect(c2Result.structuredContent.ok).toBe(false);
+    expect(c2Result.structuredContent.classification).toBe("capture-busy");
+
+    releaseC1!();
+    const c1Result = await c1;
+    expect(c1Result.structuredContent.ok).toBe(true);
+
+    // The guard must release after C1 returns: a follow-up capture
+    // succeeds normally.
+    const c3Result = await capture.callback({});
+    expect(c3Result.structuredContent.ok).toBe(true);
+  } finally {
+    await session.destroy();
+  }
+});
