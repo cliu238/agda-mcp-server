@@ -8,9 +8,11 @@
 // surface). Reuses src/ logic (version parsing/comparison) via a
 // plain relative import rather than re-deriving a second copy.
 //
-// spawnColdAgdaSession() generalizes scripts/verify-cold-replay.mjs's
-// runColdLoad() — which kills the process after exactly ONE command —
-// into a reusable, MULTI-command lifecycle: ONE spawn for the
+// spawnColdAgdaSession() generalizes a since-deleted single-command
+// cold-replay script's runColdLoad() (deleted 2026-07 as DEBT-01 — see
+// PROJECT.md Key Decisions for the exact former filename and
+// evidence), which killed the process after exactly ONE command, into
+// a reusable, MULTI-command lifecycle: ONE spawn for the
 // lifetime of the returned object; each sendCommand() call arms its
 // OWN idle timer (reset on every subsequent stdout chunk) and
 // resolves independently, so ORCL-01 can issue Cmd_load and ORCL-03
@@ -44,12 +46,13 @@ import { parseAgdaVersion, compareVersions } from "../../src/agda/agda-version.j
  * commands against the SAME process before the caller kills it.
  *
  * Reuses the exact `"JSON> "`-prefix-stripping + per-line
- * `JSON.parse`-with-raw-fallback parsing loop from
- * verify-cold-replay.mjs's `runColdLoad()`. Complete lines are always
- * drained from the buffer as they arrive (even between commands, when
- * nothing is pending) so stray output can never leak into the WRONG
- * command's response array; a line is only recorded into a response
- * array while a `sendCommand()` call is in flight.
+ * `JSON.parse`-with-raw-fallback parsing loop originally written for
+ * the since-deleted cold-replay script's single-command `runColdLoad()`.
+ * Complete lines are always drained from the buffer as they arrive
+ * (even between commands, when nothing is pending) so stray output can
+ * never leak into the WRONG command's response array; a line is only
+ * recorded into a response array while a `sendCommand()` call is in
+ * flight.
  *
  * `spawn(agdaBin, ["--interaction-json"], {...})` always uses the
  * argv-array form, never a shell string, so an untrusted/corrupted
