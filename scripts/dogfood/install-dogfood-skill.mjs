@@ -27,10 +27,10 @@ import { isMainModule } from "../test-with-sentinel.mjs";
 
 /**
  * `lstatSync`, but returns `null` instead of throwing when
- * `path` does not exist (any other error still propagates). Mirrors
- * scripts/promote-capture.mjs's "check first, degrade gracefully,
- * never throw on the common/expected case" shape, adapted from an
- * index-read to a symlink/file-existence check.
+ * `path` does not exist (any other error still propagates) — the
+ * "check first, degrade gracefully, never throw on the common/
+ * expected case" shape, applied here to a symlink/file-existence
+ * check.
  */
 function lstatOrNull(path) {
   try {
@@ -48,12 +48,11 @@ function lstatOrNull(path) {
  * `.agents/skills/agda-dogfooding` content under `serverRepoRoot`.
  *
  * `serverRepoRoot` defaults to `SERVER_REPO_ROOT` (this checkout, via
- * src/repo-root.ts) rather than a caller-cwd-dependent fallback —
- * unlike promote-capture.mjs's own current-working-directory
- * fallback (which exists there for a different reason, cross-machine
- * capture promotion), this installer must behave identically
- * regardless of the caller's cwd, so it accepts an explicit override
- * for testability instead.
+ * src/repo-root.ts) rather than a caller-cwd-dependent fallback — this
+ * installer must behave identically regardless of the caller's cwd
+ * (unlike a cross-machine capture-promotion tool, where a
+ * cwd-dependent fallback would exist for a different reason), so it
+ * accepts an explicit override for testability instead.
  *
  * Returns `{ action, canonicalPath, claudeLinkPath }` where `action`
  * is one of:
@@ -79,6 +78,16 @@ export function installDogfoodSkill({ serverRepoRoot = SERVER_REPO_ROOT } = {}) 
   const existing = lstatOrNull(claudeLink);
 
   if (existing === null) {
+    // IN-02: a partial checkout (canonical content never cloned/
+    // restored) must never report "created" for a symlink that
+    // resolves to nothing — check BEFORE the symlinkSync call, not
+    // after.
+    if (lstatOrNull(canonical) === null) {
+      throw new Error(
+        `install-dogfood-skill: canonical Skill directory not found at ${canonical} — `
+          + "refusing to create a dangling symlink (partial checkout?).",
+      );
+    }
     symlinkSync(canonical, claudeLink, "dir");
     return { action: "created", canonicalPath: canonical, claudeLinkPath: claudeLink };
   }
@@ -87,6 +96,16 @@ export function installDogfoodSkill({ serverRepoRoot = SERVER_REPO_ROOT } = {}) 
     const currentTarget = readlinkSync(claudeLink);
     if (currentTarget === canonical) {
       return { action: "already-linked", canonicalPath: canonical, claudeLinkPath: claudeLink };
+    }
+    // IN-02: same existence check as the "created" branch above,
+    // before EITHER of this branch's own filesystem mutations
+    // (unlinkSync/symlinkSync) — a stale link must never be replaced
+    // with a new dangling one.
+    if (lstatOrNull(canonical) === null) {
+      throw new Error(
+        `install-dogfood-skill: canonical Skill directory not found at ${canonical} — `
+          + "refusing to relink to a dangling target (partial checkout?).",
+      );
     }
     // A stale/misdirected link from some prior partial run — still
     // idempotent with respect to the DESIRED end state.
@@ -104,17 +123,25 @@ export function installDogfoodSkill({ serverRepoRoot = SERVER_REPO_ROOT } = {}) 
 }
 
 export async function scriptMain() {
-  const result = installDogfoodSkill();
+  // IN-02: any thrown error (including the new canonical-existence
+  // checks above) must surface as a one-line stderr message +
+  // process.exitCode = 1, never a raw stack trace.
+  try {
+    const result = installDogfoodSkill();
 
-  if (result.action === "skipped-existing-non-symlink") {
-    process.stderr.write(
-      `install-dogfood-skill: ${result.claudeLinkPath} already exists and is not a `
-        + "symlink — left untouched. Remove it manually first if you want the agda-dogfooding "
-        + "Skill symlink installed there.\n",
-    );
+    if (result.action === "skipped-existing-non-symlink") {
+      process.stderr.write(
+        `install-dogfood-skill: ${result.claudeLinkPath} already exists and is not a `
+          + "symlink — left untouched. Remove it manually first if you want the agda-dogfooding "
+          + "Skill symlink installed there.\n",
+      );
+    }
+
+    process.stdout.write(`${result.action} ${result.claudeLinkPath}\n`);
+  } catch (err) {
+    process.stderr.write(`install-dogfood-skill: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
   }
-
-  process.stdout.write(`${result.action} ${result.claudeLinkPath}\n`);
 }
 
 if (isMainModule(import.meta.url, process.argv[1])) {
