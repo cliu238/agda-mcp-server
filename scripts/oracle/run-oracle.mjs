@@ -256,8 +256,9 @@ export async function runOracle(artifactPath, options = {}) {
   // abstention/INCONCLUSIVE rate be computed later by counting lines.
   // mkdirSync-free: the captures directory already exists since the
   // artifact itself lives there. Single-writer, out-of-band script —
-  // appendFileSync (not writeFileAtomic) matches this project's own
-  // promote-capture.mjs precedent for this exact category of file.
+  // appendFileSync (not writeFileAtomic) is the right shape here:
+  // single-writer, out-of-band, best-effort appends, with no concurrent
+  // writer to race against.
   const metricsPath = join(dirname(artifactPath), "oracle-metrics.jsonl");
   appendFileSync(metricsPath, `${JSON.stringify(abstentionMetricLine(verdict))}\n`, "utf8");
 

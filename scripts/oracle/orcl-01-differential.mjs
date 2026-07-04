@@ -19,9 +19,11 @@
 // imported directly rather than duplicated, per this project's SSOT
 // convention — this is what makes ORCL-01 compliant with the "no
 // hand-built IOTCM strings" invariant for the first time in the
-// capture/oracle code path (scripts/verify-cold-replay.mjs, the seed
-// this plan supersedes, predates the tsx-import finding and hand-rolls
-// its own escaping).
+// capture/oracle code path (a now-deleted standalone cold-replay
+// script was the seed this plan supersedes, predating the tsx-import
+// finding and hand-rolling its own escaping; deleted 2026-07 as
+// DEBT-01, see PROJECT.md Key Decisions for the exact former filename
+// and evidence).
 //
 // Run with: npx tsx scripts/oracle/orcl-01-differential.mjs <path>
 // (NOT plain `node` — this script's src/ imports use .js-suffixed

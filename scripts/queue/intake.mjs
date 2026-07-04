@@ -30,9 +30,9 @@ import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
 /**
  * Read the queue JSON array at `queueJsonPath`. An absent file or
  * malformed/non-array JSON both degrade to an empty array — never
- * throws. Mirrors scripts/promote-capture.mjs's readExistingIndex
- * guard, adapted for an array instead of an object keyed by
- * fingerprint.
+ * throws: the guard is deliberately permissive (absent/malformed file
+ * degrades to an empty value, never throws), adapted here for an array
+ * instead of an object keyed by fingerprint.
  */
 export function readQueueFile(queueJsonPath) {
   if (!existsSync(queueJsonPath)) {
