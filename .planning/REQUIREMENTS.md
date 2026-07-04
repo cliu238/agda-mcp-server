@@ -10,8 +10,8 @@ Actors: the maintainer, internal teammates (trusted, consented), and AI coding a
 ### Backlog Digestion (POLICY / REVERIFY)
 
 - [x] **POLICY-01**: ORCL-02's policy key is passed through at runtime — a `--policy` flag on `run-oracle.mjs`/`dogfood-wrapup.mjs` and/or consuming the task manifest's `policyKey` — replacing today's `.agda-lib` `name:`-only derivation. An unresolvable/mismatched policy **fails loudly** (never silently disables cheat auto-filing). Regression-tested against the real CHG mismatch (`Codex-Homotopy-Group` vs `codex-homotopy-group.json`) and verified on a **case-sensitive filesystem** (Linux container/CI) — macOS APFS masks the bug. (v1.0 audit headline W2; correctness prerequisite for all team-channel judging.)
-- [ ] **REVERIFY-01**: All 8 `needsReverify` CHG defect specs in `test/fixtures/fix-queue.json` (v0.6.7-era measurements) are re-verified against current main through the shipped pipeline (replay + wrap-up oracle); every entry ends `confirmed` (fresh capture + verdict evidence) or closed as unreproducible (with evidence) — zero remain `needsReverify`. Closes deferred quick task `260702-29k`.
-- [ ] **REVERIFY-02**: Confirmed live defects in the queue (the CHG-confirmed set — `agda_auto` CLI-flag leak, `agda_give` ok:true-wrapping-error, `agda_search_definitions` hardcoded `agda/` layout — plus whatever REVERIFY-01 confirms) are driven through the normal loop in QUEUE-02 priority order: fix → regression lock → queue `locked`. Every confirmed entry ends `locked` or explicitly re-triaged with a recorded reason — none silently stalled. (The loop's first sustained real workload.)
+- [x] **REVERIFY-01**: All 8 `needsReverify` CHG defect specs in `test/fixtures/fix-queue.json` (v0.6.7-era measurements) are re-verified against current main through the shipped pipeline (replay + wrap-up oracle); every entry ends `confirmed` (fresh capture + verdict evidence) or closed as unreproducible (with evidence) — zero remain `needsReverify`. Closes deferred quick task `260702-29k`.
+- [x] **REVERIFY-02**: Confirmed live defects in the queue (the CHG-confirmed set — `agda_auto` CLI-flag leak, `agda_give` ok:true-wrapping-error, `agda_search_definitions` hardcoded `agda/` layout — plus whatever REVERIFY-01 confirms) are driven through the normal loop in QUEUE-02 priority order: fix → regression lock → queue `locked`. Every confirmed entry ends `locked` or explicitly re-triaged with a recorded reason — none silently stalled. (The loop's first sustained real workload.)
 
 ### Team Feedback Channel (TEAM)
 
@@ -83,8 +83,8 @@ The entire theme was removed from v1.1 after a consumer audit found zero v1.1 us
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | POLICY-01 | Phase 6 | Complete |
-| REVERIFY-01 | Phase 6 | Pending |
-| REVERIFY-02 | Phase 6 | Pending |
+| REVERIFY-01 | Phase 6 | Complete |
+| REVERIFY-02 | Phase 6 | Complete |
 | TEAM-01 | Phase 7 | Pending |
 | TEAM-02 | Phase 7 | Pending |
 | TEAM-03 | Phase 7 | Pending |

@@ -123,7 +123,7 @@ Plans:
 | 03.1 Flagship false-green fix | v1.0 | 2/2 | Complete | 2026-07-02 |
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
-| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete   | 2026-07-04 |
+| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
