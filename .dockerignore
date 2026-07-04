@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.agda-mcp
+coverage
+.nyc_output
+test-output
+*.log
+.planning
+.claude
+.codex
+k8s
+*.tgz
+.DS_Store
