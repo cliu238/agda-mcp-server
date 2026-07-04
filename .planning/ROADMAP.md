@@ -114,8 +114,28 @@ Plans:
   2. The ingest endpoint + cron judge run on the k8s server (GHCR image built `linux/amd64` containing Node + pinned Agda + pinned corpus source clones only — no corpus caches, so it is small and buildable on standard hosted runners or locally; nginx-ingress path app with `proxy-body-size` raised to match the TEAM-03 cap, PVC storage root, Ceph-UID-correct securityContext). (DEPLOY-01)
   3. Local mode remains a working fallback, and POLICY-01's case-sensitivity fix is re-verified on the cluster. (DEPLOY-01)
 
-**Plans**: TBD
-**Research**: `/gsd:plan-phase --research-phase` once the server has actually arrived — genuine unknowns concentrate here and cannot be desk-researched before then: the k8s namespace name and PVC provisioning mode, and the Ceph PVC's backing-store mode (RBD vs. CephFS — determines whether `fs.rename`-based atomic writes are safe). Also needs an explicit taste/ergonomics decision on TEAM-05's exact fixed-clone-path convention.
+**Plans**: 6 plans in 4 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 08-01-PLAN.md — TEAM-05 core: clone-fuel-corpora.mjs (shared, reused by Docker) + install-pinned-env.{sh,mjs} (Node/Agda verify, run-pinned-agda.sh generation, npm ci orchestration)
+- [ ] 08-02-PLAN.md — DEPLOY-01 packaging: Dockerfile (Node 24 + cabal-built Agda 2.8.0 + 4 pinned fuel corpora, non-root UID 2231) + k8s manifests (Deployment/Ingress/CronJob targeting the verified llm-gateway namespace + PVC)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 08-03-PLAN.md — TEAM-05 acceptance: docs/TEAM-ONBOARDING.md + fresh-teammate walkthrough test (installer -> real local upload, zero real Agda dependency)
+- [ ] 08-04-PLAN.md — DEPLOY-01 CI/CD: deploy-ingest.yml (D-06 auto-deploy-on-push, no path filter) + cluster secrets bootstrap + first live deploy (checkpoint: GH Actions secrets)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 08-05-PLAN.md — DEPLOY-01 functional acceptance: real upload through the deployed cluster + manual cron-judge trigger + PVC queue accumulation + write-back-disabled proof (D-09)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 08-06-PLAN.md — Phase closeout: POLICY-01 cluster re-verify + local-mode regression re-run + cut and push the v1.1 git tag (D-11)
+
+**Research**: Completed via live cluster verification (`.claude/skills/agda-mcp-k8s-deploy/SKILL.md`, 2026-07-04) — the k8s namespace (`llm-gateway`, reused), PVC (`sciserver-datavolumes-01-rw`, CephFS, `fs.rename`-safe), UID (2231), quota headroom (~3 CPU / 7Gi), and URL convention (`dev.sites.idies.jhu.edu/agda-mcp`) are all live-verified facts, not desk research. TEAM-05's fixed-clone-path convention was resolved in `08-CONTEXT.md` (D-04/D-05).
 
 ### Phase 9: Residual v1.0 Debt Sweep
 
@@ -162,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/6 | Planned | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |
