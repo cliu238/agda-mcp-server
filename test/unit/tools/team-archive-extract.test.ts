@@ -124,7 +124,7 @@ test("extractArchiveSafely: an absolute-path entry is also rejected pre-extracti
   // pass, so the listing is faked here to exercise this branch
   // directly rather than depending on flag-specific tar behavior).
   const execFileSpy = vi.fn((cmd: string, args: readonly string[], opts: unknown) => {
-    if (Array.isArray(args) && args[0] === "-tf") {
+    if (Array.isArray(args) && args[0] === "-t" && args.includes("-P") && !args.includes("-v")) {
       return "/etc/passwd\n";
     }
     return (execFileSync as any)(cmd, args, opts);
@@ -150,7 +150,7 @@ test("extractArchiveSafely: a listing with more entries than maxEntryCount is re
   // test fast and avoids actually writing 10,000 files to disk.
   const manyEntries = Array.from({ length: 10_000 }, (_, i) => `file-${i}.txt`).join("\n");
   const execFileSpy = vi.fn((cmd: string, args: readonly string[]) => {
-    if (Array.isArray(args) && args[0] === "-tf") {
+    if (Array.isArray(args) && args[0] === "-t" && args.includes("-P") && !args.includes("-v")) {
       return `${manyEntries}\n`;
     }
     throw new Error(`unexpected execFileSync call: ${cmd} ${JSON.stringify(args)}`);
@@ -228,8 +228,8 @@ test("extractArchiveSafely: an archive with no hard links is unaffected by the W
   expect(result.ok).toBe(true);
   tempDirs.push(result.scratchDir);
   // Both the plain (-tf) and verbose (-tvf) listings were consulted.
-  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-tf")).toBe(true);
-  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-tvf")).toBe(true);
+  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-t" && !call[1]?.includes("-v"))).toBe(true);
+  expect(execFileSpy.mock.calls.some((call) => call[1]?.[0] === "-t" && call[1]?.includes("-v"))).toBe(true);
   result.cleanup();
 });
 
