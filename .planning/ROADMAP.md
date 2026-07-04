@@ -85,8 +85,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — TEAM-01: key registry (hash-only, mode 0600) + issue/revoke/list CLI + consent statement
-- [ ] 07-02-PLAN.md — TEAM-02 core: Claude Code/Codex agent-log selection + upload-run.mjs (staged tar.gz pack, fail-open POST, bounded NDJSON retry queue)
+- [x] 07-01-PLAN.md — TEAM-01: key registry (hash-only, mode 0600) + issue/revoke/list CLI + consent statement
+- [x] 07-02-PLAN.md — TEAM-02 core: Claude Code/Codex agent-log selection + upload-run.mjs (staged tar.gz pack, fail-open POST, bounded NDJSON retry queue)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -144,6 +144,6 @@ Plans:
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 7. Team Feedback Channel — Local Wiring | v1.1 | 0/6 | Not started | - |
+| 7. Team Feedback Channel — Local Wiring | v1.1 | 2/6 | In Progress|  |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
