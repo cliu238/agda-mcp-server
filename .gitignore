@@ -29,6 +29,9 @@ temp/
 # Captured session artifacts (emit-only, out-of-repo)
 .agda-mcp/
 
+# Team channel secrets
+scripts/team/data/team-keys.json
+
 # Environment and local config
 .env
 .env.*
