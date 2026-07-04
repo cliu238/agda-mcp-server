@@ -1,298 +1,244 @@
 ---
 phase: 07-team-feedback-channel-local-wiring
-reviewed: 2026-07-04T16:42:53Z
+reviewed: 2026-07-04T18:15:00Z
 depth: standard
-files_reviewed: 20
+iteration: 2
+files_reviewed: 6
 files_reviewed_list:
-  - scripts/team/issue-key.mjs
-  - scripts/team/ingest-server.mjs
-  - scripts/team/archive-extract.mjs
   - scripts/team/cron-ingest-wrapup.mjs
-  - scripts/dogfood/agent-log-selection.mjs
   - scripts/dogfood/upload-run.mjs
+  - scripts/team/archive-extract.mjs
+  - scripts/dogfood/agent-log-selection.mjs
   - scripts/dogfood/dogfood-run.mjs
   - scripts/dogfood/dogfood-wrapup.mjs
-  - scripts/dogfood/transcript-writer.mjs
-  - test/fixtures/dogfood-fake-mcp-child.mjs
-  - test/fixtures/fix-queue.json
-  - test/unit/fixtures/fix-queue.test.ts
-  - test/unit/tools/team-issue-key.test.ts
-  - test/unit/tools/team-ingest-server.test.ts
-  - test/unit/tools/team-archive-extract.test.ts
-  - test/unit/tools/team-cron-ingest-wrapup.test.ts
-  - test/unit/tools/dogfood-agent-log-selection.test.ts
-  - test/unit/tools/dogfood-upload-run.test.ts
-  - test/unit/tools/dogfood-run-report-checkpoint.test.ts
-  - test/unit/tools/dogfood-transcript-writer.test.ts
-  - test/unit/tools/dogfood-wrapup-nonfinalized-report.test.ts
-  - test/unit/tools/dogfood-wrapup-upload-chain.test.ts
 findings:
-  critical: 2
-  warning: 7
-  info: 3
-  total: 12
+  critical: 1
+  warning: 3
+  info: 4
+  total: 8
 status: issues_found
 ---
 
 # Phase 07: Code Review Report
 
-**Reviewed:** 2026-07-04T16:42:53Z
-**Depth:** standard (with targeted cross-file tracing into `src/repo-root.ts`, `src/session/safe-source-io.ts`, `scripts/queue/intake.mjs`, `scripts/dogfood/task-manifest.mjs`, `scripts/dogfood/flake-classify.mjs`, `test/helpers/mcp-harness.ts`, `test/fixtures/fix-queue.ts`/`fuel-corpora.ts`, `scripts/promote-capture.mjs` — required to verify the security claims made in the reviewed files' own comments)
-**Files Reviewed:** 20 (9 scripts + 1 test fixture + 1 data fixture + 9 test files)
+**Reviewed:** 2026-07-04T18:15:00Z
+**Depth:** standard (re-review, iteration 2 — adjudicating fix commits e10cf57, 6662cdc, f55c41b, b8f8c84, e39ec41, 6f256b5, 9e0405f, abe78b4, 58f0f8b against the 9 findings from iteration 1)
+**Files Reviewed:** 6
 **Status:** issues_found
 
 ## Summary
 
-This phase wires up the team feedback channel end to end: a Bearer-key registry (`issue-key.mjs`), a loopback HTTP ingest endpoint (`ingest-server.mjs`), a two-layer sandboxed archive extractor (`archive-extract.mjs`), an unattended cron judge that drives the existing oracle triad and writes back to git (`cron-ingest-wrapup.mjs`), a fail-open upload client with a bounded retry queue (`upload-run.mjs`), and mid-phase SIGKILL-safe checkpointing for the dogfooding proxy (`dogfood-run.mjs`, `dogfood-wrapup.mjs`).
+This is a re-review of the fix pass applied to iteration 1's findings. Every one of the 9 fix commits was traced against its actual `git show` diff (not the fixer's own report) and, wherever runtime behavior was in question, verified empirically: by running the affected test files (repeatedly, for the signal-timing-sensitive ones), by direct invocation of exported pure functions with hand-picked adversarial inputs, and — for the two most consequential questions — by writing independent reproduction scripts against the real `processArchive`/`computeProxyExitCode` functions rather than trusting either the original review's prose or the fix report's narrative.
 
-The key-registry and ingest-server auth/size-cap/path-sandboxing mechanics are well built: timing-safe Bearer comparison, hash-only key storage, two independent path-containment layers for both storage paths and archive extraction, and a streamed byte-cap that never fully buffers a request body. Those pieces hold up under adversarial reading.
+**8 of the 9 findings hold up as genuinely and completely fixed:** CR-02, WR-01, WR-02, WR-04, WR-05, and WR-06 are straightforward, correctly-scoped fixes, each verified via diff + a green test run. WR-03's general concurrent read-modify-write race is also correctly closed for the common case (verified via its own concurrency tests). WR-07's disputed test-expectation change was adjudicated as **correct, not a regression** — the old `(null, null, false, true) => 0` expectation was *literally the false-negative the original review reported*, and the new `=> 1` is exactly the fix the review asked for; this was independently confirmed against the commit's own diff and re-derivation of the pre-fix formula.
 
-The real problems are downstream of "the archive extracted safely": nothing in this phase validates the *content* of an uploaded capture artifact before it is trusted by the oracle-triad pipeline and, critically, before it is used as the **upsert key** for the git-tracked fix queue that the new unattended cron judge auto-commits and (by default) auto-pushes with zero human review. That gap produces a genuine, provable BLOCKER (CR-01): any holder of a valid team upload key can overwrite/reopen an existing, previously-locked fix-queue entry. A second BLOCKER (CR-02) is a straightforward missing-catch bug that lets a single malformed upload cause unbounded, permanent re-processing on every cron tick — provably contradicting the function's own documented "never retried forever" contract. Several further WARNINGs cover a dangling-reference data-integrity bug the project's own committed fix-queue data already shows had to be hand-patched once, a TOCTOU race in the retry queue, an extraction sandbox gap around tar hard links, an entry-count decompression-bomb gap, an inconsistent path-normalization bug that silently drops Codex logs, and an incomplete orphan-process kill path in the dogfooding proxy.
+**CR-01 — the highest-severity finding from iteration 1 — is only partially fixed and remains OPEN.** The fix (`wrapCronUpsertQueueEntry`) correctly refuses a colliding-fingerprint takeover of a `locked`/`rejected` fix-queue entry, exactly as its commit title promises, and this is verified by both the existing regression tests and this review's own reproduction. However, the guard checks only `status === "locked" || status === "rejected"` — entries in `triaged` or `fixing` status (the *active, in-progress* human-review states this project's own design relies on as its Phase-4 review checkpoint — see `dogfood-wrapup.mjs`'s own header: "Phase 4 already placed the human review point INSIDE the queue itself (new -> triaged)") remain **completely unprotected against the identical attack**. This review independently reproduced it end to end: a crafted archive colliding with a human-triaged entry's fingerprint silently reverts its status to `"new"`, wipes its `triageClass` to `null`, and overwrites its title/summary/capturePath/verdictPath with attacker/oracle-derived text — reported as a genuine `filed: true` (not even flagged as a conflict) — which is exactly the shape of write that `writeBackQueue` auto-commits and auto-pushes with zero human review. This is the same BLOCKER, just incompletely scoped by status value.
 
-## Critical Issues
+This iteration's fixes also introduce three new, narrower issues, most notably in WR-07 (which received special scrutiny per this review's instructions): the SIGKILL escalation targets only the immediate child process's PID, never the process (sub)tree, so in precisely the scenario the fix's own header comment names as motivating it ("a wedged process... itself blocked on its own unresponsive Agda grandchild"), **the orphaned Agda grandchild process is not actually killed** — only the immediate MCP-server wrapper dies, while the real problem process survives as a permanent orphan. This was independently confirmed with a live process-tree reproduction on this machine. A second, more contained WR-07 side effect: `computeProxyExitCode`'s rewritten signal-branch silently drops the `childFailed` flag the old formula OR'd into its failure condition — demonstrated directly against the exported function, though currently unreachable via this file's one real call site. WR-03's new advisory file lock also has its own narrower residual TOCTOU in its stale-lock-reclamation path.
 
-### CR-01: Any valid team upload key can overwrite/reopen an existing fix-queue entry via a colliding `dedup.fingerprint`, auto-committed and auto-pushed with zero human review
+## Narrative Findings (AI reviewer)
 
-**File:** `scripts/dogfood/dogfood-wrapup.mjs:100-157` (`buildQueueEntryFromVerdict`), consumed by `scripts/team/cron-ingest-wrapup.mjs:158-284` (`processArchive`) and `scripts/team/cron-ingest-wrapup.mjs:302-332` (`writeBackQueue`)
+### Fix verification ledger (iteration 1 findings, re-adjudicated)
 
-**Issue:**
-`ingest-server.mjs` never validates the *contents* of an uploaded archive (by design — extraction is deferred to the cron judge), and `archive-extract.mjs` only validates *paths* inside the archive, never the JSON *content* of the capture artifacts it exposes. `cron-ingest-wrapup.mjs`'s `processArchive` reads `report.stagedCaptures[].stagedPath`-derived artifact JSON straight from the extracted, fully attacker-controlled archive (`cron-ingest-wrapup.mjs:230`) and hands it to `wrapUpCapture` with no schema validation of `artifact` at all.
+| ID | Status | Commit(s) | Verification method |
+|---|---|---|---|
+| CR-01 | **STILL OPEN** (partial fix) | e10cf57, f55c41b | Diff trace + existing tests (locked/rejected path) + **independent reproduction proving triaged/fixing bypass** |
+| CR-02 | RESOLVED | 6662cdc | Diff trace + existing tests (malformed JSON + missing file) |
+| WR-01 | RESOLVED | f55c41b | Diff trace + independent reproduction confirming stable `<archivePath>::captures/<basename>` path |
+| WR-02 | RESOLVED | b8f8c84 | Diff trace + existing test (push-fails-after-commit-succeeds) |
+| WR-03 | RESOLVED (general case); new narrower residual opened as WR-08 | e39ec41 | Diff trace + concurrency tests + independent trace of the stale-reclaim path |
+| WR-04 | RESOLVED | 6f256b5 | Diff trace + existing test (real tar with a genuine hard-link entry via `linkSync`) |
+| WR-05 | RESOLVED | 9e0405f | Diff trace + existing test (entry-count ceiling checked first) |
+| WR-06 | RESOLVED | abe78b4 | Diff trace + existing tests (trailing-slash/relative-path matching) |
+| WR-07 | RESOLVED (literal ask); two new narrower residuals opened as WR-09/WR-10 | 58f0f8b | Diff trace + 3x repeated real-subprocess test runs + independent verification the disputed test-expectation change is correct, not a regression + live process-tree reproduction of the residual gap |
 
-`wrapUpCapture` (`dogfood-wrapup.mjs:216-269`) calls the real oracle (`runOracle`) to get a verdict, which is a genuine, non-forgeable signal *that something is wrong* (e.g. `orcl02.kind === "cheat-flagged"` is trivially reachable by simply including an actual unsanctioned `postulate` in the uploaded proof — that requires no special access, any team member can do it in five minutes). Once `shouldFile` is true, `buildQueueEntryFromVerdict` (`dogfood-wrapup.mjs:133`) builds the queue entry with:
-
-```js
-fingerprint: artifact.dedup.fingerprint,
-```
-
-`artifact.dedup.fingerprint` is taken **verbatim from the attacker-supplied JSON** — there is no format constraint anywhere (`fixQueueEntrySchema.fingerprint` is only `z.string().min(1)`) and no re-derivation/verification against the actual captured session content. This value becomes the **upsert key** passed to `upsertQueueEntry` (`scripts/queue/intake.mjs:66-93`, imported and called unchanged at `dogfood-wrapup.mjs:267` and `cron-ingest-wrapup.mjs:161`/`254`), whose update path does:
-
-```js
-const candidate = existingIndex === -1 ? entryData : {
-  ...existing[existingIndex],
-  ...entryData,
-  recurrence: bumpRecurrence ? existing[existingIndex].recurrence + 1 : existing[existingIndex].recurrence,
-};
-```
-
-`entryData` (from `buildQueueEntryFromVerdict`) unconditionally includes `status: "new"`, `closedAt: null`, `matrixEntryId: null`, plus attacker-influenced `title`, `affectedTool`, `capturePath`, `verdictPath`, `triageClass`/`triageConfidence` (read straight from `artifact.triage?.category`/`artifact.triage?.confidence` with no enum pre-check — a bad value here is only caught by `fixQueueEntrySchema.parse` throwing, which is a fail-safe, but a *valid* enum value is happily accepted and merged).
-
-Every fingerprint value that has ever been filed is **publicly visible** in the repo's own tracked `test/fixtures/fix-queue.json` (this very file is in this review's scope — e.g. the locked flagship entry `"e6f0c1169032b9d5"`, `test/fixtures/fix-queue.json:3`). Any team member who has been issued a legitimate upload key — or anyone who obtains/steals one — can therefore:
-
-1. Craft a proof session containing a deliberate unsanctioned postulate (guarantees `orcl02.kind === "cheat-flagged"`, skipping the flake gate entirely per `dogfood-wrapup.mjs:232-236`).
-2. Set that capture artifact's `dedup.fingerprint` to `"e6f0c1169032b9d5"` (or any other known fingerprint, including locked/closed ones).
-3. Upload it through the normal, fully-authenticated `/ingest` endpoint.
-4. Wait for the cron judge to process it.
-
-The result: `upsertQueueEntry` finds the existing **locked** flagship entry, merges in `status: "new"`, `closedAt: null`, `matrixEntryId: null`, and attacker/oracle-derived `title`/`affectedTool`/`capturePath`/`verdictPath` — silently reopening/corrupting a resolved defect record. `fixQueueEntrySchema`'s `superRefine` does **not** forbid this transition (it only forbids `locked`/`rejected` with `closedAt: null`, which is satisfied here since the merged `status` is `"new"`). `writeBackQueue` (`cron-ingest-wrapup.mjs:302-332`) then unconditionally `git commit`s and (absent `--no-push`) `git push`es this corrupted state directly to the branch — **no PR, no human review, by design (D-01/D-02)**.
-
-This is precisely the "could a malicious archive influence WHAT gets committed" scenario this review was asked to check: the *scope* of `git add` is correctly bounded to the one queue file, but the *content* written into that file is not defended at all.
-
-**Fix:**
-Do not trust an archive-supplied fingerprint as an update key without validation. At minimum:
-
-```js
-// buildQueueEntryFromVerdict (dogfood-wrapup.mjs) — never trust an
-// archive-supplied fingerprint verbatim for the UPDATE path; only a
-// freshly-computed, oracle-independent fingerprint may match an
-// existing row.
-const fingerprint = recomputeFingerprint(artifact); // same derivation
-// the server used when the capture was first recorded — never read
-// `artifact.dedup.fingerprint` as if it were trustworthy input.
-```
-
-And/or add a guard at the call sites in `cron-ingest-wrapup.mjs`/`dogfood-wrapup.mjs` (or in `upsertQueueEntry` itself) that refuses an automated, unattended write-back from silently regressing a `locked`/`rejected` entry back to `new`, or clearing `matrixEntryId`/`closedAt` — that specific transition class should require a human-reviewed path (e.g. route a fingerprint collision against a terminal-status entry to the same non-schema side channel `appendFlakyLog` uses, with a loud warning, rather than an automatic overwrite).
+Full detail for each item follows below, organized by current severity.
 
 ---
 
-### CR-02: A malformed `run-report.json` inside an otherwise valid archive is never marked processed, causing the same archive to be re-extracted and re-judged on every cron tick forever
+## Critical Issues
 
-**File:** `scripts/team/cron-ingest-wrapup.mjs:172-284` (`processArchive`)
+### CR-01: STILL OPEN — the colliding-fingerprint takeover is fixed for `locked`/`rejected` but fully reproducible against `triaged`/`fixing` entries
 
-**Issue:**
-`processArchive`'s core logic is wrapped in `try { ... } finally { extracted.cleanup(); }` — **there is no `catch` clause**:
+**File:** `scripts/team/cron-ingest-wrapup.mjs:182-225` (`wrapCronUpsertQueueEntry`), specifically the terminal-status check at line 194
 
+**What the fix (e10cf57, extended by f55c41b) got right:** `wrapCronUpsertQueueEntry` now intercepts the ONE call site `wrapUpCapture` uses to file/update a queue entry from the cron path, looks up the existing entry by fingerprint, and refuses the write (loud stderr `SECURITY WARNING`, a metadata-only annotation instead, `conflictState.conflict = true`, surfaced as `classification: "terminal-conflict"` in the run summary and a non-zero exit code) whenever the existing entry's status is `"locked"` or `"rejected"` and the incoming candidate would change it. This is verified correct: `test/unit/tools/team-cron-ingest-wrapup.test.ts`'s three CR-01 regression tests pass, and this review's own reproduction against a `locked` entry confirms `status`/`closedAt`/`matrixEntryId`/`recurrence` all survive byte-for-byte.
+
+**What remains broken:** line 194 reads:
 ```js
-try {
-  const runsDir = join(extracted.scratchDir, "runs");
-  const runIds = existsSync(runsDir) ? readdirSync(runsDir) : [];
-  if (runIds.length !== 1) { ...write .processed.json...; return {...}; }
-
-  const [runId] = runIds;
-  const reportPath = join(runsDir, runId, "run-report.json");
-  const report = JSON.parse(readFileSync(reportPath, "utf8"));   // <-- line 189, unguarded
-  ...
-  await writeFileAtomic(`${archivePath}.processed.json`, ...);   // only reached on the happy path
-  return { archivePath, runId, results };
-} finally {
-  extracted.cleanup();
-}
+const isTerminal = existing?.status === "locked" || existing?.status === "rejected";
 ```
+The fix-queue schema's actual status enum (`test/fixtures/fix-queue.ts:50`) is `["new", "triaged", "fixing", "locked", "rejected"]`. An entry a human has already moved to `"triaged"` or `"fixing"` — i.e. an entry *currently under active human review*, with human-assigned `triageClass`/`triageConfidence`/notes, which is precisely the review checkpoint this project's own design document (`dogfood-wrapup.mjs`'s header) says exists to gate automated filing — is **not** `isTerminal`, so `attemptsRegression` is `false` regardless of what the incoming candidate's status is, and the write proceeds exactly as it did before the CR-01 fix existed: a full field-by-field overwrite via `upsertQueueEntry`'s `{...existing, ...entryData}` merge (`scripts/queue/intake.mjs:71-80`).
 
-If `run-report.json` is missing (e.g. the single entry under `runs/` is not actually a directory, or lacks the file) or is not valid JSON, `readFileSync`/`JSON.parse` throws. That exception propagates out of `processArchive` entirely — `scriptMain`'s own per-archive `try/catch` (`cron-ingest-wrapup.mjs:450-464`) does catch it so the cron *run* doesn't crash, but **no `.processed.json` sidecar is ever written for this archive**, because every write of that marker sits either before this line (extraction failure, wrong run count) or after it (success, unresolvable-policy-key) — none of them execute once this specific `throw` fires.
+This was independently reproduced against the real `processArchive` (no mocking of the vulnerable code path itself — only `extractArchiveSafely`/`runOracle` were faked, exactly as the existing test suite does):
 
-`discoverUnprocessedArchives` (`cron-ingest-wrapup.mjs:91-116`) treats "no `.processed.json` sidecar" as "not yet processed." The result: **this exact archive is rediscovered and fully re-extracted (full sandboxed `tar -x`, mid-extraction polling, post-extraction realpath walk) on every single subsequent cron tick, forever** — a trivially-triggerable, permanent, unbounded resource drain from a single malformed upload. This directly contradicts the function's own documented contract at `cron-ingest-wrapup.mjs:144-150`: *"a `.processed.json` sidecar marking the archive done (success OR terminal failure alike, so a permanently-broken archive is never retried forever)."* Any uploader (malicious or merely buggy) triggers this with zero effort — just ship an archive whose `run-report.json` is truncated/corrupt.
+- Seed queue: one entry, `fingerprint: "triaged-fp-repro"`, `status: "triaged"`, `triageClass: "genuine-server-bug"`, `title: "A human already triaged this real defect"`, `capturePath: "/human/verified/capture.json"`.
+- Uploaded archive contains one capture whose `artifact.dedup.fingerprint` is the identical string `"triaged-fp-repro"`, with an ORCL-02 cheat-flagged verdict (trivially achievable by any team member — just include one unsanctioned postulate).
+- Result: `processArchive` reports `filed: true`, `classification: "deterministic"` — **not** `"terminal-conflict"`. The persisted queue entry after the run:
+  ```json
+  {
+    "fingerprint": "triaged-fp-repro",
+    "status": "new",
+    "triageClass": null,
+    "triageConfidence": null,
+    "recurrence": 2,
+    "title": "Dogfood-surfaced: triaged-fp-repro",
+    "summary": "ORCL-02 soundness-hygiene scan flagged 1 unsanctioned finding(s): postulate.",
+    "capturePath": ".../run-1.tar.gz::captures/attack.json",
+    "verdictPath": ".../run-1.tar.gz::captures/attack.verdict.json",
+    ...
+  }
+  ```
+  Status silently regressed `"triaged" -> "new"`, `triageClass` wiped, title/summary/capturePath/verdictPath all replaced with attacker/oracle-derived content. `stats.filed` counts this capture, so `writeBackQueue` would `git commit` and (absent `--no-push`) `git push` this directly to the branch with zero human review — the exact end-to-end harm CR-01 was filed to close, just reached via a status value the fix didn't enumerate.
 
-**Fix:** Wrap the risky read/parse (and ideally the whole block) so a parse failure is treated as a terminal, marked failure like every sibling branch:
+This is not a hypothetical: any fingerprint that has ever reached `"triaged"` or `"fixing"` is equally publicly visible in the tracked `test/fixtures/fix-queue.json` as a `"locked"` one, and the attack requires nothing beyond a valid upload key (the same precondition as the original finding).
 
+**Fix:** Broaden the protected-status condition from an enumerated pair to "anything a human has already moved past `new`" — the fix-queue's own status enum only has one value (`"new"`) that represents "never touched by a human," so the simplest correct guard is to invert the check:
 ```js
-let report;
-try {
-  report = JSON.parse(readFileSync(reportPath, "utf8"));
-} catch (err) {
-  await writeFileAtomic(
-    `${archivePath}.processed.json`,
-    JSON.stringify(
-      { processedAt: new Date().toISOString(), ok: false, reason: "malformed-run-report",
-        detail: err instanceof Error ? err.message : String(err) },
-      null, 2,
-    ),
-  );
-  return { archivePath, error: "malformed-run-report", results: [] };
-}
+// Any status OTHER than "new" means a human has already looked at this
+// entry — an automated, unattended write-back must never regress it
+// via a colliding, attacker-influenced fingerprint, regardless of
+// which of the four post-"new" statuses it currently holds.
+const isProtected = existing !== undefined && existing.status !== "new";
+const attemptsRegression = isProtected && rewritten.status !== undefined && rewritten.status !== existing.status;
 ```
+This is a one-line change, preserves every currently-passing test (locked/rejected protection unchanged; brand-new fingerprints and legitimate same-status recurrence bumps on `"new"` entries are unaffected), and closes the reproduced gap. Consider also protecting non-status fields (`title`/`triageClass`/`capturePath`) on a `"triaged"`/`"fixing"` collision even when status isn't explicitly changing, since `buildQueueEntryFromVerdict` always sets a full field set — the annotate-and-refuse path already used for terminal statuses is the natural template to extend.
+
+---
 
 ## Warnings
 
-### WR-01: Every cron-auto-filed queue entry gets a `capturePath`/`verdictPath` that is dangling by construction
+### WR-08 (new): The advisory file lock's own stale-lock reclamation is a non-atomic check-then-act, so two racing reclaimers can both believe they hold the lock
 
-**File:** `scripts/team/cron-ingest-wrapup.mjs:228, 264` (artifact/result path construction), consumed by `scripts/dogfood/dogfood-wrapup.mjs:151` (`capturePath: artifactPath`)
+**File:** `scripts/dogfood/upload-run.mjs:296-330` (`acquireRetryQueueLock`)
 
-**Issue:** `artifactPath` passed into `wrapUpFn`/`buildQueueEntryFromVerdict` is `join(extracted.scratchDir, "captures", basename(staged.stagedPath))` — a path inside the **ephemeral** `mkdtemp` scratch directory that `processArchive`'s own `finally` block deletes (`extracted.cleanup()`) before `processArchive` even returns to its caller. Every fix-queue entry the cron path files therefore persists a `capturePath`/`verdictPath` pointing at a directory that is already gone by the time anyone reads the queue. This is not hypothetical: the project's own seed data documents exactly this happening and being hand-patched — `test/fixtures/fix-queue.json`, fingerprint `2eb1768df88bfb07`'s notes state verbatim: *"The cron-ingest-wrapup.mjs --no-push re-judging pass's own capturePath/verdictPath pointed at its transient per-run extraction sandbox (deleted by extracted.cleanup() immediately after judging, per scripts/team/cron-ingest-wrapup.mjs's own design) -- corrected here to the STABLE, permanent uploader-side path..."* — i.e. a maintainer already had to manually fix this once; the code itself still reproduces the defect on every future run.
-
-**Fix:** Persist a stable reference instead of the scratch path — e.g. the archive's own on-disk location plus the in-archive relative path (`{archivePath}::captures/<basename>`), or defer writing `capturePath`/`verdictPath` until a maintainer resolves them from the archive during triage, rather than a path guaranteed to be unlinked by the time it is read.
-
-### WR-02: `writeBackQueue` reports `committed: false` even when the commit actually succeeded and only the push failed
-
-**File:** `scripts/team/cron-ingest-wrapup.mjs:316-331`
-
-**Issue:**
+**Issue:** WR-03's fix (commit e39ec41) correctly closes the *common-case* race (two healthy, non-crashed writers appending/flushing around the same time) via `openSync(lockPath, "wx")`, which is atomic. However, the *stale-lock reclamation* branch is not:
 ```js
 try {
-  execFile("git", ["add", relQueuePath], ...);
-  execFile("git", ["commit", "-m", ...], ...);
-  let pushed = false;
-  if (!noPush) {
-    execFile("git", ["push"], ...);   // if THIS throws...
-    pushed = true;
+  const age = Date.now() - statSync(lockPath).mtimeMs;
+  if (age > staleMs) {
+    unlinkSync(lockPath);
+    continue; // Retry immediately after reclaiming an abandoned lock.
   }
-  return { committed: true, pushed };
-} catch (err) {
-  return { committed: false, error: ... };   // ...the already-created local commit is misreported as "not committed"
+} catch { continue; }
+```
+`statSync` (read age) and `unlinkSync` (remove) are two separate syscalls with no atomicity between them. If a lock's original owner crashed (leaving it stale, age > 30s) and two *other* processes are both polling and both observe the same stale lock at nearly the same instant: both pass the `age > staleMs` check, both call `unlinkSync` — the first succeeds and immediately loops back to `openSync(lockPath, "wx")`, successfully creating and returning a *fresh* lock (call it L2). If the second process's `unlinkSync` call executes *after* L2 was created (it targets the same path, not a file handle, so it does not care that the file's identity changed), it silently deletes the first process's legitimate, just-acquired L2. The second process then loops and creates its own L3, believing it has exclusive access — but so does the first process, which is still holding what it thinks is a valid lock (L2, now already unlinked from under it). Both callers now proceed under the illusion of exclusivity, reproducing the exact double-writer clobber WR-03 was written to prevent, scoped narrowly to "a previous holder crashed AND two reclaimers raced within milliseconds of each other."
+
+This is materially narrower than the original WR-03 finding (requires a crashed prior holder, not just ordinary concurrency), which is why it is filed as a Warning rather than re-opening WR-03 as a Critical.
+
+**Fix:** Make the reclaim self-verifying by writing and re-reading a per-attempt owner token immediately after winning the race to recreate the file, retrying the whole loop (not just returning) if the token doesn't survive the read-back:
+```js
+if (age > staleMs) {
+  unlinkSync(lockPath);
+  try {
+    const token = `${process.pid}-${randomUUID()}`;
+    closeSync(openSync(lockPath, "wx"));
+    writeFileSync(lockPath, token);
+    if (readFileSync(lockPath, "utf8") === token) {
+      return () => { try { unlinkSync(lockPath); } catch {} };
+    }
+  } catch { /* fall through to retry */ }
+  continue;
 }
 ```
-A `git push` failure (network down, diverged remote, auth issue) is caught by the same block that wraps `add`+`commit`, so the function reports `{ committed: false, ... }` even though `git commit` already succeeded and a real commit now sits in the local repo. The persisted run summary (`.agda-mcp/team/cron-runs/*.json`) and stdout digest therefore understate what happened, and the *next* cron run with new filings will attempt `git commit` again — silently accumulating local commits, or hitting the already-anticipated-but-differently-caused "nothing to commit" error if the queue file didn't change in between.
+This narrows the remaining window to the read-back itself rather than eliminating it in a fully adversarial-scheduler sense, but is a substantial practical improvement consistent with the module's own "advisory, best-effort, D-14 no-new-dependencies" design constraints.
 
-**Fix:** Track `committed` and `pushed` independently:
+### WR-09 (new): WR-07's SIGKILL escalation kills only the immediate child PID, never the process tree — the orphaned Agda grandchild the fix's own header comment names as the concern is not actually prevented
+
+**File:** `scripts/dogfood/dogfood-run.mjs:371-420` (`finalize`, specifically `child.kill()` at line 379 and `child.kill("SIGKILL")` at line 399); `scripts/dogfood/dogfood-run.mjs:61-84` (`buildDogfoodChildOptions`, no `detached` option); interacts with `src/agda/agda-process-spawn.ts:101-105` (the real Agda subprocess is spawned the same way, by the proxy's *child*, not by the proxy itself)
+
+**Issue:** `finalize()`'s comment claims "Never leak an orphaned Agda process," and WR-07 added SIGKILL escalation specifically to make that guarantee hold even for "a wedged process (or one itself blocked on its own unresponsive Agda grandchild)" (the fix's own commit message). But `child.kill()`/`child.kill("SIGKILL")` both target only the single tracked PID (the proxy's direct child, i.e. `dist/index.js`) — a positive-PID signal never propagates to that process's own children. `dist/index.js`'s own cleanup of its Agda subprocess happens entirely inside its *own* catchable `SIGINT`/`SIGTERM` handler (`src/index.ts:278-279`, which awaits `session.destroy()`). SIGKILL is, by definition, not catchable — so a `dist/index.js` process that is SIGKILLed while wedged never runs that cleanup, and its own Agda child is orphaned (re-parented to PID 1), continuing to run indefinitely with no supervisor.
+
+This was independently confirmed with a live reproduction on this machine: a "mid-parent" process spawned a `sleep 30` "grandchild" exactly the way `agda-process-spawn.ts` spawns Agda (plain `spawn()`, no `detached`), was then sent `SIGKILL` targeting only its own PID (exactly what `finalize()`'s escalation does), and the grandchild was confirmed still running immediately afterward, reparented to PPID 1:
+```
+GRANDCHILD_PID=39746
+--- sending SIGKILL to mid-parent only ---
+(mid-parent confirmed dead)
+--- is the grandchild ('sleep 30') still alive and now orphaned? ---
+  501 39746     1   0  1:38PM ??         0:00.00 sleep 30
+```
+So in exactly the scenario WR-07 exists to handle, the fix improves *reporting accuracy* (the run-report no longer falsely claims a clean exit — `childConfirmedDead`/exit code 1 correctly reflect the ambiguity) but does not achieve the "never leak an orphaned Agda process" invariant its own header comment states. Note the new WR-07 regression test (`dogfood-run-report-checkpoint.test.ts`'s "SIGKILL escalation" test) cannot catch this gap because its fake inner child (`dogfood-fake-mcp-child.mjs`) has no grandchild of its own — the test only proves the immediate child eventually dies, not that its descendants are cleaned up.
+
+**Fix:** Spawn the child in its own process group and target the whole group on escalation — the exact pattern this codebase's own test helper (`killGroup` in `dogfood-run-report-checkpoint.test.ts`) already uses for the same reason:
 ```js
-let committed = false;
-try {
-  execFile("git", ["add", relQueuePath], ...);
-  execFile("git", ["commit", "-m", ...], ...);
-  committed = true;
-  if (!noPush) {
-    execFile("git", ["push"], ...);
-    return { committed: true, pushed: true };
-  }
-  return { committed: true, pushed: false };
-} catch (err) {
-  return { committed, error: ... };
+// buildDogfoodChildOptions:
+return { command: built.command, args: ..., cwd: built.cwd, env: built.env,
+         stdio: ["pipe", "pipe", "pipe"], detached: true };
+
+// finalize():
+try { process.kill(-child.pid, "SIGTERM"); } catch { /* group already gone */ }
+...
+try { process.kill(-child.pid, "SIGKILL"); } catch { /* group already gone */ }
+```
+(Negative PID targets the whole process group under POSIX semantics, reaching the Agda grandchild even when `dist/index.js` itself cannot run its own cleanup.)
+
+### WR-10 (new): `computeProxyExitCode`'s rewritten signal-branch silently drops the `childFailed` flag, narrowing the exported decision table's own contract
+
+**File:** `scripts/dogfood/dogfood-run.mjs:149-161` (`computeProxyExitCode`)
+
+**Issue:** The pre-WR-07 formula was `childFailed || (childSignalCode != null && !proxyKilledChild) ? 1 : 0`, which ORs `childFailed` into the failure condition regardless of `proxyKilledChild`. The post-fix code is:
+```js
+if (childSignalCode != null) {
+  return proxyKilledChild ? 0 : 1;
 }
 ```
-
-### WR-03: Read-modify-write race in the upload retry queue can silently drop pending entries and violate the documented D-08 bound
-
-**File:** `scripts/dogfood/upload-run.mjs:283-313` (`appendRetryQueueEntry`), `scripts/dogfood/upload-run.mjs:346-379` (`flushRetryQueue`)
-
-**Issue:** Both functions follow the same pattern: `readRetryQueue(queuePath)` (full read), mutate an in-memory array, then `writeRetryQueue(queuePath, ...)` (full atomic rewrite of the whole file). There is no locking or CAS between the read and the write. `chainUploadRun` (`dogfood-wrapup.mjs:362-384`) spawns a fresh `upload-run.mjs <runId>` subprocess per finished run, and a real dogfooding workflow can plausibly have two of these overlapping (two runs judged back-to-back, or a manual `--retry-only` flush racing a live run's own failed-upload append). If two `appendRetryQueueEntry` calls (or an append racing a flush) interleave, the second writer's full-file rewrite clobbers the first writer's queue state — the first entry (and its physically-copied pending archive under `resolvePendingArchiveDir()`) is silently lost from the tracked queue, the archive file is never cleaned up, and it also stops counting against the documented "20 archives / 2 GiB" bound (`resolveRetryMaxCount`/`resolveRetryMaxBytes`), since an orphaned file the queue no longer references can never be evicted by the drop-oldest logic.
-
-**Fix:** Use an exclusive-lock-and-rewrite (e.g. open the queue file with `wx` and retry-on-EEXIST, or serialize all queue mutations through a single in-process mutex plus a file lock for cross-process safety), or switch to a genuinely append-only log format (append one line per mutation, compact periodically) so concurrent writers can never clobber each other's entries.
-
-### WR-04: The pre-extraction tar listing does not surface hard-link targets, so a crafted hard-link entry pointing outside the sandbox is not caught by either extraction-safety layer
-
-**File:** `scripts/team/archive-extract.mjs:210-229` (Step A), `scripts/team/archive-extract.mjs:239-266` (Step C)
-
-**Issue:** Step A lists entries via `tar -tf archivePath` (no `-v`), which prints only each entry's own **name**, not its type or (for a hard-link entry) its link target. The unsafe-entry check (`entry.startsWith("/") || entry.split("/").includes("..")`) can therefore only ever reject based on the *new* link's own name, never the file it is being hard-linked *to*. A crafted archive containing a hard-link-type tar entry whose header `linkname` is an absolute path to a file that already exists on the extracting host (in the maintainer's own repo checkout, say) is not represented in the plain `-tf` listing at all, so Step A cannot see it. Step C's post-extraction check (`resolveExistingPathWithinRoot`) is realpath-based and specifically designed to catch **symlink** escapes; a hard link does not manifest as a symlink resolving outside the root — the linked file appears to `stat`/`realpath` as an ordinary file *inside* `scratchDir`, even though it shares an inode (and therefore content) with a file elsewhere on the same filesystem. Neither documented defense-in-depth layer actually covers this entry type, despite the module header's claim that these two layers are comprehensive against "the node-tar CVE class."
-
-(Practical exploitability is bounded by tar-implementation/`EXDEV`-across-filesystem behavior and by the fact this doesn't obviously grant more than direct content injection already does — hence WARNING, not BLOCKER — but the stated security property is measurably incomplete.)
-
-**Fix:** Pass `--absolute-names`-safe verbose listing (`tar -tvf`) and reject any entry whose type flag is a hard link (`h`) or whose printed `-> target`/`link to target` is absolute or escapes the archive root, in addition to the existing name-based check.
-
-### WR-05: The decompressed-size ceiling has no bound on entry count, so a many-tiny/empty-file archive bypasses both the mid-extraction and post-extraction checks
-
-**File:** `scripts/team/archive-extract.mjs:63` (`DEFAULT_MAX_DECOMPRESSED_BYTES`), `scripts/team/archive-extract.mjs:79-103` (`sumFileSizesUnderDir`), `scripts/team/archive-extract.mjs:239-266` (Step C)
-
-**Issue:** Both the mid-extraction poll and the post-extraction walk sum `stats.size` of regular files only. A tar archive containing a very large number of zero-byte (or few-byte) files compresses extremely well (a 512 MiB compressed-size ingest cap comfortably allows tens of millions of near-empty tar-header entries) yet contributes ~0 to the summed byte total at every checkpoint — the 5 GiB decompressed-size ceiling never fires. `readdirSync(scratchDir, { recursive: true })` (Step C) and the extraction itself still have to materialize an entry (inode + directory entry) per file, so this is a real, comparatively cheap-to-construct path to exhausting inodes/memory/CPU on the judging host, entirely outside the two documented byte-based defenses.
-
-**Fix:** Track and cap the total entry count (from the Step A listing, before extraction even starts) alongside the byte ceiling — e.g. reject archives whose `tar -tf` listing exceeds some fixed entry-count ceiling (a few thousand is generous for a legitimate capture bundle).
-
-### WR-06: `selectCodexSessionLogs` compares `corpusRoot` with no path normalization, unlike `selectClaudeCodeLogs`; a relative or trailing-slash `--corpus-root` silently drops all Codex logs from the archive
-
-**File:** `scripts/dogfood/agent-log-selection.mjs:37-39` (`slugifyCorpusRoot`, calls `resolve()`), `scripts/dogfood/agent-log-selection.mjs:153` (`selectCodexSessionLogs`, raw `!==`)
-
-**Issue:** `slugifyCorpusRoot` (used by `selectClaudeCodeLogs`) normalizes via `resolve(corpusRoot)` before slugifying, so a relative or trailing-slash `corpusRoot` still resolves to the correct Claude Code project directory. `selectCodexSessionLogs`, however, compares the recorded `payload.cwd` against `corpusRoot` with strict `!==` and **no normalization at all**:
-```js
-if (parsed?.payload?.cwd !== corpusRoot) { continue; }
+`childFailed` is no longer consulted at all once `childSignalCode` is non-null — it is explicitly `void`-ed earlier in the function and kept only "for API stability/self-documentation" per the function's own comment. Confirmed by direct invocation:
 ```
-`corpusRoot` here is `runReport.corpusRoot`, which is whatever string was passed to `dogfood-run.mjs --corpus-root <path>` (`dogfood-run.mjs`'s `parseDogfoodArgv` does not resolve/normalize it either). If an operator invokes the CLI with a relative path, or a path with a trailing slash, or any string that differs syntactically from Codex's own recorded absolute `cwd` — a completely ordinary thing to type on a command line — `selectCodexSessionLogs` will match zero files, and the resulting upload archive silently omits the Codex session logs entirely, even though the consent statement (`issue-key.mjs`'s `CONSENT_STATEMENT`) promises they are included. This is a silent under-collection bug that undermines the audit-trail goal this whole phase exists to serve, for a very ordinary operator input.
-
-**Fix:** Normalize `corpusRoot` the same way in both selectors — e.g. `const resolvedCorpusRoot = resolve(corpusRoot);` at the top of `selectCodexSessionLogs`, compared against `resolve(parsed.payload.cwd)` (or, simplest, resolve `corpusRoot` once in `dogfood-run.mjs`'s argv parsing before it is ever stored in `run-report.json`, so every downstream consumer sees a canonical path).
-
-### WR-07: `finalize()` only sends SIGTERM to a live child with a fixed 2-second grace period and no SIGKILL escalation; a wedged child can be leaked as an orphan while the report still claims a clean exit
-
-**File:** `scripts/dogfood/dogfood-run.mjs:349-368` (`finalize`), `scripts/dogfood/dogfood-run.mjs:135-140` (`computeProxyExitCode`)
-
-**Issue:**
-```js
-if (child.exitCode === null && child.signalCode === null) {
-  proxyKilledChild = child.kill();   // default signal: SIGTERM
-}
-await Promise.race([
-  fromServerClosed,
-  new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2000).unref()),
-]);
+computeProxyExitCode({ childExitCode: null, childSignalCode: "SIGTERM", childFailed: true, proxyKilledChild: true })
+  OLD => 1   NEW => 0
 ```
-`child.kill()` with no argument sends `SIGTERM`, which a wedged process (or one that is itself blocked on its own unresponsive `agda` subprocess) can ignore or be slow to act on. If the child has not exited within the fixed 2-second window, `Promise.race` proceeds anyway — there is no follow-up `child.kill("SIGKILL")`. The header comment at this exact call site claims *"Never leak an orphaned Agda process"*, but the mechanism as written does not guarantee that: `child.kill()` returning `true` only means the signal was deliverable, not that the process died. Worse, `computeProxyExitCode` then computes `proxyExitCode: 0` for this case (`childExitCode` stays `null`, `childSignalCode` stays `null` since the child never actually received/acted on a terminating signal that Node observed, `childFailed` is `false`) — so the persisted `run-report.json` records a clean, successful exit for a run whose child (and its own live `agda` grandchild) may still be running as an orphan on the host.
+So a hypothetical case where some process `'error'` was observed (`childFailed: true`) on a child that *also* later received a legitimate, proxy-initiated signal death would now report a clean `0` instead of the old code's `1`. This is currently **unreachable** via the single real call site in this file: `dist/index.js` is spawned with a plain 3-pipe stdio (no IPC channel), so Node's `'error'` event on this specific child realistically only fires for a pre-spawn failure (`ENOENT`/`EACCES`), which leaves `child.signalCode` permanently `null` (there was never a process to signal), routing into the separate "both null" branch instead — not the signal branch this gap lives in. It is filed as a Warning (not Critical) for that reason, but `computeProxyExitCode` is an exported, independently-unit-tested "decision table" per its own header comment, and this is a genuine, demonstrable narrowing of that table's documented contract versus the pre-fix version, worth closing defensively before any future change (e.g. adding an IPC channel, or some other 'error' trigger) makes it reachable.
 
-**Fix:** Escalate to `SIGKILL` if the child hasn't exited by the time the grace window elapses:
+**Fix:**
 ```js
-const raced = await Promise.race([
-  fromServerClosed.then(() => "closed"),
-  new Promise((r) => setTimeout(() => r("timeout"), 2000).unref()),
-]);
-if (raced === "timeout" && child.exitCode === null && child.signalCode === null) {
-  child.kill("SIGKILL");
+if (childSignalCode != null) {
+  return proxyKilledChild && !childFailed ? 0 : 1;
 }
 ```
-and reflect an unconfirmed-dead child in the exit metadata rather than reporting `proxyExitCode: 0`.
 
 ## Info
 
 ### IN-01: `ingest-server.mjs`'s temp-file write does not actually mirror `writeFileAtomic`'s O_CREAT|O_EXCL discipline, despite the header comment's claim
 
+**Status:** Unchanged, still open (out of scope for this fix iteration per the fix objective).
+
 **File:** `scripts/team/ingest-server.mjs:246-253`
 
-**Issue:** The comment at line 246-249 says the same-directory temp file "mirrors `writeFileAtomic`'s own temp-then-rename discipline... without importing it." `writeFileAtomic` (`src/session/safe-source-io.ts:163`) deliberately opens its temp file with `flag: "wx"` (`O_CREAT | O_EXCL`) specifically to refuse an open if something already exists at the (UUID-randomized) temp path. `createWriteStream(tempPath)` here uses Node's default flag (`"w"`, i.e. `O_CREAT | O_TRUNC`, no `O_EXCL`) — it mirrors the temp-then-rename *shape* but not the *exclusivity* property the comment attributes to it. Practical risk is very low given the 122 bits of `randomUUID()` entropy in the temp path (the same reasoning `safe-source-io.ts` uses to describe its own `wx` flag as "free" defense-in-depth rather than the primary protection), but the documented parity claim is inaccurate.
+**Issue:** Unchanged from iteration 1 — see original writeup. Not part of this phase's file scope for iteration 2 and not touched by any of the 9 fix commits.
 
-**Fix:** Pass `{ flags: "wx" }` to `createWriteStream(tempPath)` for genuine parity, or correct the comment to note the difference is intentional (streamed writes can't easily recover from an `EEXIST` mid-stream the way a single buffered write can).
+**Fix:** Unchanged — pass `{ flags: "wx" }` to `createWriteStream(tempPath)`, or correct the comment.
 
 ### IN-02: Brief TOCTOU window between key-registry file creation and `chmod(0o600)`
 
+**Status:** Unchanged, still open (out of scope for this fix iteration per the fix objective).
+
 **File:** `scripts/team/issue-key.mjs:94-98` (`writeKeyRegistry`)
 
-**Issue:** `writeFileAtomic` creates the registry file (via its own temp-then-rename, at the process's default umask-derived mode) and only *after* that completes does `writeKeyRegistry` call `chmod(keysPath, 0o600)`. Between the rename and the chmod there is a narrow window where the file may be group/world-readable. Impact is low because the file only ever contains SHA-256 hashes, never a raw key (per `hashKey`/`issueKey`'s own documented invariant), so a reader during that window learns nothing usable to forge a Bearer token.
+**Issue:** Unchanged from iteration 1 — see original writeup. Not part of this phase's file scope for iteration 2 and not touched by any of the 9 fix commits.
 
-**Fix:** Not urgent given the low impact, but for completeness the window can be closed by having `writeFileAtomic` (or a registry-specific variant) accept a `mode` option applied to the temp file itself before rename, rather than chmod'ing after the fact.
+**Fix:** Unchanged — have `writeFileAtomic` accept a `mode` option applied before rename.
 
-### IN-03: `slugifyCorpusRoot`'s lossy path→slug mapping can theoretically collide across two differently-named projects
+### IN-03: `slugifyCorpusRoot`'s lossy path->slug mapping can theoretically collide across two differently-named projects
+
+**Status:** Unchanged, still open. `slugifyCorpusRoot` itself (as opposed to `selectCodexSessionLogs`, which WR-06 fixed) was not touched by any of the 9 fix commits — confirmed by diff inspection of `abe78b4`, which only modifies `selectCodexSessionLogs`.
 
 **File:** `scripts/dogfood/agent-log-selection.mjs:37-39`
 
-**Issue:** `slugifyCorpusRoot` replaces every `/` with `-`. Two distinct absolute paths can produce the identical slug when one path's directory segment contains a literal `-` at a position mirroring where the other has a `/` (e.g. `/Users/eric/my-project` and `/Users/eric-my/project` both slugify to `-Users-eric-my-project`). This is inherited from Claude Code's own observed directory-naming convention (the header comment documents this is "empirically confirmed" to match Claude Code's own scheme) rather than introduced by this module, and Claude Code itself would already co-mingle sessions for such colliding paths at the OS level — so this is not a new defect in the reviewed code, but it is a real (if narrow) mechanism by which an upload could include agent-session content from an unrelated project, worth flagging given this phase's stated consent/data-minimization goals.
+**Issue:** Unchanged from iteration 1 — see original writeup.
 
-**Fix:** No action required in this phase; worth a one-line note in the module header acknowledging the theoretical collision so a future hardening pass (e.g. hashing the corpus root instead of naively slugifying it, if Claude Code's own scheme ever changes) has the context.
+**Fix:** Unchanged — no action required this phase; worth a header note for a future hardening pass.
+
+### IN-04 (new): `dogfood-wrapup.mjs`'s local human-driven CLI path shares the identical unprotected `upsertQueueEntry` call CR-01 fixed only for the cron path
+
+**File:** `scripts/dogfood/dogfood-wrapup.mjs:216-269` (`wrapUpCapture`), `:267` (`upsertFn` call, always the raw, un-wrapped `upsertQueueEntry` when invoked from `scriptMain`)
+
+**Issue:** This review's task explicitly asked to verify that the cron path is the *only* unattended write-back entry point — confirmed true (every other caller of `upsertQueueEntry` across the codebase — `scripts/queue/intake.mjs`'s own CLI, `scripts/queue/seed-initial-cargo.mjs`, `scripts/queue/mirror-github.mjs` — either operates on already-trusted, non-archive-sourced data or is manually invoked, and none run unattended on a schedule). However, `dogfood-wrapup.mjs`'s own CLI (`scriptMain`) calls `wrapUpCapture` without any `deps.upsertQueueEntry` override, so it always uses the raw, unprotected `upsertQueueEntry` — the exact same code path the pre-CR-01 cron judge used. This CLI only ever reads from `resolveRunsRoot()/<runId>/run-report.json` (not an arbitrary path), so it cannot process a team-uploaded archive *through its normal interface*. But nothing prevents an operator from manually copying an externally-sourced `run-report.json` (e.g. extracted by hand from a downloaded team archive while investigating something) into their own local runs directory and then running `dogfood-wrapup.mjs <that-run-id>` — which would reach the identical fingerprint-collision vulnerability with zero protection. The risk is meaningfully lower than the cron path's (this CLI never auto-commits/pushes — a human would see the resulting `git diff` on `test/fixtures/fix-queue.json` before deciding to commit), which is why this is Info rather than a Warning/Critical, but it is worth closing defensively given how cheap the same guard would be to share.
+
+**Fix:** No action required to close CR-01 itself, but consider applying the same `wrapCronUpsertQueueEntry`-style guard (once broadened per CR-01's fix above) to the shared `wrapUpCapture` entry point itself, rather than only at the cron call site, so both callers get the same protection "for free" and future callers can't reintroduce the gap by forgetting to wrap `deps.upsertQueueEntry`.
 
 ---
 
-_Reviewed: 2026-07-04T16:42:53Z_
+_Reviewed: 2026-07-04T18:15:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Iteration: 2 (re-review of fix commits e10cf57, 6662cdc, f55c41b, b8f8c84, e39ec41, 6f256b5, 9e0405f, abe78b4, 58f0f8b against .planning/phases/07-team-feedback-channel-local-wiring/07-REVIEW.md iteration 1 and .planning/phases/07-team-feedback-channel-local-wiring/07-REVIEW-FIX.md)_
