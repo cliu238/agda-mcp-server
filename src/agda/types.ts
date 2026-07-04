@@ -195,9 +195,9 @@ export interface GiveResult {
   /**
    * True when Agda rejected the expression — an Error DisplayInfo
    * response with no confirmed replacement — rather than accepting
-   * it. Populated by give() only; refine()/refineExact()/intro() do
-   * not populate this field yet (give-only fix, fingerprint
-   * bfcba437f5426fd6).
+   * it. Populated by give(), refine(), refineExact(), and intro()
+   * (fingerprint bfcba437f5426fd6, closed for give() first, then for
+   * its three sibling functions — CR-01).
    */
   rejected?: boolean;
   /** Agda's rejection text when `rejected` is true, else null. */

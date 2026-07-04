@@ -181,7 +181,15 @@ export async function give(
   };
 }
 
-/** Refine a goal — apply a function and create subgoals. */
+/**
+ * Refine a goal — apply a function and create subgoals.
+ *
+ * Same rejection-detection shape as give() (CR-01): a rejected `expr`
+ * arrives as an Error DisplayInfo response the same way a rejected
+ * give() does, so refine() must scan for it explicitly instead of
+ * always returning a success-shaped GiveResult (fingerprint
+ * bfcba437f5426fd6).
+ */
 export async function refine(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -193,13 +201,18 @@ export async function refine(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
+  const replacementText = resolveGiveReplacementText(responses, expr);
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
-    replacementText: resolveGiveReplacementText(responses, expr),
+    replacementText,
+    rejected,
+    rejectionText: rejected ? errorText : null,
   };
 }
 
-/** Refine a goal using Agda's exact Cmd_refine command. */
+/** Refine a goal using Agda's exact Cmd_refine command. Same rejection-detection shape as refine() (CR-01). */
 export async function refineExact(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -211,13 +224,18 @@ export async function refineExact(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
+  const replacementText = resolveGiveReplacementText(responses, expr);
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
-    replacementText: resolveGiveReplacementText(responses, expr),
+    replacementText,
+    rejected,
+    rejectionText: rejected ? errorText : null,
   };
 }
 
-/** Introduce a lambda or constructor using Agda's exact Cmd_intro command. */
+/** Introduce a lambda or constructor using Agda's exact Cmd_intro command. Same rejection-detection shape as refine() (CR-01). */
 export async function intro(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -229,9 +247,14 @@ export async function intro(
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
+  const replacementText = resolveGiveReplacementText(responses, expr);
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasReplacementText(replacementText);
   return {
     result: decodeGiveLikeResponse(responses),
-    replacementText: resolveGiveReplacementText(responses, expr),
+    replacementText,
+    rejected,
+    rejectionText: rejected ? errorText : null,
   };
 }
 

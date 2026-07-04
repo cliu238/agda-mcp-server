@@ -43,7 +43,9 @@ export {
   giveRejectedError,
   makeTextToolErrorResult,
   missingPathToolError,
+  throwIfWriteRejected,
   toToolInvocationError,
+  writeActionRejectedError,
 } from "./tool-errors.js";
 
 export {

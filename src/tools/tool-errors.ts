@@ -97,6 +97,63 @@ export function giveRejectedError(
   });
 }
 
+/**
+ * Generalized `giveRejectedError` for give()'s sibling write-capable
+ * proof actions (refine/refineExact/intro/case-split/auto): Agda
+ * declined the request (an Error DisplayInfo with no confirmed
+ * success action), so the source file was left untouched.
+ * `classification` is derived from `tool` (`agda_case_split` ->
+ * `case-split-rejected`) so callers can branch on the specific
+ * rejecting tool instead of a generic `tool-error` — the same
+ * "ok wraps a real Agda rejection" shape `giveRejectedError` closes
+ * for `agda_give`, now closed for its sibling tools (CR-01/CR-02/
+ * CR-03). `extraData` merges tool-specific fields (e.g. `clauses: []`
+ * for case-split) onto the shared `{ goalId, written: false }` base;
+ * the error envelope's `data` is not schema-validated, so this is
+ * safe even though each tool's `outputDataSchema` differs.
+ */
+export function writeActionRejectedError(
+  tool: string,
+  goalId: number,
+  attempted: string,
+  rejectionText: string | null,
+  extraData: Record<string, unknown> = {},
+): ToolInvocationError<Record<string, unknown>> {
+  const classification = `${tool.replace(/^agda_/, "").replace(/_/g, "-")}-rejected`;
+  const message = attempted.length > 0
+    ? `Agda rejected \`${attempted}\` for goal ?${goalId}.`
+    : `Agda rejected the request for goal ?${goalId}.`;
+  return new ToolInvocationError({
+    message,
+    classification,
+    diagnostics: [
+      errorDiagnostic(
+        rejectionText ?? message,
+        classification,
+        "Inspect the goal with agda_goal_type_context_check, adjust the input, and retry. The file was not modified.",
+      ),
+    ],
+    data: { goalId, written: false, ...extraData },
+  });
+}
+
+/**
+ * Throws `writeActionRejectedError(tool, ...)` iff `result.rejected`
+ * is true; a no-op otherwise. Centralizes the branch-and-throw so
+ * each write-capable proof-action callback in goal-tools.ts needs a
+ * single call instead of an inline `if` block — goal-tools.ts sits at
+ * the project's 500-line-per-file ceiling (CR-01/CR-02/CR-03).
+ */
+export function throwIfWriteRejected(
+  tool: string,
+  goalId: number,
+  attempted: string,
+  result: { rejected?: boolean; rejectionText?: string | null },
+): void {
+  if (!result.rejected) return;
+  throw writeActionRejectedError(tool, goalId, attempted, result.rejectionText ?? null);
+}
+
 export function toToolInvocationError(err: unknown): ToolInvocationError {
   if (err instanceof ToolInvocationError) {
     return err;
