@@ -12,7 +12,7 @@
 
 import { afterEach, expect, test, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -653,6 +653,43 @@ test("acquireRetryQueueLock: a stale lock file (older than staleMs) is reclaimed
 
   expect(release).not.toBeNull();
   expect(existsSync(lockPath)).toBe(true);
+  release?.();
+  expect(existsSync(lockPath)).toBe(false);
+});
+
+test("acquireRetryQueueLock: a reclaimed stale lock is written with a non-empty, per-attempt owner token — proves the new self-verifying reclaim path ran, not the plain unlink-then-recreate it replaces (WR-08)", async () => {
+  // A TRUE two-OS-process race is not reproducible deterministically
+  // inside a single Node process — every syscall this reclaim performs
+  // (statSync/unlinkSync/openSync/writeFileSync/readFileSync) is
+  // synchronous, so there is no scheduling point for a second
+  // in-process "reclaimer" to interleave between them, and this
+  // module's lock functions take no fs dependency-injection seam (the
+  // real syscalls are the whole point — see the header comment).
+  // Attempting to fake it by mutating the shared `node:fs` module
+  // object fails outright in this project's ESM test environment
+  // ("Module namespace is not configurable in ESM"). This test instead
+  // asserts the OBSERVABLE difference the fix introduces: the pre-fix
+  // reclaim (a plain unlinkSync that fell through to the NEXT loop
+  // iteration's top-level openSync("wx")) always left an EMPTY lock
+  // file behind, which is indistinguishable from "nobody is
+  // self-verifying ownership." The new reclaim branch writes and reads
+  // back a real, unique, PID-tagged owner token in the SAME step that
+  // recreates the file — this proves that code path actually executed.
+  const dir = makeTempDir("agda-mcp-upload-lock-stale-token-");
+  const queuePath = join(dir, "upload-queue.jsonl");
+  const lockPath = `${queuePath}.lock`;
+  writeFileSync(lockPath, "", "utf8");
+  const old = new Date(Date.now() - 10_000);
+  utimesSync(lockPath, old, old);
+
+  const release = await acquireRetryQueueLock(queuePath, { timeoutMs: 2000, staleMs: 1000, pollIntervalMs: 10 });
+
+  expect(release).not.toBeNull();
+  const content = readFileSync(lockPath, "utf8");
+  const expectedPrefix = `${process.pid}-`;
+  expect(content.startsWith(expectedPrefix)).toBe(true);
+  expect(content.length).toBeGreaterThan(expectedPrefix.length);
+
   release?.();
   expect(existsSync(lockPath)).toBe(false);
 });

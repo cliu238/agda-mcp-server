@@ -33,6 +33,7 @@
 // imported from a .test.ts file.)
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   copyFileSync,
@@ -47,6 +48,7 @@ import {
   rmSync,
   statSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -292,6 +294,24 @@ async function writeRetryQueue(queuePath, entries) {
  * a queue race must never turn into a teammate-blocking upload error.
  * The returned `release()` is idempotent-safe (best-effort unlink,
  * ignoring ENOENT) and MUST be called in a `finally` by every caller.
+ *
+ * WR-08: reclaiming a stale lock used to be a plain `unlinkSync` that
+ * fell through to the NEXT loop iteration's own `openSync(..., "wx")` —
+ * two separate syscalls with no atomicity between them. Two DIFFERENT
+ * reclaimers racing the SAME stale lock could each pass the
+ * `age > staleMs` check, each `unlinkSync` it, and each then "win" a
+ * fresh `openSync("wx")` on their own very next step — but the SECOND
+ * reclaimer's `unlinkSync` targets a PATH, not a file handle, so it has
+ * no way to know the file's identity already changed underneath it: it
+ * can delete the FIRST reclaimer's brand-new, legitimately-held lock
+ * out from under it, and both callers proceed believing they hold
+ * exclusive access. The reclaim now writes and immediately reads back a
+ * per-attempt owner token in the SAME synchronous step that recreates
+ * the file — if a concurrent reclaimer's own recreate-and-write lands
+ * in between, this attempt's read-back will observe a token that is
+ * not its own and fall through to retry (via the same fail-open budget
+ * as ordinary contention) instead of returning a `release()` that would
+ * unlink a lock this attempt never actually owned.
  */
 export async function acquireRetryQueueLock(queuePath, options = {}) {
   const lockPath = `${queuePath}.lock`;
@@ -323,8 +343,33 @@ export async function acquireRetryQueueLock(queuePath, options = {}) {
       try {
         const age = Date.now() - statSync(lockPath).mtimeMs;
         if (age > staleMs) {
+          // WR-08: self-verifying reclaim — see header comment. Unlink
+          // the abandoned lock, recreate it, write a per-attempt owner
+          // token, and read it straight back BEFORE trusting this
+          // attempt as the winner. Any failure in this inner block
+          // (the wx-recreate losing to a concurrent reclaimer, or the
+          // read-back observing a DIFFERENT token) falls through to
+          // `continue` below rather than returning a release() for a
+          // lock this attempt does not actually own.
           unlinkSync(lockPath);
-          continue; // Retry immediately after reclaiming an abandoned lock.
+          try {
+            const token = `${process.pid}-${randomUUID()}`;
+            closeSync(openSync(lockPath, "wx"));
+            writeFileSync(lockPath, token);
+            if (readFileSync(lockPath, "utf8") === token) {
+              return () => {
+                try {
+                  unlinkSync(lockPath);
+                } catch {
+                  // Already gone — fine, release is best-effort.
+                }
+              };
+            }
+          } catch {
+            // Another reclaimer won the recreate (EEXIST) or some other
+            // transient error — fall through to the outer retry below.
+          }
+          continue; // Retry (bounded by the same timeoutMs budget) rather than assume ownership.
         }
       } catch {
         // Lock disappeared between the failed open and this stat (the
