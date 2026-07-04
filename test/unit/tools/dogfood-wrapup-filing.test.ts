@@ -428,3 +428,37 @@ test("buildQueueEntryFromVerdict: affectedTool is the last LOAD-FAMILY action, n
 
   expect(entry.affectedTool).toBe("agda_load");
 });
+
+// ── WR-03: affectedTool fallback must not throw on a non-array recordedActions ──
+//
+// lastLoadFamilyToolName() defensively coerces a missing/non-array
+// recordedActions to []; the `?? artifact.recordedActions.at(-1)?.tool`
+// fallback on the next line called .at(-1) directly with no such
+// guard, throwing an uncaught TypeError for a malformed/adversarial
+// staged capture instead of degrading to "unknown" like the rest of
+// this pure helper.
+
+test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is missing", () => {
+  const artifact = baseArtifact();
+  delete (artifact as any).recordedActions;
+
+  const entry = buildQueueEntryFromVerdict(
+    artifact,
+    "capture.json",
+    fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }),
+  );
+
+  expect(entry.affectedTool).toBe("unknown");
+});
+
+test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is not an array", () => {
+  const artifact = { ...baseArtifact(), recordedActions: "not-an-array" };
+
+  const entry = buildQueueEntryFromVerdict(
+    artifact,
+    "capture.json",
+    fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }),
+  );
+
+  expect(entry.affectedTool).toBe("unknown");
+});

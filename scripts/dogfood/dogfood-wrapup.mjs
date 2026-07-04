@@ -137,8 +137,14 @@ export function buildQueueEntryFromVerdict(artifact, artifactPath, verdict) {
     title: `Dogfood-surfaced: ${artifact.dedup.fingerprint}`,
     summary,
     affectedTool:
+      // lastLoadFamilyToolName() defensively coerces a missing/non-array
+      // recordedActions to []; this fallback must apply the same guard
+      // (WR-03) rather than calling .at(-1) directly on a value that
+      // might not be an array — a malformed/adversarial staged capture
+      // must degrade to "unknown" like the rest of this pure helper,
+      // not throw an uncaught TypeError.
       lastLoadFamilyToolName(artifact.recordedActions)
-      ?? artifact.recordedActions.at(-1)?.tool
+      ?? (Array.isArray(artifact.recordedActions) ? artifact.recordedActions.at(-1)?.tool : undefined)
       ?? "unknown",
     capturePath: artifactPath,
     verdictPath,
