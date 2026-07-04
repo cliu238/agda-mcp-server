@@ -12,12 +12,13 @@
 
 import { afterEach, expect, test, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
 import {
+  acquireRetryQueueLock,
   appendRetryQueueEntry,
   buildArchiveStaging,
   flushRetryQueue,
@@ -550,6 +551,126 @@ test("flushRetryQueue: a failing entry is left in place and never blocks drainin
   expect(remainingQueue[0].runId).toBe("run-fail");
   expect(existsSync(archiveFail)).toBe(true);
   expect(existsSync(archiveOk)).toBe(false);
+});
+
+// ── WR-03: retry-queue TOCTOU race (advisory lock + reconciled flush) ──
+
+test("appendRetryQueueEntry: two CONCURRENT appends to the same queue never clobber each other — both entries survive (WR-03, from-RED)", async () => {
+  const dir = makeTempDir("agda-mcp-upload-race-append-");
+  const queuePath = join(dir, "upload-queue.jsonl");
+  const pendingDir = join(dir, "pending");
+  mkdirSync(pendingDir, { recursive: true });
+
+  const archiveA = join(pendingDir, "run-a.tar.gz");
+  const archiveB = join(pendingDir, "run-b.tar.gz");
+  writeFileSync(archiveA, "x", "utf8");
+  writeFileSync(archiveB, "x", "utf8");
+
+  // Fired concurrently (no await between them) — pre-fix, both read the
+  // SAME initial empty array, both mutate their own in-memory copy, and
+  // whichever writeFileAtomic rename lands LAST silently wins, dropping
+  // the other append's entry (and orphaning its pending archive file).
+  await Promise.all([
+    appendRetryQueueEntry(
+      { ts: 1, runId: "run-a", archivePath: archiveA, url: "http://a.invalid", key: "key-a", bytes: 1 },
+      { queuePath, pendingDir, maxCount: 20, maxBytes: Number.MAX_SAFE_INTEGER },
+    ),
+    appendRetryQueueEntry(
+      { ts: 2, runId: "run-b", archivePath: archiveB, url: "http://b.invalid", key: "key-b", bytes: 1 },
+      { queuePath, pendingDir, maxCount: 20, maxBytes: Number.MAX_SAFE_INTEGER },
+    ),
+  ]);
+
+  const finalQueue = readRetryQueue(queuePath);
+  expect(finalQueue).toHaveLength(2);
+  expect(finalQueue.find((entry: any) => entry.runId === "run-a")).toBeDefined();
+  expect(finalQueue.find((entry: any) => entry.runId === "run-b")).toBeDefined();
+});
+
+test("flushRetryQueue: an appendRetryQueueEntry call that lands WHILE a slow upload is in flight survives the flush's own write-back (WR-03, from-RED)", async () => {
+  const dir = makeTempDir("agda-mcp-upload-race-flush-append-");
+  const queuePath = join(dir, "upload-queue.jsonl");
+  const pendingDir = join(dir, "pending");
+  mkdirSync(pendingDir, { recursive: true });
+
+  const archiveSlow = join(pendingDir, "run-slow.tar.gz");
+  const archiveLate = join(pendingDir, "run-late.tar.gz");
+  writeFileSync(archiveSlow, "x", "utf8");
+  writeFileSync(archiveLate, "x", "utf8");
+
+  await appendRetryQueueEntry(
+    { ts: 1, runId: "run-slow", archivePath: archiveSlow, url: "http://slow.invalid", key: "key-slow", bytes: 1 },
+    { queuePath, pendingDir, maxCount: 20, maxBytes: Number.MAX_SAFE_INTEGER },
+  );
+
+  let resolveUploadStarted: () => void = () => {};
+  const uploadStarted = new Promise<void>((r) => {
+    resolveUploadStarted = r;
+  });
+  let releaseUpload: () => void = () => {};
+  const fetchFn = vi.fn(async () => {
+    resolveUploadStarted();
+    await new Promise<void>((r) => {
+      releaseUpload = r;
+    });
+    return { ok: true, status: 200 };
+  });
+
+  // flushRetryQueue reads the queue (1 entry: run-slow) and starts its
+  // (deliberately stalled) "network" upload.
+  const flushPromise = flushRetryQueue({ queuePath, deps: { fetch: fetchFn } });
+  await uploadStarted;
+
+  // A completely independent append lands WHILE that upload is still in
+  // flight — mirrors the review's own "a manual --retry-only flush
+  // racing a live run's own failed-upload append" scenario.
+  await appendRetryQueueEntry(
+    { ts: 2, runId: "run-late", archivePath: archiveLate, url: "http://late.invalid", key: "key-late", bytes: 1 },
+    { queuePath, pendingDir, maxCount: 20, maxBytes: Number.MAX_SAFE_INTEGER },
+  );
+
+  releaseUpload();
+  const result = await flushPromise;
+
+  expect(result.flushed).toBe(1);
+  const finalQueue = readRetryQueue(queuePath);
+  // run-slow was uploaded and removed by the flush; run-late — appended
+  // DURING the flush's own network call — must still be present, never
+  // clobbered by the flush's own write-back.
+  expect(finalQueue.find((entry: any) => entry.runId === "run-slow")).toBeUndefined();
+  expect(finalQueue.find((entry: any) => entry.runId === "run-late")).toBeDefined();
+});
+
+test("acquireRetryQueueLock: a stale lock file (older than staleMs) is reclaimed rather than blocking for the full timeout", async () => {
+  const dir = makeTempDir("agda-mcp-upload-lock-stale-");
+  const queuePath = join(dir, "upload-queue.jsonl");
+  const lockPath = `${queuePath}.lock`;
+  writeFileSync(lockPath, "", "utf8");
+  const old = new Date(Date.now() - 10_000);
+  utimesSync(lockPath, old, old);
+
+  const release = await acquireRetryQueueLock(queuePath, { timeoutMs: 2000, staleMs: 1000, pollIntervalMs: 10 });
+
+  expect(release).not.toBeNull();
+  expect(existsSync(lockPath)).toBe(true);
+  release?.();
+  expect(existsSync(lockPath)).toBe(false);
+});
+
+test("acquireRetryQueueLock: an unreleased, non-stale lock FAILS OPEN (returns null) within timeoutMs rather than blocking forever", async () => {
+  const dir = makeTempDir("agda-mcp-upload-lock-timeout-");
+  const queuePath = join(dir, "upload-queue.jsonl");
+  const lockPath = `${queuePath}.lock`;
+  // A fresh lock, well within staleMs — never reclaimed, and never
+  // released by anyone else during this test.
+  writeFileSync(lockPath, "", "utf8");
+
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  const release = await acquireRetryQueueLock(queuePath, { timeoutMs: 150, staleMs: 60_000, pollIntervalMs: 10 });
+  expect(stderrSpy).toHaveBeenCalled();
+  stderrSpy.mockRestore();
+
+  expect(release).toBeNull();
 });
 
 // ── scriptMain ───────────────────────────────────────────────────────

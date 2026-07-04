@@ -34,6 +34,7 @@
 
 import { spawn } from "node:child_process";
 import {
+  closeSync,
   copyFileSync,
   cpSync,
   createReadStream,
@@ -41,6 +42,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   rmSync,
   statSync,
@@ -267,6 +269,81 @@ async function writeRetryQueue(queuePath, entries) {
 }
 
 /**
+ * WR-03's advisory file lock: `<queuePath>.lock` is created with
+ * O_CREAT|O_EXCL (`wx` — fails with EEXIST if it already exists), giving
+ * `appendRetryQueueEntry`/`flushRetryQueue` mutual exclusion across
+ * concurrent upload-run.mjs invocations (D-14: zero new npm
+ * dependencies — no external lock library). Both functions follow the
+ * same read-whole-file -> mutate -> write-whole-file pattern with no
+ * locking between the read and the write; `chainUploadRun`
+ * (dogfood-wrapup.mjs) spawns a fresh upload-run.mjs subprocess per
+ * finished run, and two of those can plausibly overlap (two runs judged
+ * back to back, or a manual `--retry-only` flush racing a live run's own
+ * failed-upload append) — without this lock, the second writer's
+ * full-file rewrite silently clobbers the first writer's queue state.
+ *
+ * A lock file older than `staleMs` is treated as ABANDONED (its owning
+ * process crashed without releasing it) and is removed so a single
+ * crash can never permanently wedge the retry queue for every future
+ * run. If the lock still cannot be acquired within `timeoutMs` —
+ * sustained contention, or a race losing every stale-reclaim attempt —
+ * this FAILS OPEN (returns `null`, meaning "proceed without the lock")
+ * rather than throwing: the documented fail-open contract (D-12) means
+ * a queue race must never turn into a teammate-blocking upload error.
+ * The returned `release()` is idempotent-safe (best-effort unlink,
+ * ignoring ENOENT) and MUST be called in a `finally` by every caller.
+ */
+export async function acquireRetryQueueLock(queuePath, options = {}) {
+  const lockPath = `${queuePath}.lock`;
+  const timeoutMs = options.timeoutMs ?? 3000;
+  const staleMs = options.staleMs ?? 30_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 25;
+  const startedAt = Date.now();
+
+  mkdirSync(dirname(lockPath), { recursive: true });
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      closeSync(openSync(lockPath, "wx"));
+      return () => {
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          // Already gone — fine, release is best-effort.
+        }
+      };
+    } catch (err) {
+      if (err?.code !== "EEXIST") {
+        // An unexpected error (e.g. EACCES) acquiring the lock must
+        // never block an upload — fail open immediately rather than
+        // spinning through the whole timeout on an error retrying can
+        // never resolve.
+        break;
+      }
+      try {
+        const age = Date.now() - statSync(lockPath).mtimeMs;
+        if (age > staleMs) {
+          unlinkSync(lockPath);
+          continue; // Retry immediately after reclaiming an abandoned lock.
+        }
+      } catch {
+        // Lock disappeared between the failed open and this stat (the
+        // other writer just finished) — loop around and retry the open
+        // immediately.
+        continue;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, pollIntervalMs));
+    }
+  }
+
+  process.stderr.write(
+    `upload-run: retry-queue lock at ${lockPath} was not acquired within ${timeoutMs}ms — `
+      + "proceeding WITHOUT it (fail-open: a queue race must never block an upload).\n",
+  );
+  return null;
+}
+
+/**
  * Append `entry` (a pending-upload record: `{ ts, runId, archivePath,
  * url, key, bytes, error }`) to the retry queue at `options.queuePath`
  * (default `resolveRetryQueuePath()`). D-08's bound enforcement: while
@@ -278,38 +355,47 @@ async function writeRetryQueue(queuePath, entries) {
  * the dropped run — before the new entry is appended. The whole queue
  * file is rewritten via `writeFileAtomic` (a bound-enforcement pass
  * replaces the whole file; this is NOT the plain single-append case
- * most NDJSON side-channels in this project use).
+ * most NDJSON side-channels in this project use). WR-03: the read,
+ * mutate, and write all happen while `options.lock`-configurable
+ * `acquireRetryQueueLock` holds the queue's advisory lock, so a
+ * concurrent append/flush can never interleave with this one and
+ * silently clobber its entry.
  */
 export async function appendRetryQueueEntry(entry, options = {}) {
   const queuePath = options.queuePath ?? resolveRetryQueuePath();
   const maxCount = options.maxCount ?? resolveRetryMaxCount();
   const maxBytes = options.maxBytes ?? resolveRetryMaxBytes();
 
-  const queue = [...readRetryQueue(queuePath), entry];
-  const totalBytes = () => queue.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0);
+  const release = await acquireRetryQueueLock(queuePath, options.lock);
+  try {
+    const queue = [...readRetryQueue(queuePath), entry];
+    const totalBytes = () => queue.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0);
 
-  while (queue.length > maxCount || totalBytes() > maxBytes) {
-    let oldestIndex = 0;
-    for (let i = 1; i < queue.length; i += 1) {
-      if ((queue[i].ts ?? 0) < (queue[oldestIndex].ts ?? 0)) {
-        oldestIndex = i;
+    while (queue.length > maxCount || totalBytes() > maxBytes) {
+      let oldestIndex = 0;
+      for (let i = 1; i < queue.length; i += 1) {
+        if ((queue[i].ts ?? 0) < (queue[oldestIndex].ts ?? 0)) {
+          oldestIndex = i;
+        }
       }
-    }
-    const [dropped] = queue.splice(oldestIndex, 1);
-    if (dropped?.archivePath) {
-      try {
-        unlinkSync(dropped.archivePath);
-      } catch {
-        // Already gone — fine, this delete is best-effort.
+      const [dropped] = queue.splice(oldestIndex, 1);
+      if (dropped?.archivePath) {
+        try {
+          unlinkSync(dropped.archivePath);
+        } catch {
+          // Already gone — fine, this delete is best-effort.
+        }
       }
+      process.stderr.write(
+        `upload-run: retry queue bound exceeded — dropping oldest pending upload for run `
+          + `${dropped?.runId ?? "unknown"} (queued at ${dropped?.ts ?? "unknown"})\n`,
+      );
     }
-    process.stderr.write(
-      `upload-run: retry queue bound exceeded — dropping oldest pending upload for run `
-        + `${dropped?.runId ?? "unknown"} (queued at ${dropped?.ts ?? "unknown"})\n`,
-    );
+
+    await writeRetryQueue(queuePath, queue);
+  } finally {
+    release?.();
   }
-
-  await writeRetryQueue(queuePath, queue);
 }
 
 /**
@@ -342,13 +428,29 @@ export async function uploadArchive(archivePath, { key, url, runId }, deps = {})
  * successful upload removes the entry (and its pending archive file);
  * a failure leaves it in place and moves on — one bad entry never
  * blocks draining the rest. Returns `{ flushed, remaining }` counts.
+ *
+ * WR-03: the initial read (to decide what to attempt) and the
+ * potentially slow, network-bound upload attempts themselves are
+ * DELIBERATELY outside the advisory lock — holding it across a
+ * multi-GB upload would make a concurrent `appendRetryQueueEntry` call
+ * (e.g. a live run's own failed-upload append) block for as long as
+ * that upload takes, turning a queue race into exactly the
+ * teammate-blocking behavior the fail-open contract (D-12) forbids.
+ * Instead, only the FINAL write-back is guarded, and it reconciles
+ * against a FRESH re-read of the queue under that lock — filtering out
+ * only the specific entries (by `archivePath`, each pending upload's
+ * stable identity) THIS pass actually confirmed uploaded — rather than
+ * blindly overwriting with a `remaining` array computed from the STALE
+ * initial read. An entry appended by a concurrent writer DURING this
+ * flush's own network calls is therefore never silently clobbered by
+ * this flush's own write-back.
  */
 export async function flushRetryQueue(options = {}) {
   const queuePath = options.queuePath ?? resolveRetryQueuePath();
   const uploadFn = options.deps?.uploadArchive ?? uploadArchive;
 
   const queue = readRetryQueue(queuePath);
-  const remaining = [];
+  const flushedArchivePaths = new Set();
   let flushed = 0;
 
   for (const entry of queue) {
@@ -361,21 +463,29 @@ export async function flushRetryQueue(options = {}) {
 
     if (result?.ok) {
       flushed += 1;
+      flushedArchivePaths.add(entry.archivePath);
       try {
         unlinkSync(entry.archivePath);
       } catch {
         // Already gone — fine.
       }
-    } else {
-      remaining.push(entry);
     }
   }
 
-  if (remaining.length !== queue.length) {
-    await writeRetryQueue(queuePath, remaining);
+  let remainingCount = 0;
+  const release = await acquireRetryQueueLock(queuePath, options.lock);
+  try {
+    const freshQueue = readRetryQueue(queuePath);
+    const remaining = freshQueue.filter((entry) => !flushedArchivePaths.has(entry.archivePath));
+    remainingCount = remaining.length;
+    if (remaining.length !== freshQueue.length) {
+      await writeRetryQueue(queuePath, remaining);
+    }
+  } finally {
+    release?.();
   }
 
-  return { flushed, remaining: remaining.length };
+  return { flushed, remaining: remainingCount };
 }
 
 /**
