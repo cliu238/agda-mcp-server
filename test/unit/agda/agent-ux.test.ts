@@ -149,6 +149,38 @@ describe("buildAutoSearchPayload", () => {
     expect(payload).toContain("-h helper");
     expect(payload).toContain("-x bad");
   });
+
+  // ── T-06-12 regression: flag-shaped hints must never reach Agsy ──
+  // fingerprint 5abecc959e43fef3 / RT4 004d161b839ce725.
+
+  test("rejects a flag-shaped hints token instead of injecting it into the payload", () => {
+    expect(() => buildAutoSearchPayload({ hints: ["-t 999999"] })).toThrow(
+      /not a valid Agsy hint/u,
+    );
+    expect(() => buildAutoSearchPayload({ hints: ["-t 999999"] })).toThrow(
+      /-t 999999/u,
+    );
+  });
+
+  test("rejects a flag-shaped excludeHints token instead of injecting it into the payload", () => {
+    expect(() => buildAutoSearchPayload({ excludeHints: ["--unsafe"] })).toThrow(
+      /not a valid Agsy hint/u,
+    );
+    expect(() => buildAutoSearchPayload({ excludeHints: ["--unsafe"] })).toThrow(
+      /--unsafe/u,
+    );
+  });
+
+  test("rejects a hint token containing whitespace (would split into a second Agsy token)", () => {
+    expect(() => buildAutoSearchPayload({ hints: ["foo bar"] })).toThrow(
+      /not a valid Agsy hint/u,
+    );
+  });
+
+  test("allows a hyphenated identifier that does not lead with '-'", () => {
+    const payload = buildAutoSearchPayload({ hints: ["Nat-helper"] });
+    expect(payload).toBe("-h Nat-helper");
+  });
 });
 
 
