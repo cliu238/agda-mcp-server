@@ -134,6 +134,56 @@ test("extractArchiveSafely: an absolute-path entry is also rejected pre-extracti
   expect(result.detail).toBe("/etc/passwd");
 });
 
+// ── WR-05: entry-count ceiling (many-tiny-file decompression-bomb gap) ──
+
+test("extractArchiveSafely: a listing with more entries than maxEntryCount is rejected BEFORE extraction is ever attempted (WR-05, from-RED)", async () => {
+  const archiveDir = makeTempDir("agda-mcp-archive-extract-entrycount-archive-");
+  const archivePath = join(archiveDir, "many-entries.tar.gz");
+  writeFileSync(archivePath, "placeholder", "utf8");
+
+  // Simulate a listing with many near-empty entries — a real many-tiny-
+  // file archive compresses so well that its actual byte content would
+  // be trivial to construct for real, but faking the listing keeps this
+  // test fast and avoids actually writing 10,000 files to disk.
+  const manyEntries = Array.from({ length: 10_000 }, (_, i) => `file-${i}.txt`).join("\n");
+  const execFileSpy = vi.fn((cmd: string, args: readonly string[]) => {
+    if (Array.isArray(args) && args[0] === "-tf") {
+      return `${manyEntries}\n`;
+    }
+    throw new Error(`unexpected execFileSync call: ${cmd} ${JSON.stringify(args)}`);
+  });
+  const spawnSpy = vi.fn();
+
+  const result = await extractArchiveSafely(archivePath, {
+    maxEntryCount: 5000,
+    deps: { execFileSync: execFileSpy, spawn: spawnSpy },
+  });
+
+  expect(result.ok).toBe(false);
+  expect(result.reason).toBe("entry-count-exceeded");
+  expect(result.detail).toContain("10000");
+  expect(result.detail).toContain("5000");
+  // The listing (-tf) was the ONLY execFileSync call — extraction
+  // (spawn("tar", ["-x", ...])) must never be reached once the entry
+  // count itself is already unsafe.
+  expect(execFileSpy).toHaveBeenCalledTimes(1);
+  expect(spawnSpy).not.toHaveBeenCalled();
+});
+
+test("extractArchiveSafely: a listing at or under maxEntryCount is unaffected by the WR-05 check", async () => {
+  const sourceDir = makeTempDir("agda-mcp-archive-extract-entrycount-ok-src-");
+  writeFileSync(join(sourceDir, "a.txt"), "hello", "utf8");
+  const archiveDir = makeTempDir("agda-mcp-archive-extract-entrycount-ok-archive-");
+  const archivePath = join(archiveDir, "ok.tar.gz");
+  buildRealTarGz(archivePath, sourceDir);
+
+  const result = await extractArchiveSafely(archivePath, { maxEntryCount: 5000 });
+
+  expect(result.ok).toBe(true);
+  tempDirs.push(result.scratchDir);
+  result.cleanup();
+});
+
 // ── Post-extraction realpath containment (defense-in-depth layer 2) ──
 
 test("extractArchiveSafely: a symlink planted during extraction that resolves outside scratchDir is caught post-extraction (post-extraction-escape) and scratchDir is removed", async () => {

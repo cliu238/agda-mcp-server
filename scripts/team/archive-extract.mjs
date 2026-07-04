@@ -63,6 +63,25 @@ import { PathSandboxError, resolveExistingPathWithinRoot } from "../../src/repo-
 export const DEFAULT_MAX_DECOMPRESSED_BYTES = 5 * 1024 * 1024 * 1024;
 
 /**
+ * WR-05: a generous, documented defense-in-depth ceiling on the TOTAL
+ * NUMBER of entries an archive may contain, independent of
+ * DEFAULT_MAX_DECOMPRESSED_BYTES above. Both the mid-extraction poll and
+ * the post-extraction walk sum only `stats.size` of regular files — a
+ * tar archive containing a very large number of zero-byte (or few-byte)
+ * files compresses extremely well (the 512 MiB compressed-size ingest
+ * cap comfortably allows tens of millions of near-empty tar-header
+ * entries) yet contributes ~0 to the summed byte total at every
+ * checkpoint, so the byte ceiling never fires even though
+ * `readdirSync(scratchDir, { recursive: true })` and the extraction
+ * itself still have to materialize an entry (inode + directory entry)
+ * per file — a real, comparatively cheap-to-construct path to
+ * exhausting inodes/memory/CPU on the judging host. A few thousand is
+ * generous for any legitimate capture bundle this project produces
+ * (runs/captures/agent-logs — dozens to low hundreds of files, typically).
+ */
+export const DEFAULT_MAX_ENTRY_COUNT = 5000;
+
+/**
  * Best-effort recursive sum of on-disk file sizes under `dir`. Used by
  * the mid-extraction 500ms poll (extractBounded, below) against a
  * LIVE, still-mutating tree — an entry that disappears or is briefly
@@ -204,6 +223,7 @@ export async function extractArchiveSafely(archivePath, options = {}) {
   const readdir = deps.readdirSync ?? readdirSync;
   const stat = deps.statSync ?? statSync;
   const maxDecompressedBytes = options.maxDecompressedBytes ?? DEFAULT_MAX_DECOMPRESSED_BYTES;
+  const maxEntryCount = options.maxEntryCount ?? DEFAULT_MAX_ENTRY_COUNT;
 
   // Step A (pre-check): reject the WHOLE archive on the first
   // offending entry, before any extraction is ever attempted.
@@ -223,6 +243,20 @@ export async function extractArchiveSafely(archivePath, options = {}) {
   }
 
   const entries = listing.split("\n").filter(Boolean);
+
+  // WR-05: cheapest check first — a many-tiny/empty-file archive is
+  // rejected on ENTRY COUNT alone, before the (relatively) more
+  // expensive per-entry unsafe-path scan below and long before either
+  // byte-based ceiling (DEFAULT_MAX_DECOMPRESSED_BYTES) ever gets a
+  // chance to fire.
+  if (entries.length > maxEntryCount) {
+    return {
+      ok: false,
+      reason: "entry-count-exceeded",
+      detail: `${entries.length} entries exceeds ${maxEntryCount}`,
+    };
+  }
+
   const unsafe = entries.find((entry) => entry.startsWith("/") || entry.split("/").includes(".."));
   if (unsafe) {
     return { ok: false, reason: "unsafe-entry-path", detail: unsafe };
