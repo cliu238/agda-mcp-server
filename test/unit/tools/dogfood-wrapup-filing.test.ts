@@ -451,8 +451,20 @@ test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead
   expect(entry.affectedTool).toBe("unknown");
 });
 
-test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is not an array", () => {
-  const artifact = { ...baseArtifact(), recordedActions: "not-an-array" };
+// WR-05: a string value (e.g. "not-an-array") does NOT reproduce the
+// crash this suite is guarding against — String.prototype.at() has
+// existed since ES2022, so the pre-fix formula
+// (`artifact.recordedActions.at(-1)?.tool`) evaluates to
+// "not-an-array".at(-1) ("y"), then "y".tool (undefined), then falls
+// through to `?? "unknown"` on BOTH the pre-fix and fixed code —
+// verified empirically by extracting the literal pre-fix formula and
+// running it against a string vs. a plain object/number. A plain
+// object (or a number) genuinely lacks `.at()` and throws
+// "recordedActions.at is not a function" pre-fix, so it is the
+// fixture that actually exercises the guard this test claims to
+// cover.
+test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is a plain object", () => {
+  const artifact = { ...baseArtifact(), recordedActions: { not: "an-array" } };
 
   const entry = buildQueueEntryFromVerdict(
     artifact,
