@@ -130,7 +130,24 @@ Plans:
   4. The four Phase-5 Info findings are each fixed: argv/run-id sanitization (IN-01); dangling-symlink handling in `install-dogfood-skill.mjs` (IN-02); `git check-ignore` exit-status ambiguity in its test (IN-04); wrapup catch-handler re-dereference of `staged.stagedPath` (IN-05). (DEBT-04)
   5. A retroactive `SECURITY.md` covers Phase 5's process-spawning scripts and is extended to v1.1's new network surfaces (ingest endpoint, upload client); `tsc -p tsconfig.test.json` runs clean (no ReplayManifest index-signature or `structuredContent` errors); `.planning/codebase/` is refreshed via `/gsd:map-codebase`. (DEBT-05, DEBT-06, DEBT-07)
 
-**Plans**: TBD
+**Plans**: 6 plans in 3 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md — DEBT-01/DEBT-02: delete verify-cold-replay.mjs + promote-capture.mjs (and its dogfood-run.mjs call site), fix dangling comment references, record both decisions in PROJECT.md
+- [ ] 09-02-PLAN.md — DEBT-03: WR-01 durability reorder (resetRecordedActions after writeFileAtomic) + WR-12 fixture-tree isolation + WR-08 closure record
+- [ ] 09-03-PLAN.md — DEBT-05: consolidated Phase 5 + Phase 7 threat register (`09-SECURITY.md`), including the plaintext-Bearer-key-in-retry-queue widening
+- [ ] 09-04-PLAN.md — DEBT-06 (part A): mechanical tsconfig.test.json cleanup across 20 files + W5 fix-queue-schema fold-in
+
+**Wave 2** *(blocked on Wave 1 completion — shares dogfood-run.mjs with 09-01)*
+
+- [ ] 09-05-PLAN.md — DEBT-04: IN-01 (argv/run-id sanitization) + IN-02 (skill-installer dangling-symlink) + IN-04 (its test's exit-status precision) + IN-05 (wrapup catch-handler safety)
+
+**Wave 3** *(blocked on Waves 1–2 completion — the phase finale)*
+
+- [ ] 09-06-PLAN.md — DEBT-06 (part B) + DEBT-07: agda-transport.test.ts's remaining type errors, full-repo tsc-clean verification, permanent `typecheck:test` CI gate, DEBT-07's `/gsd:map-codebase` deferral recorded
+
 **Research**: Skip — standard pattern. A fixed, already-itemized P2 checklist from the v1.0 audit, not new capability work.
 
 ## Progress
@@ -146,4 +163,4 @@ Plans:
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
-| 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
+| 9. Residual v1.0 Debt Sweep | v1.1 | 0/6 | Ready to execute | - |
