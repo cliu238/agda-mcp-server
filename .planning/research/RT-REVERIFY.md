@@ -351,3 +351,56 @@ All 8 `needsReverify` RT defect specs (RT1-RT8) now have a definitive, pipeline-
 ---
 
 *Investigation artifacts (driver script, fixture corpora, raw run/wrapup JSON) live under gitignored `tmp/rt-reverify/`, `tmp/rt-driver.mjs`, and `.agda-mcp/runs/`; only this report and the fix-queue.json transitions are committed.*
+
+---
+
+## Phase 6 closeout (plan 06-06): REVERIFY-02 final disposition + acceptance sweep
+
+**Date:** 2026-07-04
+**Scope:** flip the four D-09-named confirmed entries plus RT4 to `locked` (Task 1); disposition every remaining RT-confirmed entry and the 2 oracle-auto-filed entries — fix and lock where the fix is an evident <=2-src-file change with an obvious from-RED unit test, otherwise defer with a recorded reason (Task 2); run the phase's final acceptance sweep.
+
+### Final disposition table
+
+| Fingerprint | Title (short) | End state | Lock/deferral reference |
+|---|---|---|---|
+| `e6f0c1169032b9d5` | Flagship: transitive dependency staleness false-green (#64/#61) | locked (pre-existing, Phase 3.1 — untouched) | `matrixEntryId: issue-64-61-transitive-staleness`; unchanged per this plan's own instruction |
+| `5abecc959e43fef3` | agda_auto CLI-flag hint injection | **locked** | Regression lock: `test/unit/agda/agent-ux.test.ts` (3 `buildAutoSearchPayload` throw cases) + `test/unit/tools/goal-tools-give.test.ts`; commits `26f8356`/`235b0b2` (plan 06-04) |
+| `bfcba437f5426fd6` | agda_give ok:true-wrapping-rejection | **locked** | Regression lock: `test/unit/agda/goal-operations-give.test.ts` + `test/unit/tools/goal-tools-give.test.ts`; commits `c9c9b5b`/`e11211c` (plan 06-04) |
+| `eb7439cb3ed9d6b9` | agda_search_definitions hardcoded agda/ layout | **locked** | Regression lock: `test/unit/tools/file-tools.test.ts` (directory-param cases); commit `67d40a6` (plan 06-05) |
+| `fdc90bfde12fb938` | agda_proof_status "All goals solved" over live constraints | **locked** | Regression lock: `test/unit/tools/analysis-tools.test.ts`; commit `6caa279` (plan 06-05) |
+| `03f7c711c0209369` | RT1: visible hole must never yield completeness | rejected / cannot-reproduce (plan 06-02 — unchanged) | `closedAt` set; evidence in the RT1 section above |
+| `e5f6de1fa365b887` | RT2: not-in-scope query returns bare success | **locked** | Regression lock: `test/unit/agda/expression-operations.test.ts` (4 throw cases across compute/computeTopLevel/infer/inferTopLevel); this plan (06-06), commit `f7c0daa` — `throwOnDisplayError()` added to `src/agda/expression-operations.ts` after empirically verifying the rejection arrives as an Error DisplayInfo, not stderr |
+| `eaea6321183bdf7b` | RT3: failing context-check inside a success result | **locked** | Regression lock: `test/unit/agda/goal-operations-context-check.test.ts` (2 throw cases); this plan (06-06), commit `3abddab` — `goalTypeContextCheck()` now reuses give()'s `detectResponseError()` |
+| `004d161b839ce725` | RT4: agda_auto CLI-flag hints (shared root cause) | **locked** | Same lock references as `5abecc959e43fef3` (cross-ref, D-08, not double-counted) |
+| `a0ae86c7deb9754e` | RT5: mutation-tool reload failure reported as success | **DEFERRED (Phase 6)** | Large-redesign class — shared root cause spans 7 write-capable proof tools (case_split/give/refine/refine_exact/intro/auto/apply_edit); needs a response-schema-level fix (e.g. reloadOk/postReloadDiagnostics) exceeding this wave's <=2-src-file appetite (D-10) |
+| `ad2b6d31f58f1759` | RT6: agda_load five-state conflation | **DEFERRED (Phase 6)** | Pre-approved deferral class — the UX report's "Suggested Schema Direction" response-schema rework |
+| `b6821f42952c6ff8` | RT7: timeout diagnostics misidentify subprocess state | **DEFERRED (Phase 6)** | Pre-approved deferral class — needs a dedicated timeout/processState taxonomy, a diagnostic-design decision, not a mechanical fix |
+| `3306edf4c2d01c53` | RT8: agda_load_no_metas silent on stale-reload transitions | **locked** | Regression lock: `test/unit/session/register-agda-load-no-metas.test.ts`; this plan (06-06), commit `6991916` — mirrors `register-agda-load.ts`'s session-history read, report-side only |
+| `1b612dfeb1d31ea9` | Oracle-auto-filed (RT5 corroboration, same incident) | **DEFERRED (Phase 6)** | Follows `a0ae86c7deb9754e`'s own deferral (D-08, not a separate defect) |
+| `1220f2840142aab8` | Oracle-auto-filed (RT6 investigation byproduct — oracle-tooling fidelity gap) | **DEFERRED (Phase 6)** | Not a live server defect; the `scripts/oracle/orcl-01-differential.mjs` fix is a `scripts/`-only change out of this wave's committed file scope, deferred alongside RT6 |
+
+15 of 15 queue rows accounted for (13 originally-seeded + 2 oracle-auto-filed) — exceeds the >= 12-row disposition-table requirement.
+
+### Acceptance-gate outputs
+
+- `grep -c '"needsReverify": true' test/fixtures/fix-queue.json` → **0**
+- `grep -c '"status": "new"' test/fixtures/fix-queue.json` → **0**
+- `grep -c '"status": "locked"' test/fixtures/fix-queue.json` → **9** (flagship, pre-existing, + 8 entries fixed across Phase 6 waves 3-4)
+- `grep -c '"status": "triaged"' test/fixtures/fix-queue.json` → **5** (every row's notes carry the literal `DEFERRED (Phase 6):` prefix, verified row-by-row)
+- `grep -c '"status": "rejected"' test/fixtures/fix-queue.json` → **1** (RT1, `cannot-reproduce`, unchanged)
+- `npx vitest run test/unit/fixtures/fix-queue.test.ts` → 10/10 passing (the `locked`/`rejected` `closedAt` superRefine and `rejected` → `rejectedReason` invariants hold for every row)
+- `npx vitest run` (full suite) → 197 test files passed, 16 skipped; 1627 tests passed, 179 skipped — zero failures
+- `npm run build` → exit 0
+- `npx tsc -p tsconfig.json --noEmit` → exit 0 (clean, no diagnostics)
+
+### Emit-regression applicability
+
+No load-family false-green candidate was confirmed during this plan's disposition pass. RT2/RT3/RT8's fixes (compute/infer and goalTypeContextCheck's Error-DisplayInfo detection; agda_load_no_metas's session-history report) are all non-load-family or report-side-only changes, and the 4 named entries plus RT4 were already established as non-load-family defects in wave 3. **The emit-regression path had no applicable cargo this phase** — every lock in this closeout uses the from-RED vitest mechanism instead (see the D-11 mechanism note below).
+
+### D-11 mechanism note (condensed from this plan's objective)
+
+D-11 names the Phase-3 emit-regression pipeline as the lock mechanism "per the flagship precedent," but that pipeline's own contracts (`judgeRefusal`, `replayCaptureRegressionEntry`) apply ONLY to load-family false-green candidates carrying an ORCL-01 `server-false-green-candidate` verdict and a `coldTuple`. None of the defects locked in Phase 6 (the 4 named entries, RT4, RT2, RT3, RT8) are load-family tool-envelope defects — forcing them through the emitter would require either fabricating a cold expected value (forbidden by Phase 3's D-06 anti-golden-master refusal) or building new matrix machinery (out of this phase's "cargo, not machinery" scope). Every non-load-family lock in this queue therefore uses its from-RED vitest regression test(s) as the durable lock artifact, with `matrixEntryId` left `null` (the frozen schema in `test/fixtures/fix-queue.ts` requires only `closedAt` for a `locked` status) and the mechanism recorded explicitly in the entry's own `notes` field, per the exact "Regression lock:" grep-able prefix.
+
+### REVERIFY-02 acceptance
+
+Every one of the 4 named entries (`5abecc959e43fef3`, `bfcba437f5426fd6`, `eb7439cb3ed9d6b9`, `fdc90bfde12fb938`) is `locked` with `closedAt` set and notes naming its regression-lock test(s), all of which pass. Every RT-confirmed entry (RT2-RT8, RT4, plus the 2 oracle-auto-filed corroborations) ends `locked` or explicitly `DEFERRED (Phase 6):` with a recorded reason — none silently stalled. Zero entries remain `needsReverify: true` and zero sit in an undocumented non-terminal state. Both of the phase's REVERIFY success criteria (zero `needsReverify`; every confirmed live defect locked or explicitly re-triaged) are now mechanically demonstrated on a green tree.
