@@ -133,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-04 — Phases 6-7 complete. Phase 7 (Team Feedback Channel) proven live end-to-end on localhost: key registry, fail-open upload, ingest endpoint, sandboxed cron judge; E2E-01 satisfied in strongest form — the live run itself surfaced defect 0bc76d15c2fec8df (run-report never written under Codex hard-kill), which was captured→fixed-from-RED→locked through the loop, plus auto-filed finding 2eb1768df88bfb07; 13 further review-chain defects fixed across 3 passes. Note: local main ~118 commits ahead of origin (push decision pending at Phase 8 boundary). Next: Phase 9 (debt sweep) fills the gap while Phase 8 awaits the k8s server (~07-07).**
+*Last updated: 2026-07-04 — Phases 6, 7, 9 complete (Phase 9: all v1.0 P2 debt swept — scripts deleted, WR-01 durability+concurrency closed with human-signed in-flight guard, 40-row SECURITY.md, tsc test-config clean with CI gate, codebase map refreshed). Only Phase 8 (Pinned-Env + Thin k8s Deployment) remains; local main ~140 commits ahead of origin (push decision at Phase 8 boundary).**
