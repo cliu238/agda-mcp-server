@@ -336,7 +336,7 @@
     "triageConfidence": null,
     "recurrence": 2,
     "title": "Linux+real-Agda integration lane: 6 test files fail on ubuntu CI (pre-existing since v1.0)",
-    "summary": "With RUN_AGDA_INTEGRATION=1 on ubuntu-latest, 3 test files fail that pass on macOS: dogfood-flake-classify-live (process-error where type-error expected), capture-regression, manifest-builder. Platform-behavioral deltas in real-Agda process handling, NOT introduced by v1.1 (same files already failing on the v1.0 cleanup commit); v1.1 fixed two other pre-existing lane failures (oracle-orcl-01, oracle-orcl-03) in passing.",
+    "summary": "With RUN_AGDA_INTEGRATION=1 on ubuntu-latest, 5 test files fail that pass on macOS: dogfood-flake-classify-live (process-error where type-error expected), capture-regression, manifest-builder, oracle-orcl-01 (1 test), oracle-orcl-03 (2 tests, conformance-flagged vs consistent). Platform-behavioral deltas in real-Agda process handling, NOT introduced by v1.1 (same files red on the v1.0 cleanup commit run 28638480726).",
     "affectedTool": "agda_load",
     "capturePath": null,
     "verdictPath": null,
@@ -344,6 +344,6 @@
     "relatedFingerprint": [],
     "createdAt": "2026-07-04T22:30:00.000Z",
     "closedAt": null,
-    "notes": "CORRECTION 2026-07-04: initial filing named 6 files; 3 of them (tool-registration-error-safety, session-error-gate-wiring, spawn-error-listener) were log-adjacency misreads and PASS on CI — the real set is the 3 in the summary. CI quarantine via AGDA_MCP_CI_QUARANTINE covers exactly those 3 (ci.yml integration job). DEFERRED (v1.1): pre-existing Linux-lane debt inherited from v1.0, surfaced when the v1.1 push re-ran CI on origin. Evidence: run 28638480726 (2026-07-03, head=v1.0 cleanup commit, same 6 files failing) vs run 28721087256 (2026-07-04, v1.1 head). Out of v1.1 scope: Phase 8 is thin packaging (no new app logic) and Phase 9's P2 checklist never included this lane. DEPLOY-01 relevance: the cluster judge runs on Linux — Phase 8's cluster POLICY-01 re-verify must treat these 6 known deltas as pre-existing context, not new findings. Fix belongs to the next milestone's queue review (QUEUE-02 priority order)."
+    "notes": "CORRECTION 2026-07-04: initial filing named 6 files; 3 of them (tool-registration-error-safety, session-error-gate-wiring, spawn-error-listener) were log-adjacency misreads and PASS on CI — the real set is the 5 in the summary. CI quarantine via AGDA_MCP_CI_QUARANTINE covers exactly those 5 (ci.yml integration job). SECOND CORRECTION 2026-07-04: oracle-orcl-01/03 were initially believed fixed by v1.1 — a log-sampling misread; they were failing throughout and are quarantined too. DEFERRED (v1.1): pre-existing Linux-lane debt inherited from v1.0, surfaced when the v1.1 push re-ran CI on origin. Evidence: run 28638480726 (2026-07-03, head=v1.0 cleanup commit, same 6 files failing) vs run 28721087256 (2026-07-04, v1.1 head). Out of v1.1 scope: Phase 8 is thin packaging (no new app logic) and Phase 9's P2 checklist never included this lane. DEPLOY-01 relevance: the cluster judge runs on Linux — Phase 8's cluster POLICY-01 re-verify must treat these 6 known deltas as pre-existing context, not new findings. Fix belongs to the next milestone's queue review (QUEUE-02 priority order)."
   }
 ]
