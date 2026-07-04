@@ -17,15 +17,15 @@ Actors: the maintainer, internal teammates (trusted, consented), and AI coding a
 
 Locked context (not re-litigated): internal colleagues only; one-time consent = the act of issuing a per-person revocable key, with a written statement of exactly what uploads; full-text logs, no redaction (trusted team); upload hook lives in the proxy/wrap-up layer, never in the published MCP server; GitHub Issues is NOT the ingest path.
 
-- [ ] **TEAM-01**: Maintainer can issue a per-person revocable Bearer key with an `issue-key` script: generates the key, records it in a server-side key registry, and emits the written consent statement naming exactly what uploads (captures + runs + **full agent logs**). Revocation removes the key and takes effect on the next request. No key → uploader has zero network behavior.
-- [ ] **TEAM-02**: Teammate's wrap-up can upload their session: `upload-run.mjs` packs `.agda-mcp/captures/` + `.agda-mcp/runs/` + the Claude Code project-log dir + this project's Codex session files (selected by project slug/mtime) into tar.gz (macOS AppleDouble metadata excluded), POSTs with the Bearer key, and is **fail-open**: no failure ever blocks or errors the teammate's work; failed uploads land in a bounded local retry queue (default: 20 archives / 2 GiB, drop-oldest with loud warning; env-tunable) retried on next invocation; optionally chained at `dogfood-wrapup.mjs` end.
-- [ ] **TEAM-03**: A ~100-line `node:http` ingest endpoint (same code local and k8s; TLS terminates at nginx-ingress) authenticates the Bearer key, enforces a size cap (default 512 MiB compressed, env-tunable; oversize rejected with a clear error), and stores archives untouched by person/date/run-id under an env-configured storage root (local dir now, Ceph PVC after deploy). Logs are stored as archives and read on demand only — extraction happens at judge time, never at ingest.
-- [ ] **TEAM-04**: Unattended cron judging digests uploads: safely extract (materialize-pattern path-sandboxing — never bare tar trust) → oracle triad → N-rerun flake gate → intake → fix queue as `new`, reusing the shipped wrap-up machinery with parameterized corpus-clone paths and policy keys so bundles from another machine don't silently abstain (closes the `agdaDirContents.libraries` absolute-path probe gap). Per-run INCONCLUSIVE/abstention rate is surfaced in the run summary — no human is watching otherwise.
+- [x] **TEAM-01**: Maintainer can issue a per-person revocable Bearer key with an `issue-key` script: generates the key, records it in a server-side key registry, and emits the written consent statement naming exactly what uploads (captures + runs + **full agent logs**). Revocation removes the key and takes effect on the next request. No key → uploader has zero network behavior.
+- [x] **TEAM-02**: Teammate's wrap-up can upload their session: `upload-run.mjs` packs `.agda-mcp/captures/` + `.agda-mcp/runs/` + the Claude Code project-log dir + this project's Codex session files (selected by project slug/mtime) into tar.gz (macOS AppleDouble metadata excluded), POSTs with the Bearer key, and is **fail-open**: no failure ever blocks or errors the teammate's work; failed uploads land in a bounded local retry queue (default: 20 archives / 2 GiB, drop-oldest with loud warning; env-tunable) retried on next invocation; optionally chained at `dogfood-wrapup.mjs` end.
+- [x] **TEAM-03**: A ~100-line `node:http` ingest endpoint (same code local and k8s; TLS terminates at nginx-ingress) authenticates the Bearer key, enforces a size cap (default 512 MiB compressed, env-tunable; oversize rejected with a clear error), and stores archives untouched by person/date/run-id under an env-configured storage root (local dir now, Ceph PVC after deploy). Logs are stored as archives and read on demand only — extraction happens at judge time, never at ingest.
+- [x] **TEAM-04**: Unattended cron judging digests uploads: safely extract (materialize-pattern path-sandboxing — never bare tar trust) → oracle triad → N-rerun flake gate → intake → fix queue as `new`, reusing the shipped wrap-up machinery with parameterized corpus-clone paths and policy keys so bundles from another machine don't silently abstain (closes the `agdaDirContents.libraries` absolute-path probe gap). Per-run INCONCLUSIVE/abstention rate is surfaced in the run summary — no human is watching otherwise.
 - [ ] **TEAM-05**: A teammate can go zero → uploading with pinned-environment distribution via **git install**: an install script (or devcontainer) pins the exact server version (git tag) and exact Agda (`tooling/scripts/run-pinned-agda.sh`), with documented steps. No npm account anywhere in the flow.
 
 ### End-to-End Validation (E2E)
 
-- [ ] **E2E-01**: One fresh, **live** dogfooding session on the pinned CHG corpus (`emilyriehl/Codex-Homotopy-Group` — the fuel manifest's designated first official dogfood-run target, v1.0 decision D-02) runs the COMPLETE loop with zero fixture shortcuts: agent proof-work via `dogfood-run.mjs` → auto-capture → TEAM-02 upload → TEAM-03 ingest → TEAM-04 cron judge (policy key resolved correctly via POLICY-01 — CHG is exactly the case-mismatch corpus) → fix-queue intake with correct dedup against existing CHG entries. Acceptance is **loop-to-verdict** (a definitive per-capture verdict + correct queue behavior), not "must find a new defect"; any confirmed defect continues through the REVERIFY-02 fix→lock path. Precondition documented, not engineered: CHG's vendored agda-unimath is built locally once (overnight, via the corpus's own tooling — no cache system).
+- [x] **E2E-01**: One fresh, **live** dogfooding session on the pinned CHG corpus (`emilyriehl/Codex-Homotopy-Group` — the fuel manifest's designated first official dogfood-run target, v1.0 decision D-02) runs the COMPLETE loop with zero fixture shortcuts: agent proof-work via `dogfood-run.mjs` → auto-capture → TEAM-02 upload → TEAM-03 ingest → TEAM-04 cron judge (policy key resolved correctly via POLICY-01 — CHG is exactly the case-mismatch corpus) → fix-queue intake with correct dedup against existing CHG entries. Acceptance is **loop-to-verdict** (a definitive per-capture verdict + correct queue behavior), not "must find a new defect"; any confirmed defect continues through the REVERIFY-02 fix→lock path. Precondition documented, not engineered: CHG's vendored agda-unimath is built locally once (overnight, via the corpus's own tooling — no cache system).
 
 ### Deployment (DEPLOY) — gated on server arrival (~2026-07-07)
 
@@ -85,11 +85,11 @@ The entire theme was removed from v1.1 after a consumer audit found zero v1.1 us
 | POLICY-01 | Phase 6 | Complete |
 | REVERIFY-01 | Phase 6 | Complete |
 | REVERIFY-02 | Phase 6 | Complete |
-| TEAM-01 | Phase 7 | Pending |
-| TEAM-02 | Phase 7 | Pending |
-| TEAM-03 | Phase 7 | Pending |
-| TEAM-04 | Phase 7 | Pending |
-| E2E-01 | Phase 7 | Pending |
+| TEAM-01 | Phase 7 | Complete |
+| TEAM-02 | Phase 7 | Complete |
+| TEAM-03 | Phase 7 | Complete |
+| TEAM-04 | Phase 7 | Complete |
+| E2E-01 | Phase 7 | Complete |
 | TEAM-05 | Phase 8 | Pending |
 | DEPLOY-01 | Phase 8 | Pending |
 | DEBT-01 | Phase 9 | Pending |
