@@ -71,6 +71,18 @@ describe("matchesTypePattern", () => {
     expect(matchesTypePattern("m ≤ m + n", "_ ≤ _ + _")).toBe(true);
     expect(matchesTypePattern("A -> B -> C", "_ -> _")).toBe(true);
   });
+
+  // WR-02: a literal (non-`_`) pattern token must never skip ahead
+  // searching for a later match — two unrelated literal tokens
+  // stitching together non-adjacent fragments of the actual type is a
+  // false positive, not a real type-shape match.
+  test("does not let literal tokens skip ahead to stitch together unrelated fragments", () => {
+    expect(matchesTypePattern("Nat -> Bool + Bool -> Nat", "Nat + Nat")).toBe(false);
+  });
+
+  test("still rejects a pattern with more tokens than the actual type", () => {
+    expect(matchesTypePattern("Nat", "Nat -> Nat")).toBe(false);
+  });
 });
 
 describe("parse options helpers", () => {

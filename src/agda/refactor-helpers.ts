@@ -33,35 +33,32 @@ function tokenMatches(pattern: string, actual: string): boolean {
 }
 
 /**
- * Lightweight type-shape match: walk `pattern` tokens left-to-right
- * and confirm each one appears in order in `typeText`, with `_`
- * matching any single token. Greedy on the actual side, so
- * `pattern = "Nat → _"` matches `"Nat → List Nat"`. Returns true iff
- * every pattern token was consumed.
+ * Lightweight type-shape match: compare `pattern` tokens against
+ * `typeText`'s tokens at the SAME positional index, with `_` matching
+ * any single token. Prefix match, not full match: `pattern =
+ * "Nat → _"` matches `"Nat → List Nat"` (the trailing `Nat` is never
+ * inspected) — but a literal (non-`_`) pattern token must match the
+ * actual token at that exact position; it never skips ahead searching
+ * for a later match elsewhere in `typeText`.
+ *
+ * WR-02: an earlier version let a literal token on a mismatch advance
+ * only the actual-side cursor and retry later, an unbounded skip-
+ * ahead search. That let two unrelated literal pattern tokens bind to
+ * non-adjacent fragments of the actual type, e.g.
+ * `matchesTypePattern("Nat -> Bool + Bool -> Nat", "Nat + Nat")`
+ * incorrectly returned true by stitching together the leading and
+ * trailing `Nat` across an unrelated `Bool + Bool` in between.
  */
 export function matchesTypePattern(typeText: string, pattern: string): boolean {
   const actualTokens = splitWords(typeText);
   const patternTokens = splitWords(pattern);
-  if (patternTokens.length === 0) return false;
-  if (actualTokens.length === 0) return false;
+  if (patternTokens.length === 0 || actualTokens.length === 0) return false;
+  if (patternTokens.length > actualTokens.length) return false;
 
-  let p = 0;
-  let a = 0;
-  while (p < patternTokens.length && a < actualTokens.length) {
-    const want = patternTokens[p];
-    if (want === "_") {
-      p += 1;
-      a += 1;
-      continue;
-    }
-    if (tokenMatches(want, actualTokens[a])) {
-      p += 1;
-      a += 1;
-      continue;
-    }
-    a += 1;
+  for (let i = 0; i < patternTokens.length; i++) {
+    if (!tokenMatches(patternTokens[i], actualTokens[i])) return false;
   }
-  return p === patternTokens.length;
+  return true;
 }
 
 /** True if `text` looks like a single Agda identifier (letters, digits, `_`, `'`, `.`). */
