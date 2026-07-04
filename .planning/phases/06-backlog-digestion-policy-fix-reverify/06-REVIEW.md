@@ -1,493 +1,467 @@
 ---
 phase: 06-backlog-digestion-policy-fix-reverify
-reviewed: 2026-07-04T02:55:41Z
+reviewed: 2026-07-04T03:43:34Z
 depth: standard
-files_reviewed: 24
+files_reviewed: 11
 files_reviewed_list:
-  - scripts/dogfood/dogfood-wrapup.mjs
-  - scripts/oracle/orcl-02-soundness-scan.mjs
-  - scripts/oracle/run-oracle.mjs
-  - src/agda/expression-operations.ts
   - src/agda/goal-operations.ts
-  - src/agda/refactor-helpers.ts
   - src/agda/types.ts
-  - src/session/register-agda-load-no-metas.ts
-  - src/tools/analysis-tools.ts
-  - src/tools/file/search-definitions.ts
+  - src/protocol/responses/proof-actions.ts
   - src/tools/goal-tools.ts
+  - src/tools/goal-write-tools.ts
   - src/tools/tool-errors.ts
   - src/tools/tool-helpers.ts
-  - test/fixtures/fix-queue.json
-  - test/unit/agda/agent-ux.test.ts
-  - test/unit/agda/expression-operations.test.ts
-  - test/unit/agda/goal-operations-context-check.test.ts
-  - test/unit/agda/goal-operations-give.test.ts
-  - test/unit/fixtures/fix-queue.test.ts
-  - test/unit/session/register-agda-load-no-metas.test.ts
-  - test/unit/tools/analysis-tools.test.ts
-  - test/unit/tools/dogfood-wrapup-filing.test.ts
-  - test/unit/tools/file-tools.test.ts
-  - test/unit/tools/goal-tools-give.test.ts
-  - test/unit/tools/oracle-orcl-02.test.ts
-  - test/unit/tools/oracle-run-oracle.test.ts
+  - src/tools/analysis-tools.ts
+  - src/agda/refactor-helpers.ts
+  - scripts/dogfood/dogfood-wrapup.mjs
+  - src/agda/advanced-queries.ts
 findings:
-  critical: 3
-  warning: 3
-  info: 2
-  total: 8
+  critical: 1
+  warning: 2
+  info: 3
+  total: 6
 status: issues_found
 ---
 
-# Phase 06: Code Review Report
+# Phase 06: Code Review Report (re-review, iteration 2)
 
-**Reviewed:** 2026-07-04T02:55:41Z
+**Reviewed:** 2026-07-04T03:43:34Z
 **Depth:** standard
-**Files Reviewed:** 24
+**Files Reviewed:** 11
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the phase's 7 claimed defect fixes (agda_auto flag-injection, the
-give/compute/infer/context-check Error-DisplayInfo rejection detectors,
-agda_proof_status's completeness claim, agda_search_definitions's directory
-param) plus the new `--policy` passthrough and case-exact resolution in the
-oracle scripts. Each fix, evaluated narrowly against its own stated scope, is
-implemented correctly and is backed by real regression tests (verified by
-tracing `detectResponseError`/`throwOnDisplayError`/`resolvePolicyStrict`
-call sites and cross-checking against `git show` for the 8 commits that
-touched these files).
+This is a re-review verifying fix commits `3155de3`, `ed42cc4`, `e558069`,
+`f57636d`, `2725dbc`, `33c34ec` (06-REVIEW-FIX.md, iteration 1) against the
+6 in-scope findings from the prior pass (CR-01, CR-02, CR-03, WR-01, WR-02,
+WR-03). Verification was done by tracing the actual pre/post diffs (`git
+show <commit>`, `git diff 3155de3^ HEAD -- src/agda/goal-operations.ts`),
+reading every new/changed decode-path and tool-callback line against the
+original finding's described defect, reading every new regression test to
+confirm it exercises the real code path (not a mock that begs the
+question), running `npx tsc -p tsconfig.json --noEmit` (clean), and running
+the full `test/unit` + `test/property` tiers (197 files / 1639 tests
+passed, 1 file / 17 tests skipped, 0 failed).
 
-However, the batch left the *exact same root-cause defect it was fixing*
-alive in sibling functions of the very files it touched. `give()`,
-`compute()`/`computeTopLevel()`, `infer()`/`inferTopLevel()`, and
-`goalTypeContextCheck()` were all patched to detect an Agda-reported
-`DisplayInfo`/`Error` response instead of silently decoding a success shape
-around it — but `refine()`, `refineExact()`, `intro()`, `caseSplit()`, and
-`autoOne()` in the same `src/agda/goal-operations.ts` file were not, despite
-sharing the identical response-decoding helpers
-(`decodeGiveLikeResponse`/`decodeCaseSplitResponses`) and the identical
-protocol behavior. For `caseSplit()`/`autoOne()` this is worse than a
-misleading `ok:true` — because their tool callbacks gate the *file write*
-on "did we get non-empty text back" rather than "did Agda actually accept
-this", Agda's own rejection/error text can be written into the user's
-`.agda` source file as if it were a legitimate case-split clause or a
-found auto-search solution. `fix-queue.json`'s own entries for
-`5abecc959e43fef3`/`004d161b839ce725` already recorded empirical proof that
-`agda_auto`'s `data.solution` can carry Agda's raw rejection text while
-`hasSolution:true` — the phase's fix (`assertValidAutoHint`) closes only the
-flag-injection *entry point* into that behavior, not the decode-side
-vulnerability itself.
+**Result: all 6 are genuinely resolved.** CR-01/CR-02/CR-03 all now share
+the identical `detectResponseError()` + a schema-presence guard
+(`hasReplacementText()`/`hasMakeCaseResponse()`/`hasGiveActionResponse()`)
+two-sided check `give()` originally pioneered, and every one of the 6
+write-capable proof-action tools (`agda_case_split`, `agda_give`,
+`agda_refine`, `agda_refine_exact`, `agda_intro`, `agda_auto`) now throws a
+tool-specific `<op>-rejected` `ToolInvocationError` before any write-gating
+logic runs. WR-01/WR-02/WR-03's production fixes are also all correct and
+verified by direct code tracing, not just their own regression tests.
 
-Two secondary findings (a `text`/`data` self-contradiction risk in
-`agda_proof_status` and a false-positive-prone type-pattern matcher) and two
-minor Info items round out the report. `test/fixtures/fix-queue.json` itself
-was checked for internal consistency (fingerprint uniqueness,
-`relatedFingerprint` references, and factual accuracy of the "FIXED" notes
-against the actual diffs) and found accurate — none of its claims overstate
-what was actually fixed.
+However, this re-review is **not clean**, for three reasons:
+
+1. **The fixer's own documented follow-up predicts a live vulnerability
+   the fixer flagged but did not fix.** `autoAll()` in
+   `src/agda/advanced-queries.ts` shares the exact CR-03 shape
+   (`decodeGiveLikeResponse()`'s unguarded raw-`DisplayInfo` fallback) and
+   remains completely unpatched — confirmed by direct code reading, not
+   just trusting the fixer's note. While investigating it, a **second,
+   previously-unflagged sibling with the identical defect** was found:
+   `elaborate()` in the same file. Filed together as **CR-04**.
+2. **The brand-new CR-02/CR-03 guard helpers have their own residual gap.**
+   `hasGiveActionResponse()`/`hasMakeCaseResponse()` (both introduced by
+   this exact fix pass) check response-*kind* presence only; the zod
+   schemas backing them explicitly permit an empty/absent payload, so the
+   two-sided guard can theoretically still be defeated. Filed as **WR-04**.
+3. **One of WR-03's two claimed regression tests is not actually
+   from-RED.** Proven empirically (see WR-05) that the "non-array
+   `recordedActions`" test uses a string value, which — because
+   `String.prototype.at()` exists — does not reproduce the crash the test
+   claims to guard against. The shipped production fix is still correct;
+   only the test's evidentiary claim is overstated.
+
+IN-01 and IN-02 remain open, unchanged, per this pass's explicit
+out-of-scope instruction.
+
+## Resolved Findings (this iteration)
+
+### CR-01 — RESOLVED (commit `3155de3`)
+
+`refine()` (`src/agda/goal-operations.ts:212-232`), `refineExact()`
+(`:235-255`), and `intro()` (`:258-278`) each now call the same
+`detectResponseError()` (`:53-63`) already used by `give()`, and compute
+`rejected = errorText !== null && !hasReplacementText(replacementText)`
+exactly as the original Fix snippet specified. `src/agda/types.ts:201-215`
+(`GiveResult`) documents `rejected`/`rejectionText` as shared across all
+four functions. `src/tools/goal-write-tools.ts` (the new sibling
+`goal-tools.ts` was split into per CR-01's file-size trigger) calls
+`throwIfWriteRejected("agda_refine"/"agda_refine_exact"/"agda_intro", ...)`
+(lines 162, 216, 269) immediately after obtaining each result, before any
+write-gating logic. `writeActionRejectedError()`/`throwIfWriteRejected()`
+(`src/tools/tool-errors.ts:115-155`) generalize the give-only
+`giveRejectedError` into a tool-agnostic helper, deriving classification
+`<op>-rejected` from the tool name — confirmed against
+`test/unit/tools/goal-tools-write-rejected.test.ts`'s assertions
+(`refine-rejected`, `refine-exact-rejected`, `intro-rejected`).
+`test/unit/agda/goal-operations-refine.test.ts` exercises the real
+`refine()`/`refineExact()`/`intro()` functions (not mocks) against a
+literal Error-`DisplayInfo` response fixture and confirms
+`rejected: true`/`rejectionText` contains `"UnequalTerms"`. Diffed against
+`3155de3^` to confirm the pre-fix functions had no such check.
+
+### CR-02 — RESOLVED (commit `ed42cc4`)
+
+`caseSplit()` (`src/agda/goal-operations.ts:150-167`) now computes
+`rejected = errorText !== null && !hasMakeCaseResponse(responses)`, using
+a new `hasMakeCaseResponse()` (`src/protocol/responses/proof-actions.ts:
+213-215`) that mirrors `hasReplacementText()`'s two-sided-guard idiom.
+`src/tools/goal-write-tools.ts:55` calls
+`throwIfWriteRejected("agda_case_split", goalId, variable, result)`
+*before* the `result.clauses.length > 0` write-gating block (verified by
+reading the callback in full, lines 51-80) — this closes the data-loss
+path (a rejected split's raw error text landing in the source file as a
+fabricated clause) that made CR-02 more severe than CR-01/CR-03.
+`test/unit/agda/goal-operations-case-split.test.ts` and the case-split
+cases in `goal-tools-write-rejected.test.ts` (including a test explicitly
+designed to crash against `applyEditAndReload` if the rejection check were
+skipped — see its own comment) both pass.
+
+### CR-03 — RESOLVED for the documented scope (commit `e558069`)
+
+`autoOne()` (`src/agda/goal-operations.ts:297-315`) now computes
+`rejected = errorText !== null && !hasGiveActionResponse(responses)`,
+using a new `hasGiveActionResponse()` (`proof-actions.ts:129-131`).
+`src/tools/goal-write-tools.ts:330` calls
+`throwIfWriteRejected("agda_auto", goalId, payload, result)` before the
+`hasReplacementText(result.solution)` write-gating check (lines 320-357).
+`test/unit/agda/goal-operations-auto-one.test.ts` reproduces the
+empirically-recorded `fix-queue.json` `NotInScope`-as-solution shape and
+confirms `rejected: true`. As the fix report itself documents (and the
+original finding anticipated), this closes only the `Error`-kind half of
+the gap for `autoOne()`/`agda_auto` specifically — the `Auto`-kind "no
+solution found" sub-case for that one function remains an intentionally
+deferred, documented open question pending a live-Agda probe.
+**Superseded/broadened by CR-04 below**: the *sibling* functions sharing
+the identical `decodeGiveLikeResponse()` fallback (`autoAll()`,
+`elaborate()`) were never touched by this commit at all, not even
+partially.
+
+### WR-01 — RESOLVED (commit `f57636d`)
+
+`src/tools/analysis-tools.ts:66` now computes a single
+`hasConstraints = constraints.text.trim().length > 0` and reuses it for
+every branch in `agda_proof_status`: the `**Constraints:** yes` line
+(`:71`), the `### Constraints` section (`:84`), the completeness tagline
+(`:88-92`), and the returned `data.hasConstraints` (`:99`) — confirmed no
+other raw-truthiness check on `constraints.text` remains in the function.
+`test/unit/tools/analysis-tools.test.ts:149-174` passes a whitespace-only
+`constraints: async () => ({ text: "   \n" })` fixture and asserts `"All
+goals solved."` plus `data.hasConstraints === false`, which would fail
+under the pre-fix raw-truthiness check (`!"   \n"` is `false`, so the
+pre-fix code would have taken the "NOT confirmed complete" branch while
+reporting `hasConstraints` inconsistently) — genuinely from-RED.
+
+### WR-02 — RESOLVED (commit `2725dbc`)
+
+`matchesTypePattern()` (`src/agda/refactor-helpers.ts:52-62`) replaced the
+skip-ahead walk with strict positional comparison: pattern token `i` must
+match actual token `i` exactly (only `_` is a wildcard), and a pattern
+longer than the actual token stream can never match. Confirmed the sole
+caller (`src/tools/file/search-definitions.ts:173`) doesn't rely on
+mid-string alignment (it's a prefix match against a definition's type
+signature, matching the function's own documented "prefix match, not full
+match" contract). `test/unit/agda/agent-ux.test.ts:80` asserts
+`matchesTypePattern("Nat -> Bool + Bool -> Nat", "Nat + Nat") === false`
+(previously `true` per the original finding) and the pre-existing
+reflexivity property test (`test/property/agda/agent-ux.property.test.ts:
+55`) still passes under the new implementation.
+
+### WR-03 — Production fix RESOLVED (commit `33c34ec`); see new WR-05 for a test-coverage caveat
+
+`scripts/dogfood/dogfood-wrapup.mjs:139-148`'s `affectedTool` fallback now
+reads:
+```js
+lastLoadFamilyToolName(artifact.recordedActions)
+?? (Array.isArray(artifact.recordedActions) ? artifact.recordedActions.at(-1)?.tool : undefined)
+?? "unknown",
+```
+which guards the `.at(-1)` call with the same `Array.isArray` check
+`lastLoadFamilyToolName()` uses internally. This **is** a correct and
+complete fix — verified empirically (not just read) by extracting the
+pre-fix formula and running it against `recordedActions = undefined`,
+which throws `Cannot read properties of undefined (reading 'at')`
+pre-fix and returns `"unknown"` post-fix. See **WR-05** below for a
+caveat about this commit's own regression-test coverage.
 
 ## Critical Issues
 
-### CR-01: `refine()`, `refineExact()`, and `intro()` still wrap an Agda rejection in an `ok:true` response — the same bug just fixed for `give()`
+### CR-04: `autoAll()` and `elaborate()` still return Agda's raw rejection text as a fabricated result — the same `decodeGiveLikeResponse()` gap CR-01/CR-03 fixed everywhere else in `goal-operations.ts`
 
-**File:** `src/agda/goal-operations.ts:185-236`
+**File:** `src/agda/advanced-queries.ts:196-205` (`autoAll`), `:120-132` (`elaborate`)
 **Issue:**
-This phase fixed `give()` (commit `e11211c`) so that an Agda-rejected
-expression (delivered as a `DisplayInfo` response with `info.kind ===
-"Error"`, never via stderr) is detected via the new `detectResponseError()`
-helper and surfaced as `rejected: true` / `rejectionText`, which
-`agda_give`'s callback turns into `ok:false`/`give-rejected`
-(`src/tools/goal-tools.ts:172-173`). The type carrying this outcome
-documents the narrowed scope explicitly:
-
+The fix report for CR-03 explicitly flagged this as an unfixed follow-up
+("`src/agda/advanced-queries.ts`'s `autoAll()` ... shares the identical
+`Cmd_autoAll`/`decodeGiveLikeResponse` vulnerability shape as CR-03's
+`autoOne()` ... left untouched ... Worth a follow-up finding"). Tracing the
+current code confirms this is real and still live:
 ```ts
-// src/agda/types.ts:195-202
-/**
- * True when Agda rejected the expression — an Error DisplayInfo
- * response with no confirmed replacement — rather than accepting
- * it. Populated by give() only; refine()/refineExact()/intro() do
- * not populate this field yet (give-only fix, fingerprint
- * bfcba437f5426fd6).
- */
-rejected?: boolean;
-```
-
-`refine()` (line 185), `refineExact()` (line 203), and `intro()` (line 221)
-call only `throwOnFatalProtocolStderr(responses)` — confirmed
-(`src/agda/protocol-errors.ts`) to inspect *stderr* text against three fatal
-regexes and nothing else; it never looks at `DisplayInfo`/`Error` responses.
-When Agda rejects a `refine`/`intro` expression the same way it rejects a
-`give` expression, `resolveGiveReplacementText` returns `null` (no
-`GiveAction` was ever emitted), so no file write happens — but
-`decodeGiveLikeResponse` still falls back to the raw `DisplayInfo` text as
-`result.result`, and `goal-tools.ts`'s `agda_refine`/`agda_refine_exact`/
-`agda_intro` callbacks (lines 221-252, 254-305, 307-356) never throw, so
-`registerGoalTextTool`'s wrapper (`src/tools/tool-registration.ts`)
-unconditionally returns `okEnvelope(...)`. The MCP client sees
-`ok:true`/`classification:"ok"` with Agda's raw rejection text
-(`UnequalTerms`, `NotInScope`, ...) embedded in `data.result` — the exact
-"ok wraps a real Agda rejection" false-green shape fingerprint
-`bfcba437f5426fd6` was created to close, just reachable through three
-different tool names. No test file in this repo exercises rejection
-detection for `refine`/`refineExact`/`intro` (confirmed via
-`grep -rn "detectResponseError\|rejected" src/agda/goal-operations.ts` and
-a search of `test/unit` for case-split/refine-rejection coverage — none
-exists).
-
-**Fix:**
-```ts
-// src/agda/goal-operations.ts — apply to refine(), refineExact(), intro()
-export async function refine(
-  ctx: AgdaCommandContext,
-  goalId: number,
-  expr: string,
-): Promise<GiveResult> {
+/** Auto-solve all goals. */
+export async function autoAll(ctx: AgdaCommandContext): Promise<AutoResult> {
   ctx.requireFile();
   const responses = await ctx.sendCommand(
-    ctx.iotcm(modeGoalCommand("Cmd_refine_or_intro", "True", goalId, quoted(expr))),
+    ctx.iotcm(rewriteTopLevelCommand("Cmd_autoAll", "Normalised")),
   );
   throwOnFatalProtocolStderr(responses);
   ctx.syncGoalIdsFromResponses(responses);
-  const replacementText = resolveGiveReplacementText(responses, expr);
-  const errorText = detectResponseError(responses);
-  const rejected = errorText !== null && !hasReplacementText(replacementText);
+  return { solution: decodeGiveLikeResponse(responses) };
+}
+```
+`autoAll()` returns an `AutoResult` — the exact same type CR-03 added
+`rejected`/`rejectionText` to — but never populates them, and never calls
+`detectResponseError`/`hasGiveActionResponse`. `agda_auto_all`'s callback
+(`src/tools/query-tools.ts:184-196`) has no `writeToFile` option and never
+writes to a file (`inputSchema: {}`, no call to `applyEditAndReload`
+anywhere in the function), so this cannot corrupt a file the way CR-02/
+CR-03 could — but it unconditionally reports `ok:true` /
+`hasSolution: Boolean(result.solution)` regardless of whether
+`result.solution` is a genuine auto-search result or Agda's own
+`NotInScope`/internal-error text, which is the identical "ok wraps a real
+Agda rejection" false-green shape CR-01 was rated Critical for (also with
+no write consequence). No test exists for this at all —
+`test/unit/tools/query-tools.test.ts:47` stubs `autoAll` to always return
+`{ solution: "" }`, never exercising the non-empty/rejection case.
+
+While verifying this, an independent second instance of the identical
+pattern was found in the same file:
+```ts
+/** Elaborate an expression in a goal context. */
+export async function elaborate(
+  ctx: AgdaCommandContext,
+  goalId: number,
+  expr: string,
+): Promise<ElaborateResult> {
+  ctx.requireFile();
+  const responses = await ctx.sendCommand(
+    ctx.iotcm(modeGoalCommand("Cmd_elaborate_give", "Normalised", goalId, quoted(expr))),
+  );
+  throwOnFatalProtocolStderr(responses);
+  return { elaboration: decodeGiveLikeResponse(responses) };
+}
+```
+`agda_elaborate` (`src/tools/expression-tools.ts:151-176`) is also
+read-only (no write path) and displays `result.elaboration` verbatim as
+"the fully explicit form" of the expression — an ill-typed `expr` would
+have its Error-`DisplayInfo` rejection text displayed as if it were a
+successful elaboration, again with `ok:true`.
+
+Both are "mislead, not corrupt" — the same severity driver that made
+CR-01 Critical rather than the data-loss driver that made CR-02/CR-03
+"strictly more severe." Given this project's explicit purpose is
+detecting and eliminating false-green tool responses for an AI agent
+driving proof work (a false `hasSolution:true` for "solve ALL goals," in
+particular, is exactly the kind of totalizing false-positive that could
+cause an agent to conclude a file is fully proved when it embeds Agda's
+own error text), this is rated Critical for consistency with CR-01's own
+precedent in this document.
+
+**Fix:**
+Promote `give()`'s private `detectResponseError()` to a shared, exported
+helper next to its siblings in `proof-actions.ts` (both call sites already
+import from there):
+```ts
+// src/protocol/responses/proof-actions.ts
+export function detectDisplayInfoError(responses: AgdaResponse[]): string | null {
+  for (const resp of responses) {
+    const display = parseResponseWithSchema(displayInfoResponseSchema, resp);
+    if (!display) continue;
+    if (display.info.kind === "Error") {
+      return decodeDisplayInfoEvents([resp]).at(-1)?.text ?? "";
+    }
+  }
+  return null;
+}
+```
+```ts
+// src/agda/advanced-queries.ts
+export async function autoAll(ctx: AgdaCommandContext): Promise<AutoResult> {
+  ctx.requireFile();
+  const responses = await ctx.sendCommand(
+    ctx.iotcm(rewriteTopLevelCommand("Cmd_autoAll", "Normalised")),
+  );
+  throwOnFatalProtocolStderr(responses);
+  ctx.syncGoalIdsFromResponses(responses);
+  const errorText = detectDisplayInfoError(responses);
+  const rejected = errorText !== null && !hasGiveActionResponse(responses);
   return {
-    result: decodeGiveLikeResponse(responses),
-    replacementText,
+    solution: decodeGiveLikeResponse(responses),
     rejected,
     rejectionText: rejected ? errorText : null,
   };
 }
-```
-(`detectResponseError` is already defined earlier in this same file for
-`give()`'s use, so no new import or export is required — `refine()`/
-`refineExact()`/`intro()` can call it directly.) Then in
-`src/tools/goal-tools.ts`, throw the same way `agda_give` does (generalize
-`giveRejectedError` to a tool-agnostic
-`writeActionRejectedError(tool, goalId, expr, rejectionText)` rather than
-copy-pasting a `give`-flavored classification string onto three unrelated
-tools):
-```ts
-const result = await session.goal.refine(goalId, exprStr);
-if (result.rejected) {
-  throw writeActionRejectedError("agda_refine", goalId, exprStr, result.rejectionText ?? null);
-}
-```
-Repeat for `refineExact()`/`agda_refine_exact` and `intro()`/`agda_intro`.
 
----
-
-### CR-02: `caseSplit()` can write Agda's raw error text into the source file as a fabricated case-split clause
-
-**File:** `src/agda/goal-operations.ts:137-148` (decode), `src/tools/goal-tools.ts:116-144` (write gate)
-**Issue:**
-`caseSplit()` never calls `detectResponseError`/an equivalent guard:
-```ts
-export async function caseSplit(
+export async function elaborate(
   ctx: AgdaCommandContext,
   goalId: number,
-  variable: string,
-): Promise<CaseSplitResult> {
+  expr: string,
+): Promise<ElaborateResult> {
   ctx.requireFile();
   const responses = await ctx.sendCommand(
-    ctx.iotcm(goalCommand("Cmd_make_case", goalId, quoted(variable))),
+    ctx.iotcm(modeGoalCommand("Cmd_elaborate_give", "Normalised", goalId, quoted(expr))),
   );
   throwOnFatalProtocolStderr(responses);
-  return { clauses: decodeCaseSplitResponses(responses) };
-}
-```
-`decodeCaseSplitResponses` (`src/protocol/responses/proof-actions.ts:167-186`)
-falls back to `decodeDisplayInfoEvents(responses).map(...).filter(Boolean)`
-whenever no `MakeCase` response is present — i.e., exactly the shape a
-rejected `Cmd_make_case` (an invalid/non-splittable variable name) takes per
-the protocol convention this same phase independently verified for four
-other commands. That fallback text lands directly in `result.clauses`, and
-the calling tool gates its *file write* purely on `result.clauses.length >
-0`, not on any rejection signal:
-```ts
-// src/tools/goal-tools.ts:122-129
-if (result.clauses.length > 0) {
-  output += `### New clauses\n...`;
-  if (shouldWrite && session.currentFile) {
-    output += await applyEditAndReload(session, goalIdsBefore, {
-      kind: "replace-line", goalId, clauses: result.clauses,
-    });
-    written = true;
-  }
-```
-`applyProofEdit`'s `"replace-line"` branch (`src/session/apply-goal-edit.ts:101-133`)
-performs no validation on `clauses` content — it splices whatever strings it
-is given, indented, directly into the source file, replacing the goal's
-original clause line. Since `writeToFile` defaults to `true`
-(`shouldWrite = writeToFile !== false`), a rejected case-split silently
-**overwrites a real function clause with Agda's own error message text**,
-while the tool still reports `ok:true`. This is strictly more severe than
-CR-01/CR-03 because it is a data-loss/corruption path, not just a
-misleading response.
-
-**Fix:**
-```ts
-export async function caseSplit(
-  ctx: AgdaCommandContext,
-  goalId: number,
-  variable: string,
-): Promise<CaseSplitResult> {
-  ctx.requireFile();
-  const responses = await ctx.sendCommand(
-    ctx.iotcm(goalCommand("Cmd_make_case", goalId, quoted(variable))),
-  );
-  throwOnFatalProtocolStderr(responses);
-  const errorText = detectResponseError(responses);
+  const errorText = detectDisplayInfoError(responses);
   if (errorText !== null) {
     throw new Error(errorText);
   }
-  return { clauses: decodeCaseSplitResponses(responses) };
+  return { elaboration: decodeGiveLikeResponse(responses) };
 }
 ```
-(Same same-file `detectResponseError` reuse as CR-01/CR-03 — no new import
-needed.)
-
----
-
-### CR-03: `autoOne()` can write Agda's own error/rejection text into a goal's hole as a fabricated "solution"
-
-**File:** `src/agda/goal-operations.ts:239-251` (decode), `src/tools/goal-tools.ts:390-407` (write gate)
-**Issue:**
-`autoOne()` has the identical gap as CR-02, but for `Cmd_autoOne`:
-```ts
-export async function autoOne(
-  ctx: AgdaCommandContext,
-  goalId: number,
-  payload = "",
-): Promise<AutoResult> {
-  ctx.requireFile();
-  const responses = await ctx.sendCommand(
-    ctx.iotcm(rewriteGoalCommand("Cmd_autoOne", "Normalised", goalId, quoted(payload))),
-  );
-  throwOnFatalProtocolStderr(responses);
-  ctx.syncGoalIdsFromResponses(responses);
-  return { solution: decodeGiveLikeResponse(responses) };
-}
-```
-`decodeGiveLikeResponse` falls back to the last `DisplayInfo` event's
-decoded text whenever no `GiveAction` response is present
-(`src/protocol/responses/proof-actions.ts:97-117`) — and, per
-`src/protocol/response-schemas.ts:236-257` /
-`src/protocol/responses/display-info.ts:77-80`, both `Error`-kind *and*
-`Auto`-kind `DisplayInfo` responses decode to non-empty text through this
-same path. `goal-tools.ts`'s `agda_auto` callback treats any non-empty
-`result.solution` as `hasSolution: true` and, when `writeToFile` is left at
-its default (`true`), writes it straight into the goal's hole via
-`applyEditAndReload({ kind: "replace-hole", expr: result.solution })`
-(`src/tools/goal-tools.ts:399-403`) — no rejection check gates this path
-either.
-
-This is not hypothetical: `test/fixtures/fix-queue.json`'s own entries for
-`5abecc959e43fef3` and `004d161b839ce725` record an **empirically measured**
-instance of exactly this shape — "`data.searchPayload` came back as
-`'-d 5 --list-candidates -h -t 999999 -x --unsafe'` ... and `hasSolution:true`
-while `data.solution` is actually Agda's own `NotInScope` rejection text."
-This phase's fix (`assertValidAutoHint` in `src/agda/refactor-helpers.ts`)
-closes the one *entry point* those two fingerprints used (a flag-shaped
-hint token), but does nothing to `decodeGiveLikeResponse`/`autoOne()`
-themselves — any other way `Cmd_autoOne` surfaces a rejection or internal
-failure via `DisplayInfo` (e.g. a syntactically valid but semantically
-nonexistent hint/module name, which `assertValidAutoHint`'s shape check
-happily allows through) reproduces the identical false-green-plus-write
-pattern.
-
-**Fix:**
-```ts
-export async function autoOne(
-  ctx: AgdaCommandContext,
-  goalId: number,
-  payload = "",
-): Promise<AutoResult> {
-  ctx.requireFile();
-  const responses = await ctx.sendCommand(
-    ctx.iotcm(rewriteGoalCommand("Cmd_autoOne", "Normalised", goalId, quoted(payload))),
-  );
-  throwOnFatalProtocolStderr(responses);
-  ctx.syncGoalIdsFromResponses(responses);
-  const errorText = detectResponseError(responses);
-  if (errorText !== null) {
-    throw new Error(errorText);
-  }
-  return { solution: decodeGiveLikeResponse(responses) };
-}
-```
-Note this specific fix only closes the `Error`-kind half of the gap; an
-`Auto`-kind "no solution found" message would still flow through
-`decodeGiveLikeResponse`'s fallback as a truthy `result.solution`. Whether
-that specific sub-case is also exploitable depends on what real Agda
-sends for a *legitimate* "no solution" outcome versus a genuine internal
-failure — recommend a live-Agda probe (this phase's own established
-verification method for CR-01/CR-02) before considering `agda_auto`'s write
-path fully closed.
+Then have `agda_auto_all`'s callback branch on `result.rejected` (throwing
+an `ok:false`/`auto-all-rejected` `ToolInvocationError`, mirroring
+`throwIfWriteRejected`'s pattern but without a `goalId` since this is a
+whole-file operation) instead of unconditionally returning `ok:true`.
+`agda_elaborate` needs no tool-layer change beyond letting `elaborate()`'s
+thrown `Error` propagate — `registerGoalTextTool`'s wrapper already
+converts an uncaught throw into an error envelope, the same pattern
+`goalTypeContextCheck()` already uses for the same reason.
 
 ## Warnings
 
-### WR-01: `agda_proof_status`'s "All goals solved" branch and `data.hasConstraints` use two different emptiness checks on the same value
+### WR-04: `hasGiveActionResponse()`/`hasMakeCaseResponse()` (new in this phase) only check response-*kind* presence, not payload non-emptiness
 
-**File:** `src/tools/analysis-tools.ts:80-91`
+**File:** `src/protocol/responses/proof-actions.ts:129-131`, `:213-215`
 **Issue:**
-This exact function was patched by this phase (commit `6caa279`,
-fingerprint `fdc90bfde12fb938`) specifically to stop `data.text` from
-contradicting the tool's own structured fields. The new branch, however,
-tests raw truthiness of `constraints.text`:
 ```ts
-if (metas.goals.length === 0 && !constraints.text) {
-  output += "All goals solved.\n";
-} else if (metas.goals.length === 0 && constraints.text) {
-  output += "No visible goals, but constraints remain — the file is NOT confirmed complete. See the Constraints section above.\n";
-}
-```
-while the structured field computed a few lines below uses a trimmed check:
-```ts
-data: {
-  ...
-  hasConstraints: constraints.text.trim().length > 0,
-```
-If `session.query.constraints()` ever returns a whitespace-only string
-(plausible for a `Cmd_constraints` response whose decoded body is just a
-trailing newline/blank line — not verified live, but not ruled out by
-`src/agda/advanced-queries.ts:57-66`'s implementation either), `data.text`
-would print "constraints remain — the file is NOT confirmed complete" while
-`data.hasConstraints` reports `false` — reproducing, via a second code
-path in the very function that was just fixed, the same class of
-`text`/`data` self-contradiction fingerprint `fdc90bfde12fb938` targeted.
-**Fix:**
-```ts
-const hasConstraints = constraints.text.trim().length > 0;
-...
-if (metas.goals.length === 0 && !hasConstraints) {
-  output += "All goals solved.\n";
-} else if (metas.goals.length === 0 && hasConstraints) {
-  output += "No visible goals, but constraints remain — the file is NOT confirmed complete. See the Constraints section above.\n";
+export function hasGiveActionResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => parseResponseWithSchema(giveActionResponseSchema, resp) !== null);
 }
 ...
-data: {
-  ...
-  hasConstraints,
-  ...
+export function hasMakeCaseResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => parseResponseWithSchema(makeCaseResponseSchema, resp) !== null);
 }
 ```
-
-### WR-02: `matchesTypePattern()` lets literal (non-`_`) tokens match arbitrarily far ahead, producing false-positive type-shape matches
-
-**File:** `src/agda/refactor-helpers.ts:42-65`
-**Issue:**
+Both helpers were introduced by this exact fix pass (CR-02/CR-03) to form
+a two-sided guard alongside `detectResponseError()`. Both only check that
+a response of the right *kind* is present in the batch — not that its
+payload is non-empty. The backing schemas explicitly allow an empty
+payload:
 ```ts
-while (p < patternTokens.length && a < actualTokens.length) {
-  const want = patternTokens[p];
-  if (want === "_") {
-    p += 1;
-    a += 1;
-    continue;
-  }
-  if (tokenMatches(want, actualTokens[a])) {
-    p += 1;
-    a += 1;
-    continue;
-  }
-  a += 1;
-}
-return p === patternTokens.length;
+// src/protocol/response-schemas.ts:147-156
+export const giveActionResponseSchema = agdaResponseSchema.extend({
+  kind: z.literal("GiveAction"),
+  giveResult: z.string().optional(),
+  result: z.string().optional(),
+});
+export const makeCaseResponseSchema = agdaResponseSchema.extend({
+  kind: z.literal("MakeCase"),
+  clauses: z.array(z.string()).optional(),
+});
 ```
-When a literal pattern token doesn't match the current actual token, the
-loop advances `a` alone and retries the *same* pattern token later — an
-unbounded skip-ahead search. Combined with the early-return-once-pattern-
-exhausted semantics, this lets two unrelated literal tokens in the pattern
-bind to non-adjacent, unrelated fragments of the actual type, stitching a
-false match. Verified directly:
-```js
-matchesTypePattern("Nat -> Bool + Bool -> Nat", "Nat + Nat") // => true
-```
-even though the text contains no `Nat + Nat` — it spuriously matches the
-leading `Nat`, skips over `-> Bool +`, and lands on the unrelated trailing
-`Nat`, treating the middle `Bool + Bool` as if it weren't there. This
-degrades `agda_search_definitions --typePattern` and `agda_term_search`
-result quality with misleading candidate matches (the actual matched line
-is still shown in the tool's output, so this isn't a silent
-false-green — but it is a real correctness bug in a tool literally
-designed to help an agent find valid candidate terms).
-**Fix:** require literal tokens to match at the *current* aligned
-position only (no skip-ahead); only `_` should ever "consume and move on":
+`decodeGiveLikeResponse()`/`decodeCaseSplitResponses()` both fall back to
+the DisplayInfo text whenever the primary payload is empty (`if (val)
+result = renderGiveResult(val);` / `if (clauses.length > 0) return
+clauses;`). So: if a single `Cmd_autoOne`/`Cmd_make_case` response batch
+ever contained *both* a schema-conformant but empty-payload
+`GiveAction`/`MakeCase` response *and* a separate Error `DisplayInfo`
+response, `hasGiveActionResponse()`/`hasMakeCaseResponse()` would report
+`true` (a genuine action is "present"), so `rejected` would compute to
+`false` — while the decoder, seeing an empty primary payload, falls
+through to the *Error's* text as `result.solution`/`result.clauses`. That
+reproduces the exact CR-02/CR-03 false-green-or-corruption shape through a
+gap in the very guard added to close it. This is unverified against real
+Agda output (unlike CR-02/CR-03's original fix-queue.json-backed evidence)
+— it is a structural gap proven from the schema/decoder definitions, not
+an observed failure — so it is filed as a Warning, mirroring how CR-03's
+own "Auto-kind no-solution" sub-case was documented as a deferred,
+unconfirmed risk rather than a proven Critical.
+**Fix:** Make both helpers content-aware, matching `hasReplacementText()`'s
+own non-empty-string semantics:
 ```ts
-export function matchesTypePattern(typeText: string, pattern: string): boolean {
-  const actualTokens = splitWords(typeText);
-  const patternTokens = splitWords(pattern);
-  if (patternTokens.length === 0 || actualTokens.length === 0) return false;
-  if (patternTokens.length > actualTokens.length) return false;
+export function hasGiveActionResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => {
+    const give = parseResponseWithSchema(giveActionResponseSchema, resp);
+    return give !== null && Boolean(give.giveResult ?? give.result);
+  });
+}
 
-  for (let i = 0; i < patternTokens.length; i++) {
-    if (!tokenMatches(patternTokens[i], actualTokens[i])) return false;
-  }
-  return true;
+export function hasMakeCaseResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => {
+    const makeCase = parseResponseWithSchema(makeCaseResponseSchema, resp);
+    return makeCase !== null && (makeCase.clauses ?? []).some(Boolean);
+  });
 }
 ```
-This preserves both existing unit tests (`m ≤ m + n` / `_ ≤ _ + _` and
-`A -> B -> C` / `_ -> _`, both of which already align from position 0) —
-run the full `test/unit` + `test/property` tiers after applying, since this
-is a behavior change to a shared helper.
+Recommend a live-Agda probe (this phase's own established verification
+method for CR-01/CR-02) to confirm whether Agda ever actually emits this
+combination before treating it as purely theoretical.
 
-### WR-03: `buildQueueEntryFromVerdict()`'s `affectedTool` fallback is unguarded against a non-array `recordedActions`
+### WR-05: WR-03's "non-array `recordedActions`" regression test does not actually reproduce the crash it claims to guard against
 
-**File:** `scripts/dogfood/dogfood-wrapup.mjs:139-142`
-**Issue:**
-```js
-affectedTool:
-  lastLoadFamilyToolName(artifact.recordedActions)
-  ?? artifact.recordedActions.at(-1)?.tool
-  ?? "unknown",
+**File:** `test/unit/tools/dogfood-wrapup-filing.test.ts:454-464`
+**Issue:** The fix report for WR-03 claims "Added two from-RED regression
+tests (missing and non-array `recordedActions` cases)". The "missing"
+case is genuinely from-RED (verified empirically below). The "non-array"
+case is not:
+```ts
+test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is not an array", () => {
+  const artifact = { ...baseArtifact(), recordedActions: "not-an-array" };
+  ...
+  expect(entry.affectedTool).toBe("unknown");
+});
 ```
-`lastLoadFamilyToolName()` defensively coerces its input
-(`Array.isArray(recordedActions) ? recordedActions : []`), but the fallback
-expression on the next line calls `.at(-1)` directly on
-`artifact.recordedActions` with no such guard. A malformed/adversarial
-staged capture (missing or non-array `recordedActions`) throws an uncaught
-`TypeError` from this line instead of degrading to `"unknown"` the way the
-rest of this pure helper is designed to. In practice this is caught by
-`scriptMain`'s per-capture `try`/`catch` (`dogfood-wrapup.mjs:409-437`), so
-it degrades to a generic `"error"` result rather than crashing the whole
-run — but the inconsistency between the two null-safety strategies in the
-same three-line expression is a real robustness gap in code whose entire
-purpose is per-capture error isolation.
-**Fix:**
-```js
-affectedTool:
-  lastLoadFamilyToolName(artifact.recordedActions)
-  ?? (Array.isArray(artifact.recordedActions) ? artifact.recordedActions.at(-1)?.tool : undefined)
-  ?? "unknown",
+`"not-an-array"` is a **string**, and `String.prototype.at()` has existed
+since ES2022 — so the pre-fix formula
+(`artifact.recordedActions.at(-1)?.tool`) does **not** throw for a string
+value; it evaluates to `"not-an-array".at(-1)` (`"y"`), then `"y".tool`
+(`undefined`), then falls through to `?? "unknown"` — the same final
+result as the fixed code. Verified directly by extracting the literal
+pre-fix formula and running it in isolation:
+```
+$ node -e '... preFixAffectedTool("not-an-array") ...'
+result: unknown          // no throw — passes on BOTH old and new code
+$ node -e '... preFixAffectedTool({}) ...'
+THREW: recordedActions.at is not a function   // this WOULD have caught the bug
+```
+So this specific test would have passed unchanged even if commit
+`33c34ec`'s fix were fully reverted — it provides no actual regression
+protection for the "non-array" class of input the commit message and test
+name both claim to cover (only `undefined`/`null`/plain-object/number
+shapes actually exercise the crash). The shipped production code is
+still correct and complete (`Array.isArray(...)` correctly rejects a
+string too) — this finding is about the test's evidentiary value, not the
+runtime behavior.
+**Fix:** Replace or supplement the string-based case with a value that
+genuinely lacks `.at()`, e.g.:
+```ts
+test("buildQueueEntryFromVerdict: affectedTool falls back to \"unknown\" instead of throwing when recordedActions is a plain object", () => {
+  const artifact = { ...baseArtifact(), recordedActions: { not: "an-array" } };
+  const entry = buildQueueEntryFromVerdict(
+    artifact,
+    "capture.json",
+    fakeVerdict({ orcl01: { kind: "server-false-green-candidate" } }),
+  );
+  expect(entry.affectedTool).toBe("unknown");
+});
 ```
 
 ## Info
 
-### IN-01: `giveRejectedError()`'s generic message overclaims the rejection reason
+### IN-01: `giveRejectedError()`'s generic message overclaims the rejection reason (still open — out of scope this pass)
 
 **File:** `src/tools/tool-errors.ts:85`
-**Issue:**
+**Issue:** Unchanged since the original review — confirmed still present
+verbatim:
 ```ts
 const message = `Agda rejected \`${expr}\` for goal ?${goalId} — the expression does not satisfy the goal type.`;
 ```
-This fallback message (used whenever `rejectionText` is `null`) is worded
-as if every rejection is a type mismatch, but the same code path also
-fires for `NotInScope` (an unknown identifier) and parse errors, neither of
-which is "the expression does not satisfy the goal type." The real
-diagnostic text (`rejectionText`) is shown separately when available, so
-this only affects the rarer null-rejectionText fallback, but the wording
-is still misleading to whichever agent/human reads it.
+This fallback (used only when `rejectionText` is `null`) is worded as if
+every rejection is a type mismatch, but the same path also fires for
+`NotInScope` and parse errors.
 **Fix:** Use reason-neutral wording, e.g. `` `Agda declined to accept
 \`${expr}\` for goal ?${goalId}.` ``.
 
-### IN-02: Magic number `50` duplicated in `agda_search_definitions`'s visible-match cap
+### IN-02: Magic number `50` duplicated in `agda_search_definitions`'s visible-match cap (still open — out of scope this pass)
 
 **File:** `src/tools/file/search-definitions.ts:185,192`
-**Issue:** The visible-results cap is hardcoded twice (`matches.slice(0,
-50)` and `matches.length > 50`), unlike the memory-safety cap
-`MAX_RAW_MATCHES` a few lines above, which is a named constant with an
-explanatory comment. Two literals for one concept risk drifting out of
-sync if either is edited in isolation.
+**Issue:** Unchanged since the original review — confirmed still present:
+`matches.slice(0, 50)` and `matches.length > 50` both hardcode the same
+cap independently, unlike `MAX_RAW_MATCHES` a few lines above.
 **Fix:**
 ```ts
 const MAX_VISIBLE_MATCHES = 50;
@@ -497,8 +471,34 @@ const capped = matches.slice(0, MAX_VISIBLE_MATCHES);
 output = `## Search (${mode}): "${actualQuery}" (${matches.length} matches${matches.length > MAX_VISIBLE_MATCHES ? `, showing first ${MAX_VISIBLE_MATCHES}` : ""})\n\n`;
 ```
 
+### IN-03: `writeActionRejectedError()`'s `extraData` parameter is unused
+
+**File:** `src/tools/tool-errors.ts:115-138`
+**Issue:**
+```ts
+export function writeActionRejectedError(
+  tool: string,
+  goalId: number,
+  attempted: string,
+  rejectionText: string | null,
+  extraData: Record<string, unknown> = {},
+): ToolInvocationError<Record<string, unknown>> {
+  ...
+  data: { goalId, written: false, ...extraData },
+```
+No call site in `src/` or `test/` ever passes a 5th argument — confirmed
+via `grep -rn "writeActionRejectedError("`, which only shows the single
+zero-extra-args call inside `throwIfWriteRejected()`. This is speculative
+generality the docstring anticipates ("`extraData` merges tool-specific
+fields (e.g. `clauses: []` for case-split)") but no caller actually needs
+yet.
+**Fix:** Either remove the unused parameter until a real caller needs it,
+or use it from `throwIfWriteRejected()` for at least one tool (e.g. thread
+`clauses: []` through for `agda_case_split`) so the generality it was
+added for is actually exercised.
+
 ---
 
-_Reviewed: 2026-07-04T02:55:41Z_
+_Reviewed: 2026-07-04T03:43:34Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
