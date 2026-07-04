@@ -520,14 +520,25 @@ export async function scriptMain(argv = process.argv.slice(2)) {
 
   const results = [];
   for (const staged of stagedCaptures) {
+    // IN-05: hoisted BEFORE the try block and computed defensively
+    // (via an optional chain) so a null/malformed `staged` element (a
+    // hand-edited or corrupted run-report.json) can never throw a
+    // SECOND time inside the catch block below — the pre-fix code
+    // re-read this same field directly off `staged` again inside the
+    // catch block's own error message/results.push, which escaped the
+    // whole loop on a null `staged` (no wrapup-report.json written,
+    // every remaining capture left unjudged). A non-string stagedPath
+    // still safely becomes a stringified placeholder here rather than
+    // ever throwing.
+    const stagedPath = typeof staged?.stagedPath === "string" ? staged.stagedPath : String(staged?.stagedPath);
     // Per-capture error isolation: one deleted/corrupt staged file, an
     // absent stagedPath field, or one wrapUpCapture rejection (oracle
     // cold-spawn failure, a stale dist/ build failing harness creation)
     // must never zero out the whole run — every remaining capture still
     // gets judged and wrapup-report.json still gets written.
     try {
-      const artifact = JSON.parse(readFileSync(staged.stagedPath, "utf8"));
-      const outcome = await wrapUpCapture(staged.stagedPath, artifact, {
+      const artifact = JSON.parse(readFileSync(stagedPath, "utf8"));
+      const outcome = await wrapUpCapture(stagedPath, artifact, {
         queueJsonPath,
         flakyLogPath,
         n: rerunN,
@@ -539,16 +550,16 @@ export async function scriptMain(argv = process.argv.slice(2)) {
       // never a quiet skip, per-capture AND in the run summary below.
       if (outcome.verdict?.orcl02?.kind === "no-policy") {
         process.stderr.write(
-          `dogfood-wrapup: WARNING — no ORCL-02 policy resolved for ${staged.stagedPath}; `
+          `dogfood-wrapup: WARNING — no ORCL-02 policy resolved for ${stagedPath}; `
             + "cheat auto-filing was inactive for this capture.\n",
         );
       }
-      results.push({ stagedPath: staged.stagedPath, ...outcome });
+      results.push({ stagedPath, ...outcome });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`dogfood-wrapup: failed to judge ${staged.stagedPath}: ${message}\n`);
+      process.stderr.write(`dogfood-wrapup: failed to judge ${stagedPath}: ${message}\n`);
       results.push({
-        stagedPath: staged.stagedPath,
+        stagedPath,
         filed: false,
         classification: "error",
         error: message,

@@ -7,6 +7,12 @@
 // local-checkout launch caveat (Pitfall 2). Task 2 extends this file
 // with 3 more behaviors covering install-dogfood-skill.mjs's
 // idempotent .claude/skills/ symlink installer.
+//
+// DEBT-04 additions: the gitignore test now asserts the PRECISE
+// `git check-ignore` exit status (IN-04 — a bare `.toThrow()` also
+// passes on a genuine git failure, exit 128, for the wrong reason);
+// two new tests prove installDogfoodSkill never reports success for a
+// dangling symlink when the canonical directory is missing (IN-02).
 
 import { execFileSync } from "node:child_process";
 import {
@@ -16,6 +22,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -58,16 +65,24 @@ function makeFakeServerRepoRoot(): string {
 // ── Task 1: SKILL.md is tracked and content-complete ─────────────────
 
 test("SKILL.md is not gitignored", () => {
-  // `git check-ignore -v` exits 1 (and execFileSync throws on a
-  // non-zero exit code) EXACTLY when the path is NOT excluded by any
-  // .gitignore rule — the desired/passing state per D-07's Pitfall-1
-  // fix (.agents/skills/ is never listed in this repo's .gitignore,
-  // unlike .claude/ and .codex/, which are both wholesale-excluded).
-  expect(() =>
+  // `git check-ignore -v` exits 1 EXACTLY when the path is NOT excluded
+  // by any .gitignore rule — the desired/passing state per D-07's
+  // Pitfall-1 fix (.agents/skills/ is never listed in this repo's
+  // .gitignore, unlike .claude/ and .codex/, which are both
+  // wholesale-excluded). It exits 128 for a genuine git failure (not a
+  // repo, bad path). Both throw via execFileSync, so a bare
+  // `.toThrow()` would pass even when git failed for the WRONG reason
+  // (IN-04) — assert the precise exit status instead.
+  let caught: { status?: number } | undefined;
+  try {
     execFileSync("git", ["check-ignore", "-v", SKILL_MD_RELATIVE_PATH], {
       cwd: SERVER_REPO_ROOT,
-    }),
-  ).toThrow();
+    });
+  } catch (err) {
+    caught = err as { status?: number };
+  }
+  expect(caught).toBeDefined();
+  expect(caught?.status).toBe(1);
 });
 
 test("SKILL.md documents the hard gate, the capture verb, the scaffold-hole workflow, the trust-retraction framing, and the local-checkout launch caveat", () => {
@@ -134,4 +149,40 @@ test("installDogfoodSkill never overwrites a pre-existing REAL (non-symlink) dir
   expect(readFileSync(join(claudeLink, "unrelated-local-file.txt"), "utf8")).toBe(
     "do not touch\n",
   );
+});
+
+// ── IN-02: never report success for a dangling symlink ──────────────
+
+test("installDogfoodSkill throws before creating a symlink when the canonical .agents/skills/agda-dogfooding directory does not exist (partial checkout)", () => {
+  const serverRepoRoot = makeTempDir("agda-mcp-install-skill-missing-canonical-");
+  // Deliberately does NOT create .agents/skills/agda-dogfooding under
+  // serverRepoRoot — simulates a partial checkout.
+
+  expect(() => installDogfoodSkill({ serverRepoRoot })).toThrow(/canonical/i);
+
+  // No dangling symlink is left behind — the throw happens BEFORE the
+  // "created" branch's own symlinkSync call.
+  const claudeLink = join(serverRepoRoot, ".claude", "skills", "agda-dogfooding");
+  expect(lstatSync(claudeLink, { throwIfNoEntry: false })).toBeUndefined();
+});
+
+test("installDogfoodSkill throws before relinking a stale symlink when the canonical directory has since disappeared", () => {
+  const serverRepoRoot = makeFakeServerRepoRoot();
+  const claudeSkillsDir = join(serverRepoRoot, ".claude", "skills");
+  mkdirSync(claudeSkillsDir, { recursive: true });
+  const claudeLink = join(claudeSkillsDir, "agda-dogfooding");
+  const staleTarget = join(serverRepoRoot, "some-other-nonexistent-dir");
+  symlinkSync(staleTarget, claudeLink, "dir");
+
+  // Remove the canonical dir AFTER creating the stale link, simulating
+  // a checkout that lost the canonical content between installs.
+  rmSync(join(serverRepoRoot, ".agents", "skills", "agda-dogfooding"), {
+    recursive: true,
+    force: true,
+  });
+
+  expect(() => installDogfoodSkill({ serverRepoRoot })).toThrow(/canonical/i);
+  // The original stale link is left untouched — the throw happens
+  // BEFORE the "relinked" branch's own unlinkSync/symlinkSync calls.
+  expect(readlinkSync(claudeLink)).toBe(staleTarget);
 });
