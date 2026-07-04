@@ -544,8 +544,9 @@ export async function flushRetryQueue(options = {}) {
  * Everything after the gate is wrapped so that NO error — a missing
  * run-report.json, a `tar` spawn failure, a rejected `fetch`, a
  * non-2xx response — ever propagates out of this function or blocks
- * the caller (mirrors `scripts/dogfood/dogfood-run.mjs`'s
- * `promoteCapture` fail-open shape exactly): a failed upload is queued
+ * the caller (the same "never let a best-effort side operation block
+ * or fail the caller" fail-open shape used throughout this
+ * codebase's best-effort operations): a failed upload is queued
  * for retry and reported via the return value, never thrown.
  */
 export async function runUploadForRun(runId, options = {}) {

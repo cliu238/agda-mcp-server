@@ -611,8 +611,9 @@ export async function scriptMain(argv = process.argv.slice(2)) {
   // branch above (never before or inside it) and must NEVER reassign
   // process.exitCode itself: chainUploadRun's own contract already
   // never throws, but this call site does not trust that alone
-  // (belt-and-suspenders — mirrors promoteCapture's best-effort,
-  // log-and-continue shape in scripts/dogfood/dogfood-run.mjs).
+  // (belt-and-suspenders — the same "never let a best-effort side
+  // operation block or fail the caller" fail-open shape used
+  // throughout this codebase's best-effort operations).
   try {
     await chainUploadRun(runId);
   } catch (err) {
