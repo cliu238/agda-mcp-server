@@ -87,8 +87,8 @@ test("fixQueueEntrySchema rejects status: locked with closedAt: null", () => {
 
 // ── Seed data (Plan 04-03) ───────────────────────────────────────────
 
-test("fixQueue holds the 13 real seeded entries plus dogfood-wrapup auto-filings from Phase 6 plan 06-03's RT5/RT6 live sessions", () => {
-  expect(fixQueue.length).toBe(15);
+test("fixQueue holds the 13 real seeded entries, dogfood-wrapup auto-filings from Phase 6 plan 06-03's RT5/RT6 live sessions, and 07-06's hand-authored dogfood-run.mjs report-checkpointing defect", () => {
+  expect(fixQueue.length).toBe(16);
 });
 
 test("every fixQueue entry has a unique fingerprint", () => {
