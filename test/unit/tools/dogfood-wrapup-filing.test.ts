@@ -13,12 +13,16 @@
 // ever removes the mock.
 
 import { afterEach, expect, test, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error script module lacks types
-import { buildQueueEntryFromVerdict, wrapUpCapture } from "../../../scripts/dogfood/dogfood-wrapup.mjs";
+import {
+  buildQueueEntryFromVerdict,
+  resolveWrapupPolicyKey,
+  wrapUpCapture,
+} from "../../../scripts/dogfood/dogfood-wrapup.mjs";
 
 let tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
@@ -251,6 +255,104 @@ test("wrapUpCapture: an orcl02 cheat-flagged signal files even when a co-occurri
   expect(upsertFn).toHaveBeenCalledTimes(1);
   expect(classifyFn).not.toHaveBeenCalled();
   expect(appendFlakyFn).not.toHaveBeenCalled();
+});
+
+// ── Test 7 (POLICY-01, key_links wiring): config.policyKey reaches runOracleFn ──
+
+test("wrapUpCapture: config.policyKey reaches runOracleFn as { policyKey } (the exact key_links wiring)", async () => {
+  const artifact = baseArtifact();
+  const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
+
+  await wrapUpCapture("fake-capture.json", artifact, {
+    queueJsonPath: throwawayQueuePath(),
+    flakyLogPath: throwawayFlakyLogPath(),
+    policyKey: "some-key",
+    deps: { runOracle: runOracleFn },
+  });
+
+  expect(runOracleFn).toHaveBeenCalledTimes(1);
+  expect(runOracleFn.mock.calls[0][0]).toBe("fake-capture.json");
+  expect(runOracleFn.mock.calls[0][1]).toEqual({ policyKey: "some-key" });
+});
+
+test("wrapUpCapture: an omitted config.policyKey reaches runOracleFn as {} (judgeOrcl02's own .agda-lib-derived default)", async () => {
+  const artifact = baseArtifact();
+  const runOracleFn = vi.fn(async () => fakeVerdict({ orcl01: { kind: "pass" }, orcl02: { kind: "clean" } }));
+
+  await wrapUpCapture("fake-capture.json", artifact, {
+    queueJsonPath: throwawayQueuePath(),
+    flakyLogPath: throwawayFlakyLogPath(),
+    deps: { runOracle: runOracleFn },
+  });
+
+  expect(runOracleFn.mock.calls[0][1]).toEqual({});
+});
+
+// ── resolveWrapupPolicyKey: direct unit coverage of the D-01 precedence chain ──
+
+test("resolveWrapupPolicyKey: an explicit --policy flag wins over everything, even a resolvable manifest", () => {
+  const dir = makeTempDir("agda-mcp-wrapup-policykey-flag-");
+  const manifestPath = join(dir, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify([{ target: "Foo.agda", expectedSignature: "foo : Set", corpus: "codex-homotopy-group" }]),
+    "utf8",
+  );
+
+  expect(resolveWrapupPolicyKey({ policyFlag: "explicit-key", manifestPath })).toBe("explicit-key");
+});
+
+test("resolveWrapupPolicyKey: a manifest whose entries unanimously share one known fuel-corpora key resolves that corpus's policyKey column", () => {
+  const dir = makeTempDir("agda-mcp-wrapup-policykey-unanimous-");
+  const manifestPath = join(dir, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify([
+      { target: "Foo.agda", expectedSignature: "foo : Set", corpus: "codex-homotopy-group" },
+      { target: "Bar.agda", expectedSignature: "bar : Set", corpus: "codex-homotopy-group" },
+    ]),
+    "utf8",
+  );
+
+  expect(resolveWrapupPolicyKey({ policyFlag: undefined, manifestPath })).toBe("codex-homotopy-group");
+});
+
+test("resolveWrapupPolicyKey: mixed corpus values across manifest entries fall back to undefined (never guesses)", () => {
+  const dir = makeTempDir("agda-mcp-wrapup-policykey-mixed-");
+  const manifestPath = join(dir, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify([
+      { target: "Foo.agda", expectedSignature: "foo : Set", corpus: "codex-homotopy-group" },
+      { target: "Bar.agda", expectedSignature: "bar : Set", corpus: "agda-unimath" },
+    ]),
+    "utf8",
+  );
+
+  expect(resolveWrapupPolicyKey({ policyFlag: undefined, manifestPath })).toBeUndefined();
+});
+
+test("resolveWrapupPolicyKey: an unreadable manifestPath falls back to undefined", () => {
+  const dir = makeTempDir("agda-mcp-wrapup-policykey-unreadable-");
+  const manifestPath = join(dir, "does-not-exist.json");
+
+  expect(resolveWrapupPolicyKey({ policyFlag: undefined, manifestPath })).toBeUndefined();
+});
+
+test("resolveWrapupPolicyKey: a unanimous but unknown (not in fuel-corpora.json) corpus value falls back to undefined", () => {
+  const dir = makeTempDir("agda-mcp-wrapup-policykey-unknown-corpus-");
+  const manifestPath = join(dir, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify([{ target: "Foo.agda", expectedSignature: "foo : Set", corpus: "not-a-real-corpus-zzz" }]),
+    "utf8",
+  );
+
+  expect(resolveWrapupPolicyKey({ policyFlag: undefined, manifestPath })).toBeUndefined();
+});
+
+test("resolveWrapupPolicyKey: no manifestPath and no flag falls back to undefined", () => {
+  expect(resolveWrapupPolicyKey({ policyFlag: undefined, manifestPath: undefined })).toBeUndefined();
 });
 
 // ── buildQueueEntryFromVerdict: direct coverage of the exported pure helper ──

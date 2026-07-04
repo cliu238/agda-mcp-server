@@ -20,6 +20,8 @@ import { join } from "node:path";
 import { runOracle } from "../../../scripts/oracle/run-oracle.mjs";
 // @ts-expect-error script module lacks types
 import { spawnColdAgdaSession } from "../../../scripts/oracle/cold-agda-session.mjs";
+// @ts-expect-error script module lacks types
+import { PolicyResolutionError } from "../../../scripts/oracle/orcl-02-soundness-scan.mjs";
 
 import { AgdaSession } from "../../../src/agda-process.js";
 import { buildReplayManifest } from "../../../src/agda/session-capture/manifest-builder.js";
@@ -268,6 +270,59 @@ test("runOracle: verdict sidecar path is a pure suffix-replace on the INPUT path
 
   expect(existsSync(join(dir, "my-capture-name.verdict.json"))).toBe(true);
   expect(existsSync(join(dir, "totally-unrelated-fingerprint-xyz.verdict.json"))).toBe(false);
+});
+
+// ── POLICY-01 (pure, no Agda subprocess): options.policyKey threads ──
+// ── through runOracle to judgeOrcl02 (--only orcl-02 never spawns Agda) ──
+
+/** A minimal load-family recorded action shaped exactly like
+ *  test/unit/tools/oracle-orcl-02.test.ts's own writeCaptureArtifact
+ *  helper — sufficient for judgeOrcl02's findLastLoadFamilyAction to
+ *  resolve a scan target, with no real AgdaSession/loadResult needed. */
+function orcl02LoadFamilyAction(file: string, classification = "ok-complete") {
+  return {
+    tool: "agda_load",
+    args: { file },
+    timestamp: Date.now(),
+    normalizedResponse: { data: { file, classification } },
+  };
+}
+
+/** A single-file fixture directly under `dir` postulating `name` — no
+ *  upstream/downstream closure needed for these policy-threading tests. */
+function writeSinglePostulateFixture(dir: string, file: string, name: string): void {
+  writeFileSync(join(dir, file), `module Target where\n\npostulate\n  ${name} : Set\n`, "utf8");
+}
+
+test("runOracle: options.policyKey threads through to judgeOrcl02 — an explicit exact-case key resolves normally and is NOT the excluded --only placeholder", async () => {
+  const dir = makeTempDir("agda-mcp-run-oracle-policy-");
+  writeSinglePostulateFixture(dir, "Target.agda", "univalence");
+  const artifact = baseArtifact({
+    manifest: { repoRoot: dir },
+    recordedActions: [orcl02LoadFamilyAction("Target.agda")],
+  });
+  const { artifactPath } = writeArtifact(artifact);
+
+  const verdict = await runOracle(artifactPath, { only: ["orcl-02"], policyKey: "codex-homotopy-group" });
+
+  expect(verdict.orcl01).toEqual({ kind: "skip", reason: "excluded by --only" });
+  expect(verdict.orcl03).toEqual({ kind: "vacuous-no-expected-signature" });
+  expect(verdict.orcl02).not.toEqual({ kind: "skip", reason: "excluded by --only" });
+  expect(verdict.orcl02.kind).toBe("clean");
+});
+
+test("runOracle: a mismatched-case options.policyKey propagates judgeOrcl02's PolicyResolutionError uncaught", async () => {
+  const dir = makeTempDir("agda-mcp-run-oracle-policy-mismatch-");
+  writeSinglePostulateFixture(dir, "Target.agda", "univalence");
+  const artifact = baseArtifact({
+    manifest: { repoRoot: dir },
+    recordedActions: [orcl02LoadFamilyAction("Target.agda")],
+  });
+  const { artifactPath } = writeArtifact(artifact);
+
+  await expect(
+    runOracle(artifactPath, { only: ["orcl-02"], policyKey: "Codex-Homotopy-Group" }),
+  ).rejects.toThrow(PolicyResolutionError);
 });
 
 // ── Test 5 (RUN_AGDA_INTEGRATION-gated): --only orcl-03 alone (Warning 4) ──
