@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
 stopped_at: Phase 8 context gathered
-last_updated: "2026-07-04T00:50:40.386Z"
-last_activity: 2026-07-04 -- Phase 6 planning complete
+last_updated: "2026-07-04T00:52:31.812Z"
+last_activity: 2026-07-04 -- Phase 6 execution started
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Every real proof session reliably converts into a stronger server — the closed loop (use it → surface a defect → capture it → fix and lock it with a regression test → use it again) must work reproducibly by hand.
-**Current focus:** Phase 6: Backlog Digestion (Policy Fix + Reverify)
+**Current focus:** Phase 6 — Backlog Digestion (Policy Fix + Reverify)
 
 ## Current Position
 
-Phase: 6 of 9 (Backlog Digestion (Policy Fix + Reverify))
-Plan: — (not yet planned)
-Status: Ready to execute
-Last activity: 2026-07-04 -- Phase 6 planning complete
+Phase: 6 (Backlog Digestion (Policy Fix + Reverify)) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 6
+Last activity: 2026-07-04 -- Phase 6 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
