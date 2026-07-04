@@ -96,8 +96,9 @@
   },
   {
     "fingerprint": "03f7c711c0209369",
-    "status": "new",
-    "needsReverify": true,
+    "status": "rejected",
+    "rejectedReason": "cannot-reproduce",
+    "needsReverify": false,
     "defectKind": "false-green",
     "triageClass": null,
     "triageConfidence": null,
@@ -109,26 +110,26 @@
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT1 (turn-key regression spec, v0.6.7 measurement). Re-verify against current main before promoting past new."
+    "closedAt": "2026-07-04T01:04:03.000Z",
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT1 (turn-key regression spec, v0.6.7 measurement). Re-verify against current main before promoting past new. Re-verified 2026-07-04 (run-id rt1-20260703) through dogfood-run/dogfood-wrapup against current main: does not reproduce -- agda_load on a fixture with a bare ? hole correctly reports classification ok-with-holes, hasHoles:true, isComplete:false, plus an explicit 'Detected 1 visible goals' diagnostic; classifyLoadResult() derives isComplete=success&&!hasHoles structurally, so no independent fileComplete:true claim is possible in the current schema. Measurement conditions and full envelope in .planning/research/RT-REVERIFY.md."
   },
   {
     "fingerprint": "e5f6de1fa365b887",
-    "status": "new",
-    "needsReverify": true,
+    "status": "triaged",
+    "needsReverify": false,
     "defectKind": "false-green",
     "triageClass": null,
     "triageConfidence": null,
     "recurrence": 1,
     "title": "RT2: a not-in-scope query must return ok:false/NotInScope, never a bare success",
     "summary": "A query referencing an out-of-scope identifier returns a bare successful envelope instead of ok:false with a structured NotInScope classification (v0.6.7 measurement).",
-    "affectedTool": "agda_query",
+    "affectedTool": "agda_infer",
     "capturePath": null,
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT2 (v0.6.7 measurement). affectedTool is best-inferred (query-family) - confirm the exact tool during re-verification."
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT2 (v0.6.7 measurement). affectedTool is best-inferred (query-family) - confirm the exact tool during re-verification. Re-verified 2026-07-04 (run-id rt2-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED on both top-level probes -- agda_infer{expr: <not-in-scope>} returns ok:true/classification:ok with inferredType:'(unable to infer)', and agda_compute{expr: <not-in-scope>} returns ok:true/classification:ok with normalForm:'(no result)'; neither surfaces ok:false or a structured NotInScope classification. affectedTool corrected from the placeholder agda_query to agda_infer (agda_compute reproduces identically -- see .planning/research/RT-REVERIFY.md)."
   },
   {
     "fingerprint": "eaea6321183bdf7b",
