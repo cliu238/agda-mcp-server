@@ -92,7 +92,7 @@
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 1's related sub-finding, re-verified 2026-07-02. A labeling/presentation bug in the server's own summary text, not a raw Agda error (triageClass null, not applicable)."
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 1's related sub-finding, re-verified 2026-07-02. A labeling/presentation bug in the server's own summary text, not a raw Agda error (triageClass null, not applicable). Cross-reference: Phase 6 plan 06-03 RT6 re-verification (run-id rt6-20260703, spec fingerprint ad2b6d31f58f1759) confirmed agda_load's own broader five-state conflation as a separate, related issue (missing-feature, not wrong-result); this entry's own no-goals-but-constraints-hold-an-error sub-case remains scoped to agda_proof_status specifically and is unaffected/unresolved by that finding -- still pending its own fix in a later wave."
   },
   {
     "fingerprint": "03f7c711c0209369",
@@ -172,9 +172,9 @@
   },
   {
     "fingerprint": "a0ae86c7deb9754e",
-    "status": "new",
-    "needsReverify": true,
-    "defectKind": "wrong-result",
+    "status": "triaged",
+    "needsReverify": false,
+    "defectKind": "false-green",
     "triageClass": null,
     "triageConfidence": null,
     "recurrence": 1,
@@ -184,14 +184,17 @@
     "capturePath": null,
     "verdictPath": null,
     "matrixEntryId": null,
+    "relatedFingerprint": [
+      "1b612dfeb1d31ea9"
+    ],
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT5 (v0.6.7 measurement). affectedTool is best-inferred (mutation-tool family) - confirm the exact tool during re-verification."
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT5 (v0.6.7 measurement). affectedTool is best-inferred (mutation-tool family) - confirm the exact tool during re-verification. Re-verified 2026-07-04 (run-id rt5-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED -- agda_apply_edit (the deterministic mutation-tool probe used; a give's own accept path requires the expr to already type-check, so it cannot independently produce this shape) wrote an ill-typed replacement (myZero = definitelyNotInScopeXyz) and returned top-level ok:true/classification:'ok'/data.applied:true, while data.text's embedded prose reads 'Reloaded with errors: 0 goal(s) remaining' plus the raw NotInScope error and the misleading 'Goal diff: solved ?0, ?1, ?2' -- no structured field anywhere distinguishes this from a genuine success. defectKind corrected from wrong-result to false-green to match this queue's own established usage for an ok:true response wrapping a real failure (see bfcba437f5426fd6/5abecc959e43fef3, the identical shape). Root cause is shared with those two entries: registerTextTool/registerGoalTextTool (src/tools/tool-registration.ts) unconditionally wrap a non-throwing callback in okEnvelope, and reloadAndDiagnose (src/session/reload-and-diagnose.ts) reports a reload failure only as prose text, never a structured field -- confirmed to affect every write-capable proof tool (case_split/give/refine/refine_exact/intro/auto/apply_edit) identically by source inspection. Cross-references 1b612dfeb1d31ea9: dogfood-wrapup auto-filed this SAME session's capture as an independent ORCL-01 server-false-green-candidate (agda_load's own last-recorded warm tuple went stale once agda_apply_edit mutated the file without itself being a load-family-NAMED tool) -- see that entry's notes and .planning/research/RT-REVERIFY.md for the full differential. Full envelope in .planning/research/RT-REVERIFY.md."
   },
   {
     "fingerprint": "ad2b6d31f58f1759",
-    "status": "new",
-    "needsReverify": true,
+    "status": "triaged",
+    "needsReverify": false,
     "defectKind": "missing-feature",
     "triageClass": null,
     "triageConfidence": null,
@@ -203,11 +206,52 @@
     "verdictPath": null,
     "matrixEntryId": null,
     "relatedFingerprint": [
-      "fdc90bfde12fb938"
+      "fdc90bfde12fb938",
+      "1220f2840142aab8"
     ],
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT6 (v0.6.7 measurement). Cross-references the agda_proof_status mislabeling entry for its sub-case; the broader five-state-conflation ask remains its own tracked item."
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT6 (v0.6.7 measurement). Cross-references the agda_proof_status mislabeling entry for its sub-case; the broader five-state-conflation ask remains its own tracked item. Re-verified 2026-07-04 (run-id rt6-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED as missing-feature. Of the five asked-for distinctions (visible goals, hidden metas, constraints, source hole syntax, file completeness), agda_load's response schema (loadDataSchema) exposes visible goals (goalCount/goalIds) and hidden metas (invisibleGoalCount) directly, and file completeness via isComplete/classification -- but TWO remain conflated: (1) source hole syntax has no field of its own; classifyLoadResult() (src/agda/session-load-helpers.ts) folds a text-scanned sourceHoleCount into the single derived boolean hasHoles, with no way for a client to see the count or distinguish it from a protocol-reported goal. Live probe on MixedGoalsErrors.agda (one valid {!!} hole plus one unrelated hard type error later in the file) reproduced finding #4's exact historical symptom LIVE: the response reports goalCount:0, invisibleGoalCount:0, hasHoles:false, classification:'type-error' -- the file's own genuinely-present, syntactically-valid hole is completely invisible to the client, because runLoad's needsExplicitHoleScan gate (src/agda/session-load-impl.ts) only runs countExplicitSourceHoles when parsed.success is true, so a hole co-occurring with an unrelated hard error is never scanned for at all. (2) constraints has no field on agda_load's own response schema whatsoever -- it exists only on a different tool, agda_proof_status (cross-referenced via fdc90bfde12fb938, not double-counted here per the plan's instruction). Second fixture (MixedVisibleInvisible.agda) confirms goalCount/invisibleGoalCount work correctly for the visible/hidden-metas distinction when Agda's own protocol actually reports both goals as visible (both do, on Agda 2.8.0 -- see the fixture's own comment). ADDITIONAL FINDING (oracle-tooling, not this spec): dogfood-wrapup auto-filed this session's MixedGoalsErrors.agda capture as fingerprint 1220f2840142aab8 (an ORCL-01 server-false-green-candidate on the SAME hasHoles field) -- root-cause analysis (see that entry's own notes) shows this stems from scripts/oracle/orcl-01-differential.mjs's runColdLoadAndDiff calling countExplicitSourceHoles UNCONDITIONALLY, unlike the live server's own needsExplicitHoleScan gate, i.e. a fidelity gap in the ORACLE's cold-replay reimplementation, not an independent live-server defect beyond what is already recorded here. The plausible fix for THIS entry (RT6 itself) is the UX report's 'Suggested Schema Direction' response-schema rework -- a deferred-ideas re-triage candidate (D-10); the disposition (fix vs re-triage) belongs to plan 06-06, not here. Full envelopes in .planning/research/RT-REVERIFY.md."
+  },
+  {
+    "fingerprint": "1b612dfeb1d31ea9",
+    "status": "new",
+    "defectKind": "false-green",
+    "triageClass": null,
+    "triageConfidence": null,
+    "recurrence": 1,
+    "title": "Dogfood-surfaced: 1b612dfeb1d31ea9",
+    "summary": "ORCL-01 server-faithfulness differential flagged a candidate false-green.",
+    "affectedTool": "agda_load",
+    "capturePath": "/Users/eric/projects6/agda-mcp-server/tmp/rt-reverify/rt5/.agda-mcp/captures/1b612dfeb1d31ea9-1-0-868b1a44-a783-4def-bdf0-9ded040b9352.json",
+    "verdictPath": "/Users/eric/projects6/agda-mcp-server/tmp/rt-reverify/rt5/.agda-mcp/captures/1b612dfeb1d31ea9-1-0-868b1a44-a783-4def-bdf0-9ded040b9352.verdict.json",
+    "matrixEntryId": null,
+    "relatedFingerprint": [
+      "a0ae86c7deb9754e"
+    ],
+    "createdAt": "2026-07-04T01:28:16.096Z",
+    "closedAt": null,
+    "notes": "AUTO-FILED by dogfood-wrapup.mjs (run-id rt5-20260703, Phase 6 plan 06-03) during RT5 re-verification -- D-08 manual-merge: this is the SAME staged capture a0ae86c7deb9754e's own manual verdict is based on, independently flagged by ORCL-01's warm/cold differential. warmTuple (success:true, goalCount:3, hasHoles:true, classification:'ok-with-holes') is the LAST load-family-NAMED tool call in the session (the original agda_load, before the mutation); coldTuple (success:false, goalCount:0, hasHoles:true, classification:'type-error') is a fresh read of the file as it exists on disk NOW, i.e. AFTER agda_apply_edit silently mutated and internally reloaded it. The divergence is genuine and robust on the success/classification/goalCount fields regardless of hasHoles (verified: a hypothetically-faithful cold reload using the live server's own needsExplicitHoleScan gate would report hasHoles:false here too, since parsed.success would be false -- the two tuples would still disagree on success/classification/goalCount). Mechanism: findWarmLoadTuple (scripts/oracle/orcl-01-differential.mjs) matches only /^agda_(load|typecheck)/-named recorded actions; agda_apply_edit is not in that family even though it performs a real internal reload, so a mutation via that tool leaves the recorder's notion of 'the warm state' stale relative to disk truth. Same root incident as a0ae86c7deb9754e (RT5), not a separate defect -- kept as its own row (not merged) per this queue's established relatedFingerprint convention (see 5abecc959e43fef3/004d161b839ce725, ad2b6d31f58f1759/fdc90bfde12fb938). Flagged for 06-06: consider whether ORCL-01's own warm-tuple lookup should also track non-load-family-named mutation tools' own internal reloads (a possible ORCL-01 enhancement), distinct from RT5's client-facing envelope fix."
+  },
+  {
+    "fingerprint": "1220f2840142aab8",
+    "status": "new",
+    "defectKind": "false-green",
+    "triageClass": "proof-obligation",
+    "triageConfidence": 0.72,
+    "recurrence": 1,
+    "title": "Dogfood-surfaced: 1220f2840142aab8",
+    "summary": "ORCL-01 server-faithfulness differential flagged a candidate false-green.",
+    "affectedTool": "agda_load",
+    "capturePath": "/Users/eric/projects6/agda-mcp-server/tmp/rt-reverify/rt6/.agda-mcp/captures/1220f2840142aab8-1-0-f64dcbae-693d-4a26-9935-717ab87bc7ee.json",
+    "verdictPath": "/Users/eric/projects6/agda-mcp-server/tmp/rt-reverify/rt6/.agda-mcp/captures/1220f2840142aab8-1-0-f64dcbae-693d-4a26-9935-717ab87bc7ee.verdict.json",
+    "matrixEntryId": null,
+    "relatedFingerprint": [
+      "ad2b6d31f58f1759"
+    ],
+    "createdAt": "2026-07-04T01:29:53.336Z",
+    "closedAt": null,
+    "notes": "AUTO-FILED by dogfood-wrapup.mjs (run-id rt6-20260703, Phase 6 plan 06-03) during RT6 re-verification -- D-08 manual-merge, and IMPORTANT CORRECTION to the auto-derived title/summary: this is NOT independent evidence of a live agda_load response defect beyond what ad2b6d31f58f1759 (RT6) already records. warmTuple and coldTuple AGREE on success (false), goalCount (0), invisibleGoalCount (0), and classification ('type-error') -- the ONLY differing field is hasHoles (warm:false, cold:true). Root-cause analysis: scripts/oracle/orcl-01-differential.mjs's runColdLoadAndDiff computes `sourceHoleCount = countExplicitSourceHoles(materializedPath)` UNCONDITIONALLY (line ~481), then feeds it into classifyLoadResult() to derive coldTuple.hasHoles -- but the LIVE server's own runLoad() (src/agda/session-load-impl.ts) only ever calls countExplicitSourceHoles behind a needsExplicitHoleScan gate (`parsed.success && goals.length===0 && invisibleGoalCount===0`), i.e. it deliberately skips the source-hole text scan on a failed load. Since this capture's load failed (parsed.success:false), the REAL live server never scans for source holes at all here and reports hasHoles:false either warm OR on any hypothetical fresh reload -- the oracle's own cold-side reimplementation simply does not replicate this gate, producing a spurious mismatch. This is a genuine, newly-discovered fidelity gap in the ORACLE TOOLING (scripts/oracle/orcl-01-differential.mjs), not a second independent client-facing agda_load defect -- ad2b6d31f58f1759's own notes already record the real, client-facing hasHoles/sourceHoleCount conflation this queue entry is a side effect of investigating. Flagged loudly for 06-06: the likely fix is a one-line change to runColdLoadAndDiff to gate countExplicitSourceHoles the same way runLoad does (scripts/ change, out of this plan's committed file scope); triageClass/triageConfidence (from classifyAgdaError on the UnequalTerms error text, which IS identical warm vs cold) are independently accurate and left as auto-derived."
   },
   {
     "fingerprint": "b6821f42952c6ff8",

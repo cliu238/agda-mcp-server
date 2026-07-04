@@ -2,12 +2,12 @@
 
 **Date:** 2026-07-04
 **`agda --version`:** `Agda version 2.8.0`
-**Current-main commit:** `a8e1512278c6424719b41b59f35815a0e166c381` (branch `main`)
+**Current-main commit:** `a8e1512278c6424719b41b59f35815a0e166c381` (branch `main`; plan 06-02's base)
 **Node/tsx used for driver:** Node `v22.22.0` via `npx tsx v4.22.4` (per D-06, the driver connects THROUGH `scripts/dogfood/dogfood-run.mjs`, never a bare `node` harness)
 **Build:** `npm run build` completed with exit 0 before any session ran.
-**Pipeline used:** every RT session below was driven live through `scripts/dogfood/dogfood-run.mjs` (recording proxy) -> `agda_capture_session` -> `scripts/dogfood/dogfood-wrapup.mjs` (oracle triad + N=3 flake gate), per D-06 — not an ad-hoc harness script. Fixtures are small, disposable, gitignored Agda files under `tmp/rt-reverify/` (D-05 — reusing `test/fixtures/agda/{HoleQuestionMark,NavigationQueries,WriteCaseSplit}.agda`, never the CHG corpus).
+**Pipeline used:** every RT session below was driven live through `scripts/dogfood/dogfood-run.mjs` (recording proxy) -> `agda_capture_session` -> `scripts/dogfood/dogfood-wrapup.mjs` (oracle triad + N=3 flake gate), per D-06 — not an ad-hoc harness script. Fixtures are small, disposable, gitignored Agda files under `tmp/rt-reverify/` (D-05 — reusing `test/fixtures/agda/{HoleQuestionMark,NavigationQueries,WriteCaseSplit,WriteGiveSimple,MixedGoalsErrors,MixedVisibleInvisible}.agda`, never the CHG corpus).
 
-This plan (06-02) covers **RT1-RT4**. RT5-RT8: see continuation (plan 06-03).
+Plan 06-02 covered **RT1-RT4** (below). Plan 06-03 (base commit `2fbbab4a68305305e6ac9bab15fe8db068a12b08`, same Agda/Node/tsx versions, same rig reused verbatim per the 06-02 handoff) is completing **RT5-RT8** in this same file, per the 06-02 handoff instruction to extend rather than replace this report. This commit covers RT5+RT6; RT7+RT8 follow in the next commit of the same plan.
 
 ## Summary
 
@@ -17,8 +17,13 @@ This plan (06-02) covers **RT1-RT4**. RT5-RT8: see continuation (plan 06-03).
 | RT2: not-in-scope query must return `ok:false`/NotInScope | `e5f6de1fa365b887` | **CONFIRMED** | `rt2-20260703` | Both `agda_infer` and `agda_compute` (top-level) return `ok:true`/`classification:"ok"` for an out-of-scope identifier, wrapping `"(unable to infer)"` / `"(no result)"`. |
 | RT3: failing context-check must never say "no checked term" inside success | `eaea6321183bdf7b` | **CONFIRMED** | `rt3-20260703b` (`rt3-20260703` superseded — see below) | `agda_goal_type_context_check` returns `ok:true`/`classification:"ok"` while `data.goalType` embeds a raw NotInScope/UnequalTerms error and `data.checkedExpr` renders `"(no checked term returned)"`. |
 | RT4: `agda_auto` must not treat CLI-flag hints as a term or a diagnostic as a solution | `004d161b839ce725` | **CONFIRMED** | `rt4-20260703` | `data.searchPayload` came back as `"-d 5 --list-candidates -h -t 999999 -x --unsafe"` and `hasSolution:true` while `data.solution` is Agda's own NotInScope rejection text — byte-for-byte the same shape as the already-triaged `5abecc959e43fef3` entry. |
+| RT5: a mutation tool that fails to reload must return partial/failure with post-reload diagnostics | `a0ae86c7deb9754e` | **CONFIRMED** | `rt5-20260703` | `agda_apply_edit` wrote an ill-typed replacement and returned `ok:true`/`applied:true`/`"Goal diff: solved ?0, ?1, ?2"` while the reload actually failed with a raw `NotInScope` error — no structured field distinguishes this from a real success. |
+| RT6: `agda_load` must distinguish visible goals/hidden metas/constraints/source holes/file-completeness | `ad2b6d31f58f1759` | **CONFIRMED** (missing-feature) | `rt6-20260703` | Source hole syntax has no field of its own (folded into `hasHoles`, and can go fully invisible — `goalCount:0, hasHoles:false` — when a real hole co-occurs with an unrelated hard error later in the file); `constraints` has no field on `agda_load` at all. |
+| RT7-RT8 | — | — | — | see the next commit's continuation of this file |
 
-D-08 duplicate sweep: `grep -c '"title": "Dogfood-surfaced' test/fixtures/fix-queue.json` returns **0** across all five wrapup runs below (`rt1-20260703`, `rt2-20260703`, `rt3-20260703`, `rt3-20260703b`, `rt4-20260703`). Every `dogfood-wrapup.mjs` run reported `0 filed` (see per-RT Observed sections) — the current oracle triad's two auto-filing predicates (ORCL-01 differential, ORCL-02 soundness scan) are not designed to catch this bug class (a deterministic response-envelope/schema defect that reproduces identically warm and cold, not a staleness differential or an unsanctioned-axiom/flag soundness violation), so nothing was ever staged for the manual-merge procedure D-08 anticipates. This is a legitimate, expected outcome, not a gap in the sweep — the verdicts above come from direct inspection of the driver's printed envelopes (quoted below), which is the mechanism the RT specs themselves require.
+D-08 duplicate sweep (plan 06-02's five runs): `grep -c '"title": "Dogfood-surfaced' test/fixtures/fix-queue.json` returns **0** across all five wrapup runs below (`rt1-20260703`, `rt2-20260703`, `rt3-20260703`, `rt3-20260703b`, `rt4-20260703`). Every `dogfood-wrapup.mjs` run reported `0 filed` (see per-RT Observed sections) — the current oracle triad's two auto-filing predicates (ORCL-01 differential, ORCL-02 soundness scan) are not designed to catch this bug class (a deterministic response-envelope/schema defect that reproduces identically warm and cold, not a staleness differential or an unsanctioned-axiom/flag soundness violation), so nothing was ever staged for the manual-merge procedure D-08 anticipates. This is a legitimate, expected outcome, not a gap in the sweep — the verdicts above come from direct inspection of the driver's printed envelopes (quoted below), which is the mechanism the RT specs themselves require.
+
+D-08 duplicate sweep (plan 06-03's RT5+RT6 runs, `rt5-20260703` and `rt6-20260703`): **this time 2 were auto-filed** (`1b612dfeb1d31ea9` from `rt5-20260703`, `1220f2840142aab8` from `rt6-20260703`) — both are the SAME staged capture their respective manual RT5/RT6 verdicts are based on, independently flagged by ORCL-01's warm/cold differential, not a second incident. Per D-08, neither was left as a disconnected `new` row: both are cross-referenced via `relatedFingerprint` to their originating RT entry (`a0ae86c7deb9754e`, `ad2b6d31f58f1759`) with the mechanism explained in each entry's own `notes`. See RT5's and RT6's sections below for the full detail, including RT6's auto-file turning out to be a genuine fidelity gap in the ORACLE tooling itself (`scripts/oracle/orcl-01-differential.mjs`), not a second independent server defect.
 
 ---
 
@@ -153,6 +158,81 @@ Both a NotInScope and a genuinely ill-typed (`UnequalTerms`) probe come back `ok
 `dogfood-wrapup.mjs rt4-20260703`: `orcl01=pass orcl02=no-policy orcl03=consistent trueGreen=false` — `0 filed` (the last load-family action, the reload, correctly agrees warm-vs-cold since the file was never mutated; ORCL-02's soundness scan targets unsanctioned postulates/flags/holes in the *file's own content*, not a CLI-argument-injection pattern inside a tool call's search payload — this bug class is outside both predicates' coverage, same as RT1-RT3).
 
 **Implication:** CONFIRMED -> `needsReverify: false`, `status: "new" -> "triaged"`. This is the D-12-mandated pre-fix measurement for RT4, recorded here BEFORE any `agda_auto` fix lands (D-08's no-race rule — the fix plan is gated behind this plan's wave). The fresh run-id/evidence is cross-attached to `5abecc959e43fef3`'s own notes (same root cause, `buildAutoSearchPayload()` in `src/agda/refactor-helpers.ts`); `5abecc959e43fef3`'s status remains `triaged` (unchanged) per the plan's instruction not to flip it here.
+
+---
+
+## RT5: a mutation tool that fails to reload must return partial/failure with post-reload diagnostics
+
+**Fingerprint:** `a0ae86c7deb9754e`
+**Verdict:** CONFIRMED
+
+**v0.6.7 claim:** Per the UX report's Finding #3 ("State-changing tools could report success after creating reload errors", affected tools in evidence: `agda_case_split`, `agda_refine`, `agda_refine_exact`, one `agda_auto` case): a state-changing tool wrote a replacement, then reported text such as `Reloaded with errors: 0 goal(s) remaining` while the same payload contained parse/split errors, with the client-visible headline still reading success. `affectedTool` was recorded as `agda_apply_edit` (best-inferred mutation-tool family).
+
+**Repro:** Corpus `tmp/rt-reverify/rt5/` (gitignored), fixture `test/fixtures/agda/WriteGiveSimple.agda` copied in verbatim (`myZero : Nat; myZero = {!!}` plus a two-clause `add`, both clauses also `{!!}`). Task manifest: `{ target: "RT5 mutation-tool reload failure", expectedSignature: "myZero : Nat", corpus: "rt-local-fixture" }`. Driver (`RT_SPEC=rt5`, run-id `rt5-20260703`): `agda_load` (baseline, `ok-with-holes`, 3 goals), then `agda_apply_edit { file: "WriteGiveSimple.agda", oldText: "myZero = {!!}", newText: "myZero = definitelyNotInScopeXyz" }`, then `agda_capture_session`. `agda_apply_edit` was chosen as the deterministic probe over `agda_give`/`agda_case_split`/`agda_refine` per the plan's own documented fallback: a `give`'s accept path requires the expression to already type-check against the goal, so a WRITTEN give cannot independently fail to reload under normal conditions — `agda_apply_edit`'s raw text substitution has no such precondition, letting the probe deterministically force a real post-write reload failure. `registerGoalTextTool`/`registerTextTool` (`src/tools/tool-registration.ts`) share the identical unconditional-`okEnvelope`-unless-throw wrapping used by `agda_case_split`/`agda_give`/`agda_refine`/`agda_refine_exact`/`agda_intro`/`agda_auto`, confirmed by direct source inspection — so this is the same defect class the UX report's evidence tools exhibit, reached via the most deterministic available probe.
+
+**Observed (current main):**
+
+```json
+{
+  "tool": "agda_apply_edit",
+  "ok": true,
+  "classification": "ok",
+  "data": {
+    "text": "## Apply edit to `WriteGiveSimple.agda`\n\nApplied edit at line 9.\n\nReloaded with errors: 0 goal(s) remaining.\n**Errors:** .../WriteGiveSimple.agda:9.10-33: error: [NotInScope]\nNot in scope:\n  definitelyNotInScopeXyz\n  ...\nGoal diff: solved ?0, ?1, ?2.\n",
+    "file": "WriteGiveSimple.agda",
+    "applied": true,
+    "sandboxRejected": false,
+    "message": "Applied edit at line 9."
+  },
+  "diagnostics": []
+}
+```
+
+Top-level `ok:true`/`classification:"ok"`/`data.applied:true` — success-shaped in every structured field. The reload failure (a genuine `NotInScope` error) and the misleading `"Goal diff: solved ?0, ?1, ?2"` line (implying all three goals were solved, when in fact the file no longer type-checks at all) exist ONLY inside `data.text`'s free-form prose — `diagnostics` is empty, and no structured field (`applied`, `sandboxRejected`, or anything else) reflects the failure. Root cause: `reloadAndDiagnose()` (`src/session/reload-and-diagnose.ts`) reports a failed reload only via appended prose (`"Reloaded with errors: ..."`), never a structured field, and `registerTextTool`'s wrapper (`src/tools/tool-registration.ts`) always returns `okEnvelope(...)` unless the callback throws — which it never does here, since the edit itself DID apply successfully; only the subsequent reload failed.
+
+`dogfood-wrapup.mjs rt5-20260703`: `orcl01=server-false-green-candidate orcl02=no-policy orcl03=conformance-flagged trueGreen=false` — **1 filed** (auto-filed as `1b612dfeb1d31ea9`, see below), classified `deterministic` (survived the N=3 flake gate).
+
+**Implication:** CONFIRMED -> `needsReverify: false`, `status: "new" -> "triaged"`. `defectKind` corrected from the seeded `wrong-result` to `false-green`, matching this queue's own established usage for an `ok:true` response wrapping a real failure (`bfcba437f5426fd6`, `5abecc959e43fef3`/`004d161b839ce725` are the identical shape). Fix direction (future wave): give write-capable proof tools a structured `reloadOk`/`postReloadDiagnostics` field (the UX report's own Finding #3 suggested split — `editApplied`/`reloadOk`/`postReloadGoalCount`/`postReloadDiagnostics`/`solvedGoals`) and have the envelope's `ok`/`classification` reflect a failed reload, not just a successful edit.
+
+**D-08 auto-file:** `dogfood-wrapup.mjs` independently auto-filed this SAME staged capture as `1b612dfeb1d31ea9`, an ORCL-01 server-false-green-candidate: the differential's `warmTuple` (`success:true, classification:"ok-with-holes"`) is the LAST load-family-**named** tool call (the original `agda_load`, before the mutation), while `coldTuple` (`success:false, classification:"type-error"`) is a fresh read of the file as it exists on disk now, after `agda_apply_edit` silently mutated it. `findWarmLoadTuple()` (`scripts/oracle/orcl-01-differential.mjs`) only matches `/^agda_(load|typecheck)/`-named recorded actions; `agda_apply_edit` performs a real internal reload but isn't in that family, so the oracle's own notion of "the warm state" went stale relative to disk truth. This is the SAME incident as RT5 itself, not a second defect — kept as its own queue row per D-08 (cross-referenced via `relatedFingerprint`, not merged), consistent with this queue's `5abecc959e43fef3`/`004d161b839ce725` and `fdc90bfde12fb938`/`ad2b6d31f58f1759` precedent.
+
+---
+
+## RT6: `agda_load` must distinguish visible goals, hidden metas, constraints, source hole syntax, and complete file acceptance
+
+**Fingerprint:** `ad2b6d31f58f1759`
+**Verdict:** CONFIRMED (missing-feature)
+
+**v0.6.7 claim:** Per the UX report's Finding #4 ("Hole/completeness accounting was ambiguous", observed count 151): `agda_load` returned `classification: "ok-with-holes"`, `hasHoles: true`, `goalCount: 0`, `invisibleGoalCount: 0` — an internally-contradictory combination (holes exist, but neither visible nor invisible goals do). The suggested schema direction wants distinct fields for source hole syntax, visible interaction goals, hidden/invisible goals, unsolved metas, constraints, and final file completeness. `relatedFingerprint` links this entry to `fdc90bfde12fb938` (the `agda_proof_status` "no-goals-but-constraints-hold-an-error" sub-case, fixed separately).
+
+**Repro:** Corpus `tmp/rt-reverify/rt6/` (gitignored), fixtures `test/fixtures/agda/MixedGoalsErrors.agda` (one valid `hole1 = {!!}` PLUS an unrelated hard type error, `wrong = true : Nat`) and `test/fixtures/agda/MixedVisibleInvisible.agda` (a top-level hole plus one inside an `abstract` block; both report as visible on Agda 2.8.0 per the fixture's own comment). Task manifest: two entries, `{ target: "RT6a hole+type-error conflation...", expectedSignature: "hole1 : Nat" }` and `{ target: "RT6b mixed visible/invisible holes...", expectedSignature: "topLevel : Nat" }`, both `corpus: "rt-local-fixture"`. Driver (`RT_SPEC=rt6`, run-id `rt6-20260703`): `agda_load MixedGoalsErrors.agda` -> `agda_capture_session` (RT6a) -> `agda_load MixedVisibleInvisible.agda` -> `agda_capture_session` (RT6b).
+
+**Observed (current main, RT6a — `MixedGoalsErrors.agda`):**
+
+```json
+{
+  "classification": "type-error",
+  "data": {
+    "success": false, "goalIds": [], "goalCount": 0, "invisibleGoalCount": 0,
+    "hasHoles": false, "isComplete": false, "classification": "type-error",
+    "errors": [".../MixedGoalsErrors.agda:17.9-13: error: [UnequalTerms]\nBool !=< Nat\n..."]
+  },
+  "diagnostics": [
+    { "severity": "error", "message": "...UnequalTerms...", "code": "agda-error" },
+    { "severity": "info", "message": "Earliest diagnostic location in this load: line 17. ...", "code": "scope-check-extent" }
+  ]
+}
+```
+
+This LIVE reproduces the UX report's Finding #4 symptom exactly: the file genuinely contains a valid, syntactically-correct `hole1 = {!!}` (line 10-11), yet the response shows `goalCount:0, invisibleGoalCount:0, hasHoles:false` — the hole is completely invisible to the client. Root cause: `classifyLoadResult()`'s `sourceHoleCount` input (`src/agda/session-load-helpers.ts`) is the ONLY place source-hole-syntax feeds the response, and `runLoad()`'s `needsExplicitHoleScan` gate (`src/agda/session-load-impl.ts`) only invokes `countExplicitSourceHoles()` when `parsed.success` is true — since this file has an unrelated hard error, `parsed.success` is `false`, the source-hole scan never runs, and the genuinely-present hole vanishes from every field. **`agda_load`'s response schema also has no `constraints` field whatsoever** (that signal exists only on a different tool, `agda_proof_status`, already tracked separately as `fdc90bfde12fb938`).
+
+**Observed (current main, RT6b — `MixedVisibleInvisible.agda`):** `goalCount: 2, invisibleGoalCount: 0, hasHoles: true, classification: "ok-with-holes"` — both the top-level and abstract-block holes report as visible interaction points on Agda 2.8.0, confirming the visible/hidden-metas distinction works correctly WHEN Agda's own protocol reports both consistently (not itself a defect — an Agda-version behavior note, per the fixture's own comment).
+
+`dogfood-wrapup.mjs rt6-20260703`: RT6a — `orcl01=server-false-green-candidate orcl02=no-policy orcl03=conformance-flagged trueGreen=false`, **1 filed** (auto-filed as `1220f2840142aab8`, see below). RT6b — `orcl01=pass orcl02=no-policy orcl03=consistent trueGreen=false`, `0 filed`.
+
+**Implication:** CONFIRMED as `missing-feature` -> `needsReverify: false`, `status: "new" -> "triaged"`. Of the five asked-for distinctions, `agda_load` already exposes visible goals (`goalCount`/`goalIds`), hidden metas (`invisibleGoalCount`), and file completeness (`isComplete`/`classification`) directly — but **source hole syntax** (folded into a derived boolean with no count of its own, and demonstrably losable per RT6a above) and **constraints** (absent from this tool's schema entirely) remain conflated/missing. The plausible fix is the UX report's "Suggested Schema Direction" response-schema rework — a deferred-ideas re-triage candidate (D-10); the DISPOSITION (fix vs re-triage) belongs to plan 06-06, not here.
+
+**D-08 auto-file, WITH AN IMPORTANT CORRECTION:** `dogfood-wrapup.mjs` auto-filed RT6a's capture as `1220f2840142aab8`. Its `warmTuple`/`coldTuple` agree on `success`/`goalCount`/`invisibleGoalCount`/`classification` — the ONLY differing field is `hasHoles` (warm: `false`, cold: `true`). Root-cause analysis: `runColdLoadAndDiff()` (`scripts/oracle/orcl-01-differential.mjs`) computes `sourceHoleCount = countExplicitSourceHoles(materializedPath)` **unconditionally**, then feeds it to `classifyLoadResult()` — it does NOT replicate the live server's own `needsExplicitHoleScan` gate described above. Since this capture's load failed, the REAL live server never scans for source holes here at all (as shown in RT6a's own observed envelope); the oracle's cold-side reimplementation simply skips that gate, producing a spurious mismatch. **This is a newly-discovered fidelity gap in the ORACLE TOOLING itself (`scripts/oracle/orcl-01-differential.mjs`), not a second independent client-facing `agda_load` defect** — it is a side effect of investigating the exact same `hasHoles`/`sourceHoleCount` mechanism RT6 itself is about. Cross-referenced via `relatedFingerprint` to `ad2b6d31f58f1759` (kept as its own row per D-08, not merged). Flagged loudly for plan 06-06: the likely fix is a one-line change making `runColdLoadAndDiff`'s hole scan match `runLoad`'s own gate — a `scripts/` change, out of this plan's committed file scope (06-03 is scoped to `test/fixtures/fix-queue.json` and this report only).
 
 ---
 

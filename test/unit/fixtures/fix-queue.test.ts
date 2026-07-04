@@ -87,8 +87,8 @@ test("fixQueueEntrySchema rejects status: locked with closedAt: null", () => {
 
 // ── Seed data (Plan 04-03) ───────────────────────────────────────────
 
-test("fixQueue holds exactly the 13 real seeded entries", () => {
-  expect(fixQueue.length).toBe(13);
+test("fixQueue holds the 13 real seeded entries plus dogfood-wrapup auto-filings from Phase 6 plan 06-03's RT5/RT6 live sessions", () => {
+  expect(fixQueue.length).toBe(15);
 });
 
 test("every fixQueue entry has a unique fingerprint", () => {
@@ -114,9 +114,9 @@ test("the flagship #64/#61 entry is locked and linked to its capture-regression-
   expect(flagship?.issue).toEqual(expect.arrayContaining([64, 61]));
 });
 
-test("exactly 4 entries are flagged needsReverify: true (RT5-RT8; RT1-RT4 re-verified in Phase 6 plan 06-02)", () => {
+test("exactly 2 entries are flagged needsReverify: true (RT7-RT8; RT1-RT6 re-verified in Phase 6 plans 06-02/06-03)", () => {
   const needsReverifyCount = fixQueue.filter((entry) => entry.needsReverify === true).length;
-  expect(needsReverifyCount).toBe(4);
+  expect(needsReverifyCount).toBe(2);
 });
 
 test("classifyAgdaError on each grounded entry's own raw error text matches its seeded triageClass/triageConfidence", () => {
