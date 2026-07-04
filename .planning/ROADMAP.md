@@ -119,12 +119,12 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — TEAM-05 core: clone-fuel-corpora.mjs (shared, reused by Docker) + install-pinned-env.{sh,mjs} (Node/Agda verify, run-pinned-agda.sh generation, npm ci orchestration)
-- [ ] 08-02-PLAN.md — DEPLOY-01 packaging: Dockerfile (Node 24 + cabal-built Agda 2.8.0 + 4 pinned fuel corpora, non-root UID 2231) + k8s manifests (Deployment/Ingress/CronJob targeting the verified llm-gateway namespace + PVC)
+- [x] 08-01-PLAN.md — TEAM-05 core: clone-fuel-corpora.mjs (shared, reused by Docker) + install-pinned-env.{sh,mjs} (Node/Agda verify, run-pinned-agda.sh generation, npm ci orchestration)
+- [x] 08-02-PLAN.md — DEPLOY-01 packaging: Dockerfile (Node 24 + cabal-built Agda 2.8.0 + 4 pinned fuel corpora, non-root UID 2231) + k8s manifests (Deployment/Ingress/CronJob targeting the verified llm-gateway namespace + PVC)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 08-03-PLAN.md — TEAM-05 acceptance: docs/TEAM-ONBOARDING.md + fresh-teammate walkthrough test (installer -> real local upload, zero real Agda dependency)
+- [x] 08-03-PLAN.md — TEAM-05 acceptance: docs/TEAM-ONBOARDING.md + fresh-teammate walkthrough test (installer -> real local upload, zero real Agda dependency)
 - [ ] 08-04-PLAN.md — DEPLOY-01 CI/CD: deploy-ingest.yml (D-06 auto-deploy-on-push, no path filter) + cluster secrets bootstrap + first live deploy (checkpoint: GH Actions secrets)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -182,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/6 | Planned    |  |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 3/6 | In Progress|  |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |
