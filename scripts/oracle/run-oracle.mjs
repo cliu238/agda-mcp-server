@@ -29,7 +29,7 @@
 // Ships as a `scripts/` + repo-data-dir artifact per D-05 — no new MCP
 // verb, no new src/ tool surface.
 //
-// Run with: npx tsx scripts/oracle/run-oracle.mjs <path> [--only orcl-01,orcl-02,orcl-03]
+// Run with: npx tsx scripts/oracle/run-oracle.mjs <path> [--only orcl-01,orcl-02,orcl-03] [--policy <key>]
 // (NOT plain `node` — see orcl-01-differential.mjs's header for why.)
 
 import { appendFileSync, readFileSync } from "node:fs";
@@ -174,6 +174,12 @@ async function runSharedOrcl01AndOrcl03(artifact, runOrcl03, spawnOverride) {
  * @param {("orcl-01"|"orcl-02"|"orcl-03")[]} [options.only] - Restrict
  *   which predicates run. Defaults to all three. Passing `[]` runs
  *   none (every predicate gets its excluded-placeholder).
+ * @param {string} [options.policyKey] - POLICY-01: an explicit ORCL-02
+ *   policy key, passed straight through to `judgeOrcl02`'s own
+ *   `options.policyKey` when ORCL-02 runs. Omitted (`undefined`) keeps
+ *   `judgeOrcl02`'s own `.agda-lib`-derived default; a
+ *   `PolicyResolutionError` thrown by `judgeOrcl02` for an
+ *   unresolvable key propagates uncaught (D-03: loud, never silent).
  * @param {{ spawnColdAgdaSession?: Function }} [options.deps] -
  *   Dependency-injection seam, used by this module's own tests to
  *   count cold-session spawns (proving ORCL-01/ORCL-03 share exactly
@@ -218,8 +224,13 @@ export async function runOracle(artifactPath, options = {}) {
   }
 
   // ORCL-02 is fully independent (no subprocess, no shared state with
-  // ORCL-01/ORCL-03) — run it as-is whenever included.
-  const orcl02Outcome = runOrcl02 ? await judgeOrcl02(artifactPath) : EXCLUDED_SKIP_PLACEHOLDER;
+  // ORCL-01/ORCL-03) — run it as-is whenever included. POLICY-01:
+  // options.policyKey (when present) is threaded straight through to
+  // judgeOrcl02's own options bag, the SAME accept-a-bag-pass-through
+  // shape options.deps.spawnColdAgdaSession already uses above.
+  const orcl02Outcome = runOrcl02
+    ? await judgeOrcl02(artifactPath, options.policyKey !== undefined ? { policyKey: options.policyKey } : {})
+    : EXCLUDED_SKIP_PLACEHOLDER;
 
   const verdict = composeVerdict({
     orcl01: orcl01Outcome,
@@ -263,7 +274,8 @@ export async function scriptMain(argv = process.argv.slice(2)) {
   const artifactPath = argv[0];
   if (!artifactPath) {
     process.stderr.write(
-      "Usage: npx tsx scripts/oracle/run-oracle.mjs <path-to-artifact.json> [--only orcl-01,orcl-02,orcl-03]\n",
+      "Usage: npx tsx scripts/oracle/run-oracle.mjs <path-to-artifact.json> "
+        + "[--only orcl-01,orcl-02,orcl-03] [--policy <key>]\n",
     );
     process.exitCode = 1;
     return;
@@ -278,11 +290,20 @@ export async function scriptMain(argv = process.argv.slice(2)) {
           .filter(Boolean)
       : undefined;
 
+  const policyFlagIndex = argv.indexOf("--policy");
+  const policyKey = policyFlagIndex !== -1 ? argv[policyFlagIndex + 1] : undefined;
+
   try {
     // A non-true-green result is the CLI's own "needs attention"
     // signal (exit 1) — the sidecar's per-predicate detail is where
     // the actual reason lives, never collapsed away into the exit code.
-    const verdict = await runOracle(artifactPath, only !== undefined ? { only } : {});
+    // A PolicyResolutionError (an expected --policy key that could not
+    // be resolved) propagates uncaught into the catch block below,
+    // same as any other run-oracle failure (D-03: loud, never silent).
+    const verdict = await runOracle(artifactPath, {
+      ...(only !== undefined ? { only } : {}),
+      ...(policyKey !== undefined ? { policyKey } : {}),
+    });
     process.exitCode = verdict.trueGreen ? 0 : 1;
   } catch (err) {
     process.stderr.write(`run-oracle failed: ${err instanceof Error ? err.message : String(err)}\n`);

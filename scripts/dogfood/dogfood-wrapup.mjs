@@ -35,7 +35,7 @@
 // tsx resolves this correctly, and so does vitest's own resolver when
 // this module is imported from a .test.ts file.
 //
-// Run with: npx tsx scripts/dogfood/dogfood-wrapup.mjs <run-id> [--rerun-n <N>] [--queue-path <path>]
+// Run with: npx tsx scripts/dogfood/dogfood-wrapup.mjs <run-id> [--rerun-n <N>] [--queue-path <path>] [--policy <key>]
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,9 +45,16 @@ import { runOracle } from "../oracle/run-oracle.mjs";
 import { upsertQueueEntry } from "../queue/intake.mjs";
 import { classifyFlakiness } from "./flake-classify.mjs";
 import { resolveRunsRoot } from "./transcript-writer.mjs";
+import { loadTaskManifest } from "./task-manifest.mjs";
 
 import { writeFileAtomic } from "../../src/session/safe-source-io.js";
 import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
+// Dual JSON-loader note (test/fixtures/fuel-corpora.ts's own header):
+// this is the test-side typed constant, resolved via tsx's .js -> .ts
+// specifier mapping — NOT src/json-data.ts's runtime loadJsonData,
+// which is what orcl-02-soundness-scan.mjs's loadOraclePolicy uses for
+// the ACTUAL policy file one step later. The two are not interchangeable.
+import { fuelCorpora } from "../../test/fixtures/fuel-corpora.js";
 
 const LOAD_FAMILY_TOOL_PATTERN = /^agda_(load|typecheck)/;
 
@@ -176,11 +183,15 @@ export async function appendFlakyLog(flakyLogPath, artifactPath, verdict, flake,
 /**
  * Judge one staged capture end to end: oracle triad -> flake gate ->
  * file-or-sidechannel. `config` carries `{ queueJsonPath, flakyLogPath,
- * n, deps }`; `deps` overrides `runOracle`/`classifyFlakiness`/
+ * n, policyKey, deps }`; `deps` overrides `runOracle`/`classifyFlakiness`/
  * `upsertQueueEntry`/`appendFlakyLog` (the SAME `options.deps` DI
  * convention `./flake-classify.mjs` and `scripts/oracle/run-oracle.mjs`
  * both already use), used by this module's own tests to inject fakes
- * with zero real Agda/subprocess/filesystem cost.
+ * with zero real Agda/subprocess/filesystem cost. `config.policyKey`
+ * (POLICY-01) is threaded straight through to `runOracleFn`'s own
+ * `options.policyKey`, which `run-oracle.mjs`'s real `runOracle`
+ * forwards on to `judgeOrcl02` — omitted (`undefined`) keeps
+ * `judgeOrcl02`'s own `.agda-lib`-derived default.
  *
  * @param {string} artifactPath - Path to the staged CaptureArtifact JSON.
  * @param {object} artifact - The ALREADY-PARSED CaptureArtifact object
@@ -200,7 +211,8 @@ export async function wrapUpCapture(artifactPath, artifact, config = {}) {
   const upsertFn = config.deps?.upsertQueueEntry ?? upsertQueueEntry;
   const appendFlakyFn = config.deps?.appendFlakyLog ?? appendFlakyLog;
 
-  const verdict = await runOracleFn(artifactPath);
+  const orcl02Options = config.policyKey !== undefined ? { policyKey: config.policyKey } : {};
+  const verdict = await runOracleFn(artifactPath, orcl02Options);
 
   // STRICT priority order, checked top to bottom, first match wins —
   // see the header comment for why this precedence is itself the
@@ -250,13 +262,80 @@ export async function wrapUpCapture(artifactPath, artifact, config = {}) {
 
 // ── CLI ──────────────────────────────────────────────────────────────
 
-/** Extracts `--rerun-n <N>` / `--queue-path <path>` from a flat
- *  `--flag value` argv array, positional arg 0 = runId. Throws on a
- *  non-positive-integer rerun count: a typo'd env var or a missing/
- *  non-numeric `--rerun-n` value must fail loudly HERE, never reach
- *  `classifyFlakiness` as `NaN`/`0` — a zero-iteration replay loop
- *  would classify every deterministic candidate as "flaky" on an
- *  EMPTY observation list and silently unfile it. */
+/**
+ * POLICY-01/D-01: resolve the ORCL-02 policy key this wrapup run should
+ * pass to every `wrapUpCapture` call, in STRICT first-match-wins
+ * precedence (mirrors `wrapUpCapture`'s own STRICT-order filing
+ * precedence, see its header comment):
+ *   (a) an explicit `--policy` flag always wins.
+ *   (b) otherwise, if the run's task manifest is readable, every entry
+ *       shares exactly ONE distinct `corpus` value, AND that corpus is
+ *       a known `fuel-corpora.json` entry, its `policyKey` column is
+ *       used — the W2 fix (audit: "test-validated but never consumed
+ *       at runtime").
+ *   (c) otherwise `undefined` — `judgeOrcl02`'s own `.agda-lib`-derived
+ *       fallback, the legitimate v1.0 default.
+ * Branch (b)'s failure modes (an unreadable/invalid manifest, mixed
+ * corpus values, or an unknown corpus key) are NEVER a hard error
+ * here: Task 1's loud-fail `resolvePolicyStrict` plus the `.agda-lib`
+ * fallback already guarantee no silent degradation downstream. Each
+ * skipped branch (b) writes exactly ONE stderr warning line naming why
+ * corpus-derived resolution was skipped, then falls through to (c).
+ */
+export function resolveWrapupPolicyKey({ policyFlag, manifestPath }) {
+  if (policyFlag !== undefined) {
+    return policyFlag;
+  }
+
+  if (!manifestPath) {
+    return undefined;
+  }
+
+  let manifest;
+  try {
+    manifest = loadTaskManifest(manifestPath);
+  } catch (err) {
+    process.stderr.write(
+      "dogfood-wrapup: WARNING — could not derive a corpus policy key from the task manifest at "
+        + `${manifestPath} (${err instanceof Error ? err.message : String(err)}); falling back to `
+        + "each capture's own .agda-lib-derived policy.\n",
+    );
+    return undefined;
+  }
+
+  const corpora = [...new Set(manifest.map((entry) => entry.corpus))];
+  if (corpora.length !== 1) {
+    process.stderr.write(
+      `dogfood-wrapup: WARNING — task manifest at ${manifestPath} references `
+        + `${corpora.length} distinct corpus value(s) (${corpora.join(", ") || "none"}); a single `
+        + "run-level policy key requires exactly one, so falling back to each capture's own "
+        + ".agda-lib-derived policy.\n",
+    );
+    return undefined;
+  }
+
+  const [corpus] = corpora;
+  const fuelCorpusEntry = fuelCorpora.find((entry) => entry.key === corpus);
+  if (!fuelCorpusEntry) {
+    process.stderr.write(
+      `dogfood-wrapup: WARNING — task manifest corpus "${corpus}" is not a known fuel-corpora.json `
+        + "entry; falling back to each capture's own .agda-lib-derived policy.\n",
+    );
+    return undefined;
+  }
+
+  return fuelCorpusEntry.policyKey;
+}
+
+/** Extracts `--rerun-n <N>` / `--queue-path <path>` / `--policy <key>`
+ *  from a flat `--flag value` argv array, positional arg 0 = runId.
+ *  Throws on a non-positive-integer rerun count: a typo'd env var or a
+ *  missing/non-numeric `--rerun-n` value must fail loudly HERE, never
+ *  reach `classifyFlakiness` as `NaN`/`0` — a zero-iteration replay
+ *  loop would classify every deterministic candidate as "flaky" on an
+ *  EMPTY observation list and silently unfile it. `--policy`'s value
+ *  is returned as-is (no validation beyond string presence) —
+ *  `resolvePolicyStrict` (Task 1) owns key validation. */
 function parseWrapupArgv(argv) {
   const runId = argv[0];
 
@@ -278,7 +357,10 @@ function parseWrapupArgv(argv) {
       ? argv[queuePathFlagIndex + 1]
       : join(SERVER_REPO_ROOT, "test/fixtures/fix-queue.json");
 
-  return { runId, rerunN, queueJsonPath };
+  const policyFlagIndex = argv.indexOf("--policy");
+  const policyFlag = policyFlagIndex !== -1 ? argv[policyFlagIndex + 1] : undefined;
+
+  return { runId, rerunN, queueJsonPath, policyFlag };
 }
 
 export async function scriptMain(argv = process.argv.slice(2)) {
@@ -290,12 +372,12 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     process.exitCode = 1;
     return;
   }
-  const { runId, rerunN, queueJsonPath } = parsedArgs;
+  const { runId, rerunN, queueJsonPath, policyFlag } = parsedArgs;
 
   if (!runId) {
     process.stderr.write(
       "Usage: npx tsx scripts/dogfood/dogfood-wrapup.mjs <run-id> "
-        + "[--rerun-n <N>] [--queue-path <path>]\n",
+        + "[--rerun-n <N>] [--queue-path <path>] [--policy <key>]\n",
     );
     process.exitCode = 1;
     return;
@@ -315,6 +397,7 @@ export async function scriptMain(argv = process.argv.slice(2)) {
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
   const flakyLogPath = join(runDir, "flaky-captures.jsonl");
   const stagedCaptures = Array.isArray(report.stagedCaptures) ? report.stagedCaptures : [];
+  const policyKey = resolveWrapupPolicyKey({ policyFlag, manifestPath: report.manifestPath });
 
   const results = [];
   for (const staged of stagedCaptures) {
@@ -329,7 +412,18 @@ export async function scriptMain(argv = process.argv.slice(2)) {
         queueJsonPath,
         flakyLogPath,
         n: rerunN,
+        policyKey,
       });
+      // D-03 (second half): a no-policy verdict keeps its
+      // not-a-candidate classification (never auto-filed, never
+      // reclassified as an error) — but it is surfaced loudly here,
+      // never a quiet skip, per-capture AND in the run summary below.
+      if (outcome.verdict?.orcl02?.kind === "no-policy") {
+        process.stderr.write(
+          `dogfood-wrapup: WARNING — no ORCL-02 policy resolved for ${staged.stagedPath}; `
+            + "cheat auto-filing was inactive for this capture.\n",
+        );
+      }
       results.push({ stagedPath: staged.stagedPath, ...outcome });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -347,11 +441,13 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     runId,
     queueJsonPath,
     n: rerunN,
+    policyKey: policyKey ?? null,
     totalCaptures: results.length,
     filed: results.filter((r) => r.filed).length,
     flaky: results.filter((r) => r.classification === "flaky").length,
     replayInconclusive: results.filter((r) => r.classification === "replay-inconclusive").length,
     notACandidate: results.filter((r) => r.classification === "not-a-candidate").length,
+    noPolicy: results.filter((r) => r.verdict?.orcl02?.kind === "no-policy").length,
     errors: results.filter((r) => r.classification === "error").length,
     results,
   };
@@ -362,7 +458,8 @@ export async function scriptMain(argv = process.argv.slice(2)) {
     `[dogfood-wrapup] run ${runId}: ${summary.totalCaptures} capture(s) judged — `
       + `${summary.filed} filed, ${summary.flaky} flaky, `
       + `${summary.replayInconclusive} replay-inconclusive, `
-      + `${summary.notACandidate} not-a-candidate, ${summary.errors} error(s).\n`,
+      + `${summary.notACandidate} not-a-candidate, ${summary.noPolicy} no-policy, `
+      + `${summary.errors} error(s).\n`,
   );
 
   if (summary.errors > 0) {

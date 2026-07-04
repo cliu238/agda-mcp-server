@@ -20,6 +20,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { PathSandboxError, resolveFileWithinRoot } from "../../src/repo-root.js";
@@ -486,6 +487,135 @@ function resolveDefaultPolicyKey(repoRoot) {
   return null;
 }
 
+/**
+ * Thrown by `resolvePolicyStrict` whenever an EXPECTED ORCL-02 policy
+ * key — an explicit `--policy` value, a corpus-derived key from
+ * `fuel-corpora.json`, or a `.agda-lib`-derived key whose file exists
+ * but fails to load — cannot be resolved to a real, case-exact,
+ * loadable policy file (POLICY-01 / D-03: "loud, never silent").
+ * Never thrown for the genuinely-no-policy-anywhere case (a derived
+ * key with no on-disk file and no case variant), which still returns
+ * `null` and keeps v1.0's `no-policy` outcome downstream.
+ */
+export class PolicyResolutionError extends Error {
+  constructor(message, policyKey) {
+    super(message);
+    this.name = "PolicyResolutionError";
+    this.policyKey = policyKey;
+  }
+}
+
+/**
+ * The directory `loadOraclePolicy`/`loadJsonData` resolve `${key}.json`
+ * against — derived from `import.meta.url` via the SAME relative
+ * `../data/oracle-policy/` segment, so `resolvePolicyStrict`'s
+ * directory-listing check and the actual load can never point at two
+ * different directories.
+ */
+const ORACLE_POLICY_DIR = fileURLToPath(new URL("../data/oracle-policy/", import.meta.url));
+
+/**
+ * D-02 (case-exact, never case-normalize) + D-03 (loud-fail on an
+ * expected-but-unresolvable key) policy resolution, used by
+ * `judgeOrcl02` in place of a bare `loadOraclePolicy(policyKey)` call.
+ *
+ * `derived` distinguishes a `.agda-lib`-name-derived key (v1.0's
+ * default, which may legitimately mean "this repo has no policy at
+ * all") from an EXPECTED key — an explicit `--policy` flag or a
+ * corpus-derived key — that must hard-fail rather than silently
+ * degrade to the `no-policy` route.
+ *
+ * Never case-normalizes: `readFileSync`/`loadJsonData` resolve a path
+ * case-insensitively on macOS's default APFS but case-sensitively on
+ * Linux ext4, so relying on them to detect a mismatch would make the
+ * real CHG shape (`.agda-lib` name `Codex-Homotopy-Group` vs on-disk
+ * `codex-homotopy-group.json`) silently RESOLVE on macOS while quietly
+ * degrading to `no-policy` on Linux — exactly the defect this function
+ * exists to close. Instead this lists the policy directory with
+ * `readdirSync` and does an EXACT string compare against `entry.name`
+ * (the same idiom `resolveDefaultPolicyKey` above already uses for
+ * `.agda-lib` files), so every platform behaves identically. The
+ * lowercase compare below is used ONLY to detect a mismatched variant
+ * for the error message — the lowercased key is never passed to
+ * `loadOraclePolicy`.
+ *
+ * @param {string} policyKey
+ * @param {{ derived: boolean }} context
+ * @returns {object | null} the loaded policy, or `null` for the
+ *   genuinely-no-policy derived case.
+ * @throws {PolicyResolutionError} whenever an EXPECTED key cannot be
+ *   resolved to a real, case-exact, loadable policy file.
+ */
+function resolvePolicyStrict(policyKey, { derived }) {
+  // CR-01 allowlist gate FIRST — identical shape check to
+  // loadOraclePolicy's own, so a malformed/traversal-shaped key never
+  // reaches the directory listing below. Derived: unchanged v1.0 route
+  // (null -> no-policy). Explicit: this key was requested by name, so
+  // an invalid shape is itself a loud failure, not a silent skip.
+  const shapeOk =
+    typeof policyKey === "string"
+    && /^[A-Za-z0-9._-]+$/u.test(policyKey)
+    && /[A-Za-z0-9_-]/u.test(policyKey);
+  if (!shapeOk) {
+    if (derived) return null;
+    throw new PolicyResolutionError(
+      `Cannot resolve ORCL-02 policy key "${policyKey}": not a valid bare filename segment `
+        + "(expected [A-Za-z0-9._-]+ with at least one non-dot character) — refusing to search "
+        + "scripts/data/oracle-policy/ for it.",
+      policyKey,
+    );
+  }
+
+  let entries;
+  try {
+    entries = readdirSync(ORACLE_POLICY_DIR, { withFileTypes: true });
+  } catch {
+    entries = [];
+  }
+
+  const wantedFilename = `${policyKey}.json`;
+  const exactMatch = entries.some((entry) => entry.isFile() && entry.name === wantedFilename);
+  if (exactMatch) {
+    const policy = loadOraclePolicy(policyKey);
+    if (policy !== null) return policy;
+    // The file exists (just listed above) but failed to load —
+    // malformed JSON or a zod-schema mismatch. The key was expected
+    // either way (its file is physically present), so this is never
+    // the genuinely-no-policy case: hard-fail for BOTH derived and
+    // explicit keys (D-03).
+    throw new PolicyResolutionError(
+      `ORCL-02 policy file "${wantedFilename}" exists in scripts/data/oracle-policy/ but failed to `
+        + `load (malformed JSON or a schema mismatch) — refusing to silently treat "${policyKey}" `
+        + "as having no policy.",
+      policyKey,
+    );
+  }
+
+  // Case-insensitive variant detection ONLY (never resolution/loading):
+  // a differently-cased on-disk file means this is a MISMATCH, not an
+  // ABSENCE — the D-02 case this function exists to catch.
+  const caseVariant = entries.find(
+    (entry) => entry.isFile() && entry.name.toLowerCase() === wantedFilename.toLowerCase(),
+  );
+  if (caseVariant) {
+    throw new PolicyResolutionError(
+      `ORCL-02 policy key "${policyKey}" does not exactly match the on-disk policy file — found `
+        + `"${caseVariant.name}" in scripts/data/oracle-policy/ (case mismatch). Policy keys are `
+        + "resolved case-exactly on every platform; update the key or the on-disk file name so "
+        + "they match exactly.",
+      policyKey,
+    );
+  }
+
+  // No match at all, exact or case-variant.
+  if (derived) return null; // Genuinely no policy anywhere — keeps v1.0's no-policy outcome.
+  throw new PolicyResolutionError(
+    `Cannot resolve ORCL-02 policy key "${policyKey}": no "${wantedFilename}" found in `
+      + "scripts/data/oracle-policy/.",
+    policyKey,
+  );
+}
+
 /** Parse a manifest-recorded Agda version string, defaulting to `undefined` (never throws). */
 function safeParseAgdaVersion(raw) {
   if (typeof raw !== "string") return undefined;
@@ -547,8 +677,13 @@ export async function judgeOrcl02(artifactPath, options = {}) {
     return { kind: "no-target", reason: "no load-family recorded action to determine a scan target" };
   }
 
-  const policyKey = options.policyKey !== undefined ? options.policyKey : resolveDefaultPolicyKey(repoRoot);
-  const policy = policyKey === null ? null : loadOraclePolicy(policyKey);
+  const derived = options.policyKey === undefined;
+  const policyKey = derived ? resolveDefaultPolicyKey(repoRoot) : options.policyKey;
+  // PolicyResolutionError propagates uncaught — an expected-but-
+  // unresolvable key (explicit, or derived-but-file-exists-and-fails-
+  // to-load) is a loud hard failure (D-03), never silently swallowed
+  // into a no-policy outcome here.
+  const policy = policyKey === null ? null : resolvePolicyStrict(policyKey, { derived });
 
   const rawFindings = scanClosure(repoRoot, targetFile, agdaVersion, policy);
   const findings = diffAgainstWhitelist(rawFindings, policy, warmClassification);
