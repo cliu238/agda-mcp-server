@@ -129,20 +129,29 @@ export function selectClaudeCodeLogs(corpusRoot, options = {}) {
 
 /**
  * Codex session logs for `corpusRoot`: every `*.jsonl` file anywhere
- * under `~/.codex/sessions/` whose FIRST line parses as JSON with
- * `payload.cwd === corpusRoot` and whose mtime falls within
+ * under `~/.codex/sessions/` whose FIRST line parses as JSON with a
+ * `payload.cwd` that RESOLVES to the same path as `corpusRoot` (WR-06:
+ * normalized via `resolve()`, mirroring `slugifyCorpusRoot`'s own
+ * normalization for `selectClaudeCodeLogs` above — a relative or
+ * trailing-slash `corpusRoot`, or any string that differs syntactically
+ * from Codex's own recorded absolute `cwd`, must still match rather
+ * than silently selecting zero files) and whose mtime falls within
  * `[options.sinceMs, options.untilMs]`. `options.homeDir` overrides
  * `homedir()` the same way as `selectClaudeCodeLogs`. Each candidate's
  * own read/parse is independently try/caught, so one corrupt session
  * file never aborts the whole scan. Returns `[]` (never throws) when
- * `~/.codex/sessions/` does not exist.
+ * `~/.codex/sessions/` does not exist, OR when `corpusRoot` itself is
+ * not a string (never lets `resolve()` throw on a missing/malformed
+ * corpusRoot the way `selectClaudeCodeLogs`'s own unguarded
+ * `slugifyCorpusRoot(corpusRoot)` call would).
  */
 export function selectCodexSessionLogs(corpusRoot, options = {}) {
   const homeDir = options.homeDir ?? homedir();
   const root = join(homeDir, ".codex", "sessions");
-  if (!existsSync(root)) {
+  if (!existsSync(root) || typeof corpusRoot !== "string") {
     return [];
   }
+  const resolvedCorpusRoot = resolve(corpusRoot);
 
   const candidates = [];
   for (const filePath of walkJsonlFiles(root)) {
@@ -150,7 +159,8 @@ export function selectCodexSessionLogs(corpusRoot, options = {}) {
       const raw = readFileSync(filePath, "utf8");
       const firstLine = raw.split("\n")[0];
       const parsed = JSON.parse(firstLine);
-      if (parsed?.payload?.cwd !== corpusRoot) {
+      const payloadCwd = parsed?.payload?.cwd;
+      if (typeof payloadCwd !== "string" || resolve(payloadCwd) !== resolvedCorpusRoot) {
         continue;
       }
       const mtimeMs = statSync(filePath).mtimeMs;

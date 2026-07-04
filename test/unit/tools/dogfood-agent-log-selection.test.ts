@@ -10,7 +10,7 @@
 import { afterEach, expect, test } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 // @ts-expect-error script module lacks types
 import {
@@ -111,6 +111,57 @@ test("selectCodexSessionLogs returns only the rollout file whose payload.cwd mat
   });
 
   expect(result).toEqual([matchingPath]);
+});
+
+test("selectCodexSessionLogs matches a relative or trailing-slash corpusRoot against Codex's own recorded absolute cwd (WR-06, from-RED)", () => {
+  const homeDir = makeTempDir("agda-mcp-agent-log-codex-normalize-");
+  const absoluteCorpusRoot = "/Users/eric/projects6/Codex-Homotopy-Group";
+  const dayDir = join(homeDir, ".codex", "sessions", "2026", "07", "01");
+  mkdirSync(dayDir, { recursive: true });
+
+  const now = Date.now();
+  const matchingPath = join(dayDir, "rollout-normalize.jsonl");
+  writeFileSync(
+    matchingPath,
+    `${JSON.stringify({ type: "session_meta", payload: { cwd: absoluteCorpusRoot, id: "fixture-session" } })}\n`,
+    "utf8",
+  );
+  setMtime(matchingPath, now);
+
+  // A trailing slash is a completely ordinary thing to type on a
+  // command line and differs SYNTACTICALLY from Codex's own recorded
+  // absolute cwd, even though it resolves to the identical path.
+  const trailingSlashResult = selectCodexSessionLogs(`${absoluteCorpusRoot}/`, {
+    homeDir,
+    sinceMs: now - 60_000,
+    untilMs: now + 60_000,
+  });
+  expect(trailingSlashResult).toEqual([matchingPath]);
+
+  // A genuinely RELATIVE corpusRoot (relative to process.cwd()) that
+  // resolves to the exact same absolute path — again, a completely
+  // ordinary thing to type on a command line.
+  const relativeCorpusRoot = relative(process.cwd(), absoluteCorpusRoot);
+  const relativeResult = selectCodexSessionLogs(relativeCorpusRoot, {
+    homeDir,
+    sinceMs: now - 60_000,
+    untilMs: now + 60_000,
+  });
+  expect(relativeResult).toEqual([matchingPath]);
+});
+
+test("selectCodexSessionLogs: a non-string corpusRoot returns [] rather than throwing (WR-06 defensive guard)", () => {
+  const homeDir = makeTempDir("agda-mcp-agent-log-codex-nonstring-");
+  const dayDir = join(homeDir, ".codex", "sessions", "2026", "07", "01");
+  mkdirSync(dayDir, { recursive: true });
+  writeFileSync(
+    join(dayDir, "rollout-x.jsonl"),
+    `${JSON.stringify({ type: "session_meta", payload: { cwd: "/whatever" } })}\n`,
+    "utf8",
+  );
+
+  expect(() => selectCodexSessionLogs(undefined, { homeDir })).not.toThrow();
+  expect(selectCodexSessionLogs(undefined, { homeDir })).toEqual([]);
 });
 
 test("selectCodexSessionLogs excludes a matching-cwd file whose mtime falls outside the window", () => {
