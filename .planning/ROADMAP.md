@@ -182,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/6 | Planned | - |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/6 | Planned    |  |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |
