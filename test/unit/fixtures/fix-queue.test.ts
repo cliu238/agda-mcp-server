@@ -87,8 +87,8 @@ test("fixQueueEntrySchema rejects status: locked with closedAt: null", () => {
 
 // ── Seed data (Plan 04-03) ───────────────────────────────────────────
 
-test("fixQueue holds the 13 real seeded entries, dogfood-wrapup auto-filings from Phase 6 plan 06-03's RT5/RT6 live sessions, and 07-06's hand-authored dogfood-run.mjs report-checkpointing defect", () => {
-  expect(fixQueue.length).toBe(16);
+test("fixQueue holds the 13 real seeded entries, dogfood-wrapup auto-filings from Phase 6 plan 06-03's RT5/RT6 live sessions, 07-06's hand-authored dogfood-run.mjs report-checkpointing defect, and 07-06's E2E-01 oracle-triad-tooling-gap auto-filing", () => {
+  expect(fixQueue.length).toBe(17);
 });
 
 test("every fixQueue entry has a unique fingerprint", () => {
