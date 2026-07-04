@@ -16,11 +16,11 @@ files_reviewed_list:
   - scripts/dogfood/dogfood-wrapup.mjs
   - src/agda/advanced-queries.ts
 findings:
-  critical: 1
-  warning: 2
+  critical: 0
+  warning: 0
   info: 3
-  total: 6
-status: issues_found
+  total: 3
+status: clean
 ---
 
 # Phase 06: Code Review Report (re-review, iteration 2)
@@ -28,7 +28,7 @@ status: issues_found
 **Reviewed:** 2026-07-04T03:43:34Z
 **Depth:** standard
 **Files Reviewed:** 11
-**Status:** issues_found
+**Status:** clean — all Critical/Warning findings resolved across 2 fix passes; 3 Info findings remain open (out of fix scope by policy)
 
 ## Summary
 
@@ -191,7 +191,9 @@ caveat about this commit's own regression-test coverage.
 
 ## Critical Issues
 
-### CR-04: `autoAll()` and `elaborate()` still return Agda's raw rejection text as a fabricated result — the same `decodeGiveLikeResponse()` gap CR-01/CR-03 fixed everywhere else in `goal-operations.ts`
+### CR-04 [RESOLVED — commit 205149d]: `autoAll()` and `elaborate()` still return Agda's raw rejection text as a fabricated result — the same `decodeGiveLikeResponse()` gap CR-01/CR-03 fixed everywhere else in `goal-operations.ts`
+
+> **Resolution (fix pass 2):** `detectDisplayInfoError()` promoted to a shared helper; `autoAll()` populates `rejected`/`rejectionText` and `agda_auto_all` throws classification `auto-all-rejected`; `elaborate()` throws on Error-kind DisplayInfo (same handling as `goalTypeContextCheck`). From-RED tests: test/unit/agda/advanced-queries-auto-all.test.ts, advanced-queries-elaborate.test.ts, test/unit/tools/query-tools-auto-all-rejected.test.ts, expression-tools-elaborate-rejected.test.ts. Verified by orchestrator: commit diff traced, full suite 1666 passed / 0 failed.
 
 **File:** `src/agda/advanced-queries.ts:196-205` (`autoAll`), `:120-132` (`elaborate`)
 **Issue:**
@@ -323,7 +325,9 @@ converts an uncaught throw into an error envelope, the same pattern
 
 ## Warnings
 
-### WR-04: `hasGiveActionResponse()`/`hasMakeCaseResponse()` (new in this phase) only check response-*kind* presence, not payload non-emptiness
+### WR-04 [RESOLVED — commit fd257db]: `hasGiveActionResponse()`/`hasMakeCaseResponse()` (new in this phase) only check response-*kind* presence, not payload non-emptiness
+
+> **Resolution (fix pass 2):** both guards now require non-empty payload, aligned with the decoders' own emptiness semantics; decoder-level tests added in test/unit/protocol/proof-action-decoders.test.ts plus autoOne/caseSplit unit coverage.
 
 **File:** `src/protocol/responses/proof-actions.ts:129-131`, `:213-215`
 **Issue:**
@@ -391,7 +395,9 @@ Recommend a live-Agda probe (this phase's own established verification
 method for CR-01/CR-02) to confirm whether Agda ever actually emits this
 combination before treating it as purely theoretical.
 
-### WR-05: WR-03's "non-array `recordedActions`" regression test does not actually reproduce the crash it claims to guard against
+### WR-05 [RESOLVED — commit 4c959d9]: WR-03's "non-array `recordedActions`" regression test does not actually reproduce the crash it claims to guard against
+
+> **Resolution (fix pass 2):** test input changed from a string (which has `.at()`) to a plain object genuinely lacking `.at()`; fixer empirically confirmed the pre-fix formula crashes with `recordedActions.at is not a function` on the new input.
 
 **File:** `test/unit/tools/dogfood-wrapup-filing.test.ts:454-464`
 **Issue:** The fix report for WR-03 claims "Added two from-RED regression

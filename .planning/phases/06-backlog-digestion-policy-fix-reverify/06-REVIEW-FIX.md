@@ -1,82 +1,64 @@
 ---
 phase: 06-backlog-digestion-policy-fix-reverify
-fixed_at: 2026-07-04T03:30:17Z
+fixed_at: 2026-07-04T04:07:57Z
 review_path: .planning/phases/06-backlog-digestion-policy-fix-reverify/06-REVIEW.md
-iteration: 1
-findings_in_scope: 6
-fixed: 6
+iteration: 2
+findings_in_scope: 3
+fixed: 3
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 06: Code Review Fix Report
 
-**Fixed at:** 2026-07-04T03:30:17Z
+**Fixed at:** 2026-07-04T04:07:57Z
 **Source review:** .planning/phases/06-backlog-digestion-policy-fix-reverify/06-REVIEW.md
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
-- Findings in scope: 6 (CR-01, CR-02, CR-03, WR-01, WR-02, WR-03 — IN-01/IN-02 explicitly out of scope this pass)
-- Fixed: 6
+- Findings in scope: 3 (CR-04, WR-04, WR-05 — IN-01/IN-02/IN-03 explicitly out of scope this pass)
+- Fixed: 3
 - Skipped: 0
 
 ## Fixed Issues
 
-### CR-01: `refine()`, `refineExact()`, and `intro()` still wrap an Agda rejection in an `ok:true` response
+### CR-04: `autoAll()` and `elaborate()` still return Agda's raw rejection text as a fabricated result
 
-**Files modified:** `src/agda/goal-operations.ts`, `src/agda/types.ts`, `src/tools/goal-tools.ts`, `src/tools/goal-write-tools.ts` (new), `src/tools/tool-errors.ts`, `src/tools/tool-helpers.ts`, `test/unit/agda/goal-operations-refine.test.ts` (new), `test/unit/tools/goal-tools-write-rejected.test.ts` (new)
-**Commit:** 3155de3
-**Applied fix:** `refine()`, `refineExact()`, and `intro()` now populate `GiveResult.rejected`/`rejectionText` using the same `detectResponseError()` scan + `hasReplacementText()` two-sided guard `give()` already uses. Generalized `giveRejectedError` into a new `writeActionRejectedError(tool, goalId, attempted, rejectionText, extraData?)` in `tool-errors.ts` (classification derived per-tool, e.g. `refine-rejected`), plus a `throwIfWriteRejected(tool, goalId, attempted, result)` one-line branch-and-throw helper so each tool callback needs a single call. `giveRejectedError` itself was left untouched (its wording is IN-01, explicitly out of scope). Split `goal-tools.ts` into a thin read-only barrel plus a new `goal-write-tools.ts` sibling (the six write-capable proof-action tools) to stay under the project's 500-line-per-file ceiling once these checks were added — same barrel/sibling pattern as `src/agda/agent-ux.ts` / `src/tools/agent-ux-tools.ts`. Deviated from the REVIEW.md Fix snippet's literal per-tool `if (result.rejected) { throw ...; }` block only insofar as it was compressed into the shared one-line helper for file-size reasons; the resulting behavior is identical.
+**Files modified:** `src/agda/advanced-queries.ts`, `src/agda/goal-operations.ts`, `src/protocol/responses/proof-actions.ts`, `src/tools/query-tools.ts`, `src/tools/tool-errors.ts`, `test/unit/agda/advanced-queries-auto-all.test.ts` (new), `test/unit/agda/advanced-queries-elaborate.test.ts` (new), `test/unit/tools/query-tools-auto-all-rejected.test.ts` (new), `test/unit/tools/expression-tools-elaborate-rejected.test.ts` (new)
+**Commit:** 205149d
+**Applied fix:** Promoted `give()`'s private `detectResponseError()` (goal-operations.ts) to a shared, exported `detectDisplayInfoError()` in `proof-actions.ts` — goal-operations.ts's six call sites now import and use it instead of keeping a duplicated private copy (`AgdaResponse`/`displayInfoResponseSchema`/`parseResponseWithSchema` imports pruned there once they became unused). `autoAll()` now computes `rejected`/`rejectionText` requiring BOTH an Error display AND no genuine `GiveAction` response (`hasGiveActionResponse()`), exactly mirroring CR-03's `autoOne()`; `AutoResult` already carried the `rejected`/`rejectionText` fields from CR-03, so **no `types.ts` change was needed here** — the REVIEW.md Fix's suggestion to "extend the relevant result type" was already satisfied by the prior pass, an adaptation to the current code state rather than a literal application. `elaborate()` now throws a bare `Error` on a detected rejection instead of returning it as `{ elaboration: <rejection text> }`; no tool-layer change was needed for `agda_elaborate` since `registerGoalTextTool`'s wrapper already converts an uncaught throw into an `ok:false` envelope (the same pattern `goalTypeContextCheck()` uses for the identical shape). `agda_auto_all`'s callback (`query-tools.ts`) now calls `throwIfWriteRejected("agda_auto_all", undefined, "", result)` before rendering `hasSolution`. Generalized `writeActionRejectedError()`/`throwIfWriteRejected()` in `tool-errors.ts` to accept `goalId: number | undefined` (previously required a real `goalId`) so a whole-file operation like `agda_auto_all` can reuse the same helper without a misleading `?undefined` in the message/data — `giveRejectedError()` itself (IN-01, out of scope) was left untouched, and all existing call sites are unaffected since `number` is assignable to `number | undefined`. Added four new from-RED regression tests: two domain-level (`advanced-queries-auto-all.test.ts`, `advanced-queries-elaborate.test.ts`, mirroring `goal-operations-auto-one.test.ts`/`goal-operations-context-check.test.ts`) and two tool-layer (`query-tools-auto-all-rejected.test.ts`, `expression-tools-elaborate-rejected.test.ts`, mirroring `goal-tools-write-rejected.test.ts`) confirming the `ok:false`/`auto-all-rejected` and `ok:false` envelope outcomes respectively — satisfying the task's "autoAll rejection → ok:false; elaborate rejection → ok:false" requirement at the tool-callback layer, not just the domain layer.
 
-### CR-02: `caseSplit()` can write Agda's raw error text into the source file as a fabricated case-split clause
+### WR-04: `hasGiveActionResponse()`/`hasMakeCaseResponse()` only checked response-kind presence, not payload non-emptiness
 
-**Files modified:** `src/agda/goal-operations.ts`, `src/agda/types.ts`, `src/protocol/responses/proof-actions.ts`, `src/tools/goal-write-tools.ts`, `test/unit/agda/goal-operations-case-split.test.ts` (new), `test/unit/tools/goal-tools-write-rejected.test.ts`
-**Commit:** ed42cc4
-**Applied fix:** Added `hasMakeCaseResponse()` to `proof-actions.ts` (mirrors the existing `hasReplacementText()` idiom: true iff a genuine schema-conformant `MakeCase` response is present, as opposed to `decodeCaseSplitResponses()`'s raw-`DisplayInfo` fallback). `caseSplit()` now populates `CaseSplitResult.rejected`/`rejectionText`, requiring BOTH an Error display AND no genuine `MakeCase` response — the same two-sided guard as CR-01/give(), applied here because REVIEW.md's own analysis of this exact codebase's `give()` design explicitly warns that a single-sided check risks misclassifying a successful action that also emits an unrelated display as rejected. `agda_case_split`'s callback calls `throwIfWriteRejected` immediately after obtaining the result, before the `clauses.length > 0` write-gating block. Deviated from the REVIEW.md Fix snippet (which throws a bare `Error` directly inside `caseSplit()`) to keep the "tool adapters branch on the result and throw the appropriate `ToolInvocationError`" layering explicit in the task constraints — this also yields a specific `case-split-rejected` classification instead of a generic `tool-error`.
+**Files modified:** `src/protocol/responses/proof-actions.ts`, `test/unit/agda/goal-operations-auto-one.test.ts`, `test/unit/agda/goal-operations-case-split.test.ts`, `test/unit/protocol/proof-action-decoders.test.ts`
+**Commit:** fd257db
+**Applied fix:** Applied REVIEW.md's Fix snippet as specified: both helpers now additionally require the payload be non-empty — `hasGiveActionResponse()` checks `Boolean(give.giveResult ?? give.result)` (matching `decodeGiveLikeResponse()`'s own truthy check on the same expression) and `hasMakeCaseResponse()` checks `(makeCase.clauses ?? []).some(Boolean)` (matching `decodeCaseSplitResponses()`'s own `.filter(Boolean)` + length check). Added six new direct-unit tests on the two guard functions in `proof-action-decoders.test.ts` (empty/absent payload -> false, real payload -> true, for both helpers), plus one regression test each in `goal-operations-auto-one.test.ts` and `goal-operations-case-split.test.ts` reproducing the exact theoretical gap REVIEW.md described: a response batch containing BOTH an Error DisplayInfo AND a schema-conformant-but-empty-payload GiveAction/MakeCase response. Verified empirically that these two tests are genuinely from-RED by tracing both code paths: with the pre-fix (kind-presence-only) helpers, `hasGiveActionResponse`/`hasMakeCaseResponse` would have reported `true` for the empty-payload response (since it still parses against the schema), making `rejected` compute to `false`; post-fix, `rejected` correctly computes to `true`. REVIEW.md's own suggested live-Agda probe (to confirm Agda ever actually emits this exact combination) was not attempted — it was explicitly optional ("Recommend a live-Agda probe... before treating it as purely theoretical") and out of scope for a targeted code-review fix pass; the fix closes the structural gap regardless of whether real Agda output has been observed to trigger it.
 
-### CR-03: `autoOne()` can write Agda's own error/rejection text into a goal's hole as a fabricated "solution"
+### WR-05: WR-03's "non-array `recordedActions`" regression test did not reproduce the crash it claimed to guard against
 
-**Files modified:** `src/agda/goal-operations.ts`, `src/agda/types.ts`, `src/protocol/responses/proof-actions.ts`, `src/tools/goal-write-tools.ts`, `test/unit/agda/goal-operations-auto-one.test.ts` (new), `test/unit/tools/goal-tools-write-rejected.test.ts`
-**Commit:** e558069
-**Applied fix:** Added `hasGiveActionResponse()` to `proof-actions.ts` (true iff a genuine `GiveAction` response is present). `autoOne()` now populates `AutoResult.rejected`/`rejectionText` requiring BOTH an Error display AND no genuine `GiveAction` response. `agda_auto`'s callback calls `throwIfWriteRejected("agda_auto", ...)` immediately after obtaining the result, before any write-gating logic. As REVIEW.md itself notes, this closes only the `Error`-kind half of the gap (matching the empirically-recorded `NotInScope`-as-`hasSolution:true` shape in `test/fixtures/fix-queue.json` fingerprints `5abecc959e43fef3`/`004d161b839ce725`); the `Auto`-kind "no solution found" sub-case remains open pending a live-Agda probe, and this is documented in `autoOne()`'s doc comment and in the `AutoResult.rejected` field doc, matching REVIEW.md's own stated scope.
-
-### WR-01: `agda_proof_status`'s completeness branch and `data.hasConstraints` use two different emptiness checks
-
-**Files modified:** `src/tools/analysis-tools.ts`, `test/unit/tools/analysis-tools.test.ts`
-**Commit:** f57636d
-**Applied fix:** Introduced a single trimmed `hasConstraints` value computed once and reused for every branch in the function — the `**Constraints:** yes` summary line and the `### Constraints` section header (neither of which REVIEW.md's Fix snippet touched) as well as the "All goals solved" / "NOT confirmed complete" tagline branch and the returned `data.hasConstraints`. Widened beyond the REVIEW.md Fix snippet's two-line-scoped patch because the untouched raw-truthiness checks at the two other call sites could still reproduce the identical `text`/`data` self-contradiction class the finding was about (e.g. printing `**Constraints:** yes` while `data.hasConstraints` is `false`) — closing only the one branch the snippet showed would have left the same fingerprint reachable through a second path in the same function.
-
-### WR-02: `matchesTypePattern()` lets literal tokens skip ahead, producing false-positive matches
-
-**Files modified:** `src/agda/refactor-helpers.ts`, `test/unit/agda/agent-ux.test.ts`
-**Commit:** 2725dbc
-**Applied fix:** Replaced the skip-ahead walk with strict positional comparison exactly as REVIEW.md's Fix snippet specifies: each pattern token must match the actual token at the same index (only `_` "consumes and moves on"), and a pattern longer than the actual token stream can never match. Verified the two pre-existing unit tests and the `matchesTypePattern(text, text)` reflexivity property test still pass (they already aligned from position 0, as REVIEW.md predicted), added a from-RED regression test for the exact false-positive example REVIEW.md gave, and ran the full `test/unit` + `test/property` tiers per REVIEW.md's explicit recommendation for this shared-helper behavior change (1632/1632 passed, 22 skipped, before the WR-03 commit was added on top).
-
-### WR-03: `buildQueueEntryFromVerdict()`'s `affectedTool` fallback is unguarded against non-array `recordedActions`
-
-**Files modified:** `scripts/dogfood/dogfood-wrapup.mjs`, `test/unit/tools/dogfood-wrapup-filing.test.ts`
-**Commit:** 33c34ec
-**Applied fix:** Applied REVIEW.md's Fix snippet verbatim: the fallback now guards with `Array.isArray(artifact.recordedActions)` before calling `.at(-1)` on it, matching `lastLoadFamilyToolName()`'s own defensive coercion on the line above. Added two from-RED regression tests (missing `recordedActions`, and a non-array `recordedActions` value) confirming the fallback degrades to `"unknown"` instead of throwing.
+**Files modified:** `test/unit/tools/dogfood-wrapup-filing.test.ts`
+**Commit:** 4c959d9
+**Applied fix:** Applied REVIEW.md's Fix snippet as specified: replaced the string fixture (`"not-an-array"`, which has had `.at()` since ES2022 and therefore does not crash the pre-fix formula) with a plain object (`{ not: "an-array" }`, which genuinely lacks `.at()`), and renamed the test title from "...is not an array" to "...is a plain object" to match. Verified empirically by extracting the literal pre-fix `artifact.recordedActions.at(-1)?.tool` formula into an isolated Node snippet: it does NOT throw for the string value (`"not-an-array".at(-1)` -> `"y"` -> `"y".tool` -> `undefined` -> falls through to `"unknown"` on both old and new code) but DOES throw `recordedActions.at is not a function` for the plain object (confirmed a number reproduces the same throw too, matching the class of non-array values the test name/commit message actually intended to cover). The shipped production code (commit `33c34ec`, `Array.isArray(...)` guard) was already correct and required no changes — only the test's fixture value was wrong, exactly as REVIEW.md diagnosed.
 
 ## Skipped Issues
 
-None — all 6 in-scope findings were fixed.
+None — all 3 in-scope findings were fixed.
 
 ## Verification
 
 - `npx tsc -p tsconfig.json --noEmit`: clean (no diagnostics).
 - `npm run build`: clean (`tsc` + `scripts/copy-json-assets.mjs`, exit 0).
-- `npx vitest run` (full suite: `test/examples`, `test/unit`, `test/property`, `test/integration`, live Agda 2.8.0 available on PATH): **201 test files passed, 16 skipped (217 total); 1650 tests passed, 179 skipped (1829 total); 0 failed.**
+- `npx vitest run` (full suite: `test/examples`, `test/unit`, `test/property`, `test/integration`, live Agda 2.8.0 available on PATH): **205 test files passed, 16 skipped (221 total); 1666 tests passed, 179 skipped (1845 total); 0 failed.** (16 new tests across 7 files relative to iteration 1's 1650/1829 baseline — all accounted for by this pass's new regression coverage: 2 in `advanced-queries-auto-all.test.ts`, 2 in `advanced-queries-elaborate.test.ts`, 2 in `query-tools-auto-all-rejected.test.ts`, 2 in `expression-tools-elaborate-rejected.test.ts`, 6 in `proof-action-decoders.test.ts`, 1 each in `goal-operations-auto-one.test.ts`/`goal-operations-case-split.test.ts`; `dogfood-wrapup-filing.test.ts` net zero, one test's fixture changed in place.)
 
 ## Notes for the reviewer
 
-- `agda_case_split` and `agda_auto` now use a `<op>-rejected` classification (`case-split-rejected`, `auto-rejected`) constructed by the new `writeActionRejectedError()`/`throwIfWriteRejected()` helpers in `tool-errors.ts`, rather than the literal bare-`Error`-throw shown in REVIEW.md's CR-02/CR-03 Fix snippets. This was a deliberate adaptation (see CR-02/CR-03 entries above) to keep the tool/agda layering boundary from the task's constraints intact and to give callers a specific, actionable classification instead of a generic `tool-error`.
-- `src/tools/goal-tools.ts` was split into a barrel (read-only goal/context/checked-term queries) plus a new `src/tools/goal-write-tools.ts` sibling (the six write-capable proof-action tools: case_split, give, refine, refine_exact, intro, auto) to stay under the project's 500-line-per-file ceiling. `register-core-tools.ts` required no changes — `goal-tools.ts`'s exported `register()` signature is unchanged and now internally delegates to `registerGoalWriteTools(...)`.
-- `src/agda/advanced-queries.ts`'s `autoAll()` (backing the separate `agda_auto_all` tool in `query-tools.ts`) shares the identical `Cmd_autoAll`/`decodeGiveLikeResponse` vulnerability shape as CR-03's `autoOne()`, but is not named in REVIEW.md's findings and was left untouched to keep this pass strictly scoped to CR-01/CR-02/CR-03/WR-01/WR-02/WR-03. Worth a follow-up finding.
-- IN-01 (`giveRejectedError`'s overclaiming message wording) and IN-02 (duplicated magic number `50` in `search-definitions.ts`) were left untouched per the explicit out-of-scope instruction for this pass.
+- CR-04's REVIEW.md Fix snippet implied `AutoResult` needed a field added; by the time this pass ran, `AutoResult.rejected`/`rejectionText` already existed from CR-03 (prior pass), so `src/agda/types.ts` required **no changes** for `autoAll()`. Called out explicitly since it's an example of adapting the Fix guidance to the actual current code state rather than applying it blindly.
+- `writeActionRejectedError()`/`throwIfWriteRejected()` (`tool-errors.ts`) had their `goalId` parameter widened from `number` to `number | undefined` to support `agda_auto_all`'s whole-file (no single owning goal) rejection case, continuing the same "generalize the shared helper as new call shapes emerge" pattern CR-01 established when it generalized `giveRejectedError` into `writeActionRejectedError`. All prior call sites (case-split/refine/refine_exact/intro/auto — all of which pass a real numeric `goalId`) are unaffected.
+- IN-01 (`giveRejectedError`'s overclaiming message wording), IN-02 (duplicated magic number `50` in `search-definitions.ts`), and IN-03 (`writeActionRejectedError`'s unused `extraData` parameter) were left untouched per the explicit out-of-scope instruction for this pass. IN-03 in particular remains accurate as-is: the new `agda_auto_all` call site (`throwIfWriteRejected("agda_auto_all", undefined, "", result)`) does not pass a 5th (`extraData`) argument either, so the parameter is still unused by every call site.
+- This fixer instance ran in an isolated git worktree/branch (`gsd-reviewfix/06-<pid>`) per the standard review-fix isolation protocol; all three commits above were made on that branch and fast-forwarded onto `main` during cleanup, so `git log` on `main` shows them directly with no merge commit.
 
 ---
 
-_Fixed: 2026-07-04T03:30:17Z_
+_Fixed: 2026-07-04T04:07:57Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
