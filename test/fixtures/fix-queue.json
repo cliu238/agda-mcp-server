@@ -41,7 +41,7 @@
     ],
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 2, re-verified alive 2026-07-02 against current main. buildAutoSearchPayload() (src/agda/refactor-helpers.ts) needs escaping/validation of hints/excludeHints. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_auto is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup."
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 2, re-verified alive 2026-07-02 against current main. buildAutoSearchPayload() (src/agda/refactor-helpers.ts) needs escaping/validation of hints/excludeHints. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_auto is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup. RT4 re-measurement 2026-07-04 run-id rt4-20260703 re-confirms the same root cause; fix + lock pending Phase 6 wave 3."
   },
   {
     "fingerprint": "bfcba437f5426fd6",
@@ -133,26 +133,26 @@
   },
   {
     "fingerprint": "eaea6321183bdf7b",
-    "status": "new",
-    "needsReverify": true,
+    "status": "triaged",
+    "needsReverify": false,
     "defectKind": "false-green",
     "triageClass": null,
     "triageConfidence": null,
     "recurrence": 1,
     "title": "RT3: a failing context-check must never say \"no checked term\" inside a success result",
     "summary": "A failing context/type-check is reported inside an ok:true result whose text says \"no checked term\", rather than as a failure (v0.6.7 measurement).",
-    "affectedTool": "agda_context",
+    "affectedTool": "agda_goal_type_context_check",
     "capturePath": null,
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT3 (v0.6.7 measurement). affectedTool is best-inferred - confirm the exact tool during re-verification."
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT3 (v0.6.7 measurement). affectedTool is best-inferred - confirm the exact tool during re-verification. Re-verified 2026-07-04 (run-id rt3-20260703b) through dogfood-run/dogfood-wrapup against current main: CONFIRMED -- agda_goal_type_context_check returns ok:true/classification:ok for both a not-in-scope expr and a genuinely ill-typed expr (a Nat literal into a Bool-typed goal), embedding Agda's own NotInScope/UnequalTerms error text in data.goalType while data.checkedExpr is empty, rendering '(no checked term returned)' inside a success result. Root cause: goalTypeContextCheck() (src/agda/goal-operations.ts) never calls throwOnFatalProtocolStderr, unlike caseSplit/give/etc. affectedTool corrected from the placeholder agda_context to the real tool name agda_goal_type_context_check. Full envelopes in .planning/research/RT-REVERIFY.md."
   },
   {
     "fingerprint": "004d161b839ce725",
-    "status": "new",
-    "needsReverify": true,
+    "status": "triaged",
+    "needsReverify": false,
     "defectKind": "false-green",
     "triageClass": null,
     "triageConfidence": null,
@@ -168,7 +168,7 @@
     ],
     "createdAt": "2026-07-02T00:00:00.000Z",
     "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT4. Cross-references the re-verified-alive agda_auto entry - do not double-count on the dashboard; this spec is retained separately as its own future regression-test target."
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT4. Cross-references the re-verified-alive agda_auto entry - do not double-count on the dashboard; this spec is retained separately as its own future regression-test target. Re-verified 2026-07-04 (run-id rt4-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED, matching the re-verified-alive agda_auto entry (5abecc959e43fef3) byte-for-byte -- data.searchPayload came back as '-d 5 --list-candidates -h -t 999999 -x --unsafe' (hints/excludeHints concatenated unescaped) and hasSolution:true while data.solution is actually Agda's own NotInScope rejection text. Pre-fix measurement recorded per D-12/D-08 before the agda_auto fix lands. Full envelope in .planning/research/RT-REVERIFY.md."
   },
   {
     "fingerprint": "a0ae86c7deb9754e",
