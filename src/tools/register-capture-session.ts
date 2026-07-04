@@ -45,11 +45,13 @@ import {
 
 // Per-process monotonic sequence counter appended to every staged
 // capture filename for intra-process ordering. Two captures in the same
-// session can share the identical fingerprint/recurrence pair (the dedup
-// index only advances via the manual, out-of-band
-// scripts/promote-capture.mjs) - without this counter both would collide
-// on the same stagedPath and writeFileAtomic's rename would silently
-// clobber the first artifact (closes 01-VERIFICATION.md CR-03 BLOCKER).
+// session can share the identical fingerprint/recurrence pair — recurrence
+// is computed inline at capture time via routeDedup(index, fingerprint)
+// against the in-repo dedup index (dedup-index.ts's readDedupIndex, a
+// read-only lookup with no separate external advancement step) - without
+// this counter both would collide on the same stagedPath and
+// writeFileAtomic's rename would silently clobber the first artifact
+// (closes 01-VERIFICATION.md CR-03 BLOCKER).
 //
 // The counter alone is per-process and resets to 0 on every restart, so
 // two SEPARATE server processes that each hit the same fingerprint first
