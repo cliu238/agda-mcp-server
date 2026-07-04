@@ -22,8 +22,23 @@
 // self-termination) — the whole point of the tests that spawn this
 // fixture is to observe what happens to the OUTER proxy process when
 // IT is killed while this inner child is still running.
+//
+// WR-07 regression fixture support: with
+// AGDA_MCP_DOGFOOD_TEST_CHILD_IGNORE_SIGTERM=1 set, this fixture
+// installs a no-op SIGTERM handler, simulating a wedged child (or one
+// itself blocked on an unresponsive Agda grandchild) that does not die
+// within dogfood-run.mjs's own finalize() grace window — forcing its
+// SIGKILL-escalation path to actually engage. SIGKILL itself can never
+// be ignored (installing a handler for it is not even possible), so
+// this fixture still dies once escalation fires; it only refuses the
+// FIRST, gentler signal. Off by default — every OTHER test using this
+// fixture is unaffected.
 
 import { createInterface } from "node:readline";
+
+if (process.env.AGDA_MCP_DOGFOOD_TEST_CHILD_IGNORE_SIGTERM === "1") {
+  process.on("SIGTERM", () => {});
+}
 
 const rl = createInterface({ input: process.stdin });
 

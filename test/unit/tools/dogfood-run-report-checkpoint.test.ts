@@ -127,11 +127,13 @@ function spawnProxy({
   corpusRoot,
   runId,
   runsRoot,
+  extraEnv = {},
 }: {
   manifestPath: string;
   corpusRoot: string;
   runId: string;
   runsRoot: string;
+  extraEnv?: Record<string, string>;
 }): ChildProcessWithoutNullStreams {
   const child = spawn(
     TSX_BIN,
@@ -142,6 +144,7 @@ function spawnProxy({
         ...process.env,
         AGDA_MCP_DOGFOOD_RUNS_ROOT: runsRoot,
         AGDA_MCP_DOGFOOD_TEST_CHILD_ENTRY: FAKE_CHILD_PATH,
+        ...extraEnv,
       },
       stdio: ["pipe", "pipe", "pipe"],
       // New, own process group (setsid) — see file header. Every
@@ -290,6 +293,55 @@ testPosix(
     // The proxy's own process.exit(0) call on this graceful path — the
     // OS-level exit code the test just observed must agree with what
     // got persisted into the report.
+    expect(code).toBe(0);
+  },
+  10_000,
+);
+
+// ── Test (c): WR-07's SIGKILL escalation ─────────────────────────────
+
+testPosix(
+  "a child that ignores SIGTERM is escalated to SIGKILL after the grace window, and the report reflects a CONFIRMED (not merely assumed) clean exit (WR-07, from-RED)",
+  async () => {
+    const corpusRoot = makeTempDir("agda-mcp-checkpoint-corpus-sigkill-escalation-");
+    const runsRoot = makeTempDir("agda-mcp-checkpoint-runs-sigkill-escalation-");
+    const manifestPath = writeManifest(corpusRoot);
+    const runId = "sigkill-escalation-checkpoint-test";
+
+    // The fake inner child installs a no-op SIGTERM handler — simulating
+    // a wedged child (or one itself blocked on an unresponsive Agda
+    // grandchild) that survives BOTH the group-wide SIGTERM this test
+    // sends AND finalize()'s own plain child.kill() (default SIGTERM),
+    // forcing the 2-second grace window to fully elapse and the
+    // SIGKILL-escalation path to actually engage. SIGKILL itself can
+    // never be ignored, so the child still dies once escalation fires.
+    const child = spawnProxy({
+      manifestPath,
+      corpusRoot,
+      runId,
+      runsRoot,
+      extraEnv: { AGDA_MCP_DOGFOOD_TEST_CHILD_IGNORE_SIGTERM: "1" },
+    });
+    await sendOneToolCall(child, 1);
+    await waitFor(() => existsSync(join(runsRoot, runId, "run-report.json")));
+
+    killGroup(child, "SIGTERM");
+    const { code } = await waitForExit(child);
+
+    const report = readReport(runsRoot, runId);
+    expect(report.finalized).toBe(true);
+    const exit = report.exit as Record<string, unknown>;
+    // Confirms escalation actually fired — a plain graceful shutdown
+    // (test (b) above) never reaches SIGKILL.
+    expect(exit.childSignalCode).toBe("SIGKILL");
+    expect(exit.childConfirmedDead).toBe(true);
+    // The escalation SUCCEEDED in producing a confirmed, proxy-caused
+    // death — this is the "good" outcome WR-07's fix produces (as
+    // opposed to the residual, much rarer case where even SIGKILL fails
+    // to confirm within its own bounded wait), so this is still exit 0,
+    // never the false 0 the pre-fix code would have reported after only
+    // 2 seconds with the child still alive and un-escalated.
+    expect(exit.proxyExitCode).toBe(0);
     expect(code).toBe(0);
   },
   10_000,

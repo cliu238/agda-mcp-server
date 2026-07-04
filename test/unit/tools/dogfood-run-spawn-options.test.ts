@@ -150,9 +150,21 @@ test("computeProxyExitCode: a child that exited on its own passes its exit code 
   ).toBe(3);
 });
 
-test("computeProxyExitCode: a still-alive child at report time (no code, no signal, no failure) exits 0", () => {
-  // The bounded 2s drain race can elapse before a killed child has
-  // actually exited — nothing abnormal was observed, so 0.
+test("computeProxyExitCode: a still-UNCONFIRMED child at report time (no code, no signal, no failure) now exits 1, never a false-clean 0 (WR-07, from-RED)", () => {
+  // WR-07: this is the EXACT false-negative the review reported — the
+  // bounded 2s drain race (and, pre-fix, no SIGKILL escalation at all)
+  // can elapse before a killed child has actually exited. The OLD
+  // behavior treated `proxyKilledChild:true` here as "nothing abnormal
+  // was observed, so 0" — but `child.kill()` returning true only means a
+  // signal was DELIVERABLE, never that the process died, so a wedged
+  // child could be leaked as an orphan while run-report.json still
+  // claimed a clean, successful exit. An unconfirmed child (both
+  // childExitCode and childSignalCode null) is now ALWAYS a failure,
+  // regardless of proxyKilledChild — finalize() itself (see
+  // dogfood-run.mjs) additionally escalates to SIGKILL and waits a
+  // second bounded window before ever reaching this state, so this
+  // branch should only fire in the rare case even SIGKILL didn't
+  // produce a confirmed death in time.
   expect(
     computeProxyExitCode({
       childExitCode: null,
@@ -160,5 +172,5 @@ test("computeProxyExitCode: a still-alive child at report time (no code, no sign
       childFailed: false,
       proxyKilledChild: true,
     }),
-  ).toBe(0);
+  ).toBe(1);
 });

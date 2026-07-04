@@ -118,25 +118,46 @@ function parseDogfoodArgv(argv) {
 /**
  * Decide the proxy's OWN exit code from the child's terminal state.
  * A child that exited on its own passes its exit code straight
- * through. A child that never produced one (`childExitCode === null`
- * covers BOTH a spawn failure — the 'error' event fired and the
- * process never ran — and a signal death) must NOT collapse to a
- * clean 0: a spawn/'error' death or a SPONTANEOUS signal death (OOM
- * kill, an operator's kill -9 aimed at the server) is total failure
- * -> 1, so a harness or CI wrapper gating on the proxy's exit status
- * never reads "the server never started" as success. The ONE
- * legitimate signal death is the proxy's own `child.kill()` teardown
- * on the agent-disconnect path -> 0.
+ * through. A child that died via a SIGNAL is confirmed dead, but only
+ * the ONE legitimate signal death — the proxy's own `child.kill()`
+ * teardown on the agent-disconnect path — is a clean 0; a SPONTANEOUS
+ * signal death (OOM kill, an operator's `kill -9` aimed at the server)
+ * is a failure -> 1.
+ *
+ * WR-07: `childExitCode`/`childSignalCode` BOTH null means the child's
+ * terminal state was NEVER ACTUALLY OBSERVED — either a spawn 'error'
+ * (the process never ran at all) or the bounded drain/SIGKILL-
+ * escalation race in finalize() below elapsed without Node ever seeing
+ * the child die. `proxyKilledChild` being true only means a kill SIGNAL
+ * was deliverable, never that the process actually died — treating an
+ * UNCONFIRMED child as a clean exit used to let a wedged child (or one
+ * itself blocked on its own unresponsive Agda grandchild) survive past
+ * the whole finalize() sequence while run-report.json still claimed a
+ * clean, successful exit for what could be a leaked orphan process.
+ * Both-null is therefore ALWAYS a failure now, so a harness or CI
+ * wrapper gating on the proxy's exit status never reads "we gave up
+ * waiting for the child to die" as success.
  *
  * Pure and exported so the decision table is directly unit-testable
  * (test/unit/tools/dogfood-run-spawn-options.test.ts); the single
  * live call site is finalize()'s `finally` in runDogfoodProxy.
  */
+// `childFailed` is kept in the destructured signature for API
+// stability/self-documentation (every existing call site and test still
+// names it explicitly) even though the both-null branch below is now
+// unconditionally a failure regardless of its value.
 export function computeProxyExitCode({ childExitCode, childSignalCode, childFailed, proxyKilledChild }) {
+  void childFailed;
   if (typeof childExitCode === "number") {
     return childExitCode;
   }
-  return childFailed || (childSignalCode != null && !proxyKilledChild) ? 1 : 0;
+  if (childSignalCode != null) {
+    return proxyKilledChild ? 0 : 1;
+  }
+  // Both null: the child's terminal state was never actually observed
+  // (a spawn 'error', or an unconfirmed-dead child even after finalize()'s
+  // own SIGKILL escalation) — always a failure now, see header comment.
+  return 1;
 }
 
 /**
@@ -362,10 +383,50 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
       // drained, so a tail response recorded to the transcript is never
       // omitted from run-report.json's stagedCaptures. Bounded so a
       // wedged child that never closes its pipe cannot hang finalize.
-      await Promise.race([
-        fromServerClosed,
-        new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2000).unref()),
+      const raced = await Promise.race([
+        fromServerClosed.then(() => "closed"),
+        new Promise((resolveTimeout) => setTimeout(() => resolveTimeout("timeout"), 2000).unref()),
       ]);
+
+      if (raced === "timeout" && child.exitCode === null && child.signalCode === null) {
+        // WR-07: `child.kill()` above sends a plain SIGTERM, which a
+        // wedged process (or one itself blocked on its own unresponsive
+        // Agda grandchild) can ignore or be slow to act on. The header
+        // comment's "never leak an orphaned Agda process" promise is not
+        // actually kept by SIGTERM alone — escalate to an unignorable
+        // SIGKILL rather than silently giving up once the grace window
+        // elapses.
+        child.kill("SIGKILL");
+      }
+
+      // WR-07: wait a further SHORT, bounded moment for Node's OWN
+      // 'close' event on the child PROCESS object itself, if it hasn't
+      // already fired. This covers BOTH the just-escalated-to-SIGKILL
+      // case above AND a separate, more common ordering quirk observed
+      // empirically: `fromServerClosed` (the child's STDOUT STREAM
+      // closing, raced above) can fire a tick or two BEFORE
+      // `child.exitCode`/`child.signalCode` are actually populated, even
+      // on an ordinary graceful SIGTERM shutdown with no wedged child at
+      // all — relying on `fromServerClosed` alone therefore under-reports
+      // "confirmed dead" far more often than only the rare wedged-child
+      // case this fix was originally scoped to. SIGKILL cannot be
+      // blocked/ignored and a same-process 'close' notification is a
+      // pure Node/libuv internal event, so 500ms is generous for either.
+      if (child.exitCode === null && child.signalCode === null) {
+        await Promise.race([
+          new Promise((resolveClosed) => child.once("close", resolveClosed)),
+          new Promise((resolveTimeout) => setTimeout(resolveTimeout, 500).unref()),
+        ]);
+      }
+
+      // Computed AFTER the (possible) SIGKILL escalation and the
+      // confirmation wait above — both still null here means the
+      // child's terminal state was NEVER actually observed, even after
+      // an unignorable kill signal. Persisted into the exit metadata
+      // below (never silently inferred) so a queue/report reader can
+      // tell a "confirmed clean" exit from a merely "we gave up
+      // waiting" one.
+      const childConfirmedDead = child.exitCode !== null || child.signalCode !== null;
 
       exitCode = computeProxyExitCode({
         childExitCode: child.exitCode,
@@ -387,6 +448,7 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
           proxyExitCode: exitCode,
           childFailed,
           proxyKilledChild,
+          childConfirmedDead,
         },
       });
       await scheduleReportWrite(report);
