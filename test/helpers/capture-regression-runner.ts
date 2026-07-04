@@ -99,7 +99,7 @@ export async function replayCaptureRegressionEntry(
       });
     }
 
-    const data = result.structuredContent.data as {
+    const data = (result.structuredContent as { data: unknown }).data as {
       classification: string;
       success: boolean;
       goalCount: number;

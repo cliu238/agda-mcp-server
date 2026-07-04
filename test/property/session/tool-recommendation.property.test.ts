@@ -30,19 +30,19 @@ const arbClassification = fc.constantFrom(
 );
 
 const fakeManifest: ToolManifestEntry[] = [
-  { name: "agda_load", description: "", category: "session", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_goal_type", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_context", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_auto", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_case_split", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_refine", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_solve_all", description: "", category: "process", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_read_module", description: "", category: "navigation", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_search_about", description: "", category: "process", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_goal_catalog", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_session_snapshot", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_tools_catalog", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_bug_report_bundle", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [] },
+  { name: "agda_load", description: "", category: "session", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_goal_type", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_context", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_auto", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_case_split", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_refine", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_solve_all", description: "", category: "process", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_read_module", description: "", category: "navigation", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_search_about", description: "", category: "process", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_goal_catalog", description: "", category: "proof", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_session_snapshot", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_tools_catalog", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_bug_report_bundle", description: "", category: "reporting", protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
 ];
 
 const arbInput: fc.Arbitrary<RecommendationInput> = fc.record({

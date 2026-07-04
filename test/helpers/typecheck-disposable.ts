@@ -33,6 +33,7 @@ export async function typeCheckDisposable(
       hasHoles: result.hasHoles,
       isComplete: result.isComplete,
       classification: result.classification,
+      profiling: result.profiling,
     };
   } finally {
     await session.destroy();

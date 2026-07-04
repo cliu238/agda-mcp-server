@@ -10,19 +10,19 @@ import {
 } from "../../../src/session/tool-recommendation.js";
 
 const fakeManifest = [
-  { name: "agda_load", description: "", category: "session" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_goal_type", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_context", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_auto", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_case_split", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_refine", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_solve_all", description: "", category: "process" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_read_module", description: "", category: "navigation" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_search_about", description: "", category: "process" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_goal_catalog", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_session_snapshot", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_tools_catalog", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [] },
-  { name: "agda_bug_report_bundle", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [] },
+  { name: "agda_load", description: "", category: "session" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_goal_type", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_context", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_auto", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_case_split", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_refine", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_solve_all", description: "", category: "process" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_read_module", description: "", category: "navigation" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_search_about", description: "", category: "process" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_goal_catalog", description: "", category: "proof" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: true },
+  { name: "agda_session_snapshot", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_tools_catalog", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
+  { name: "agda_bug_report_bundle", description: "", category: "reporting" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
 ];
 
 function baseInput(overrides: Partial<RecommendationInput> = {}): RecommendationInput {
@@ -121,7 +121,7 @@ describe("deriveToolRecommendations", () => {
       classification: "ok-with-holes",
       goalIds: [0],
       availableTools: [
-        { name: "agda_load", description: "", category: "session" as const, protocolCommands: [], inputFields: [], outputFields: [] },
+        { name: "agda_load", description: "", category: "session" as const, protocolCommands: [], inputFields: [], outputFields: [], requiresLoadedSession: false },
       ],
     }));
     // With only agda_load in manifest, goal tools shouldn't appear

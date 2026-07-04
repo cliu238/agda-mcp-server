@@ -61,7 +61,8 @@ test("fingerprint ignores title changes", async () => {
   await fc.assert(
     fc.property(arbBundleInput, fc.string({ minLength: 1, maxLength: 30 }), (input, newTitle) => {
       const fp1 = fingerprintBugReport(input);
-      const fp2 = fingerprintBugReport({ ...input, title: newTitle });
+      const withNewTitle: BugReportBundleInput = { ...input, title: newTitle };
+      const fp2 = fingerprintBugReport(withNewTitle);
       expect(fp1).toBe(fp2);
     }),
   );

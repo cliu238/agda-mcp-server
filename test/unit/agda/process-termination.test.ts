@@ -132,14 +132,14 @@ describe("terminateAgdaProcess", () => {
     const setTimeoutSpy = vi
       .spyOn(global, "setTimeout")
       .mockImplementation(((handler: TimerHandler, timeout?: number, ...rest: unknown[]) => {
-        const timer = realSetTimeout(handler, timeout, ...rest) as NodeJS.Timeout;
+        const timer = realSetTimeout(handler, timeout, ...rest) as unknown as NodeJS.Timeout;
         const originalUnref = timer.unref.bind(timer);
         timer.unref = () => {
           unrefCalls.push(timeout ?? 0);
           return originalUnref();
         };
         return timer;
-      }) as typeof setTimeout);
+      }) as unknown as typeof setTimeout);
 
     try {
       // Use a fake proc so we don't depend on a real subprocess
