@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { test, expect, beforeEach, afterEach } from "vitest";
+import { test, expect, beforeEach, afterEach, vi } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -26,6 +26,7 @@ import { registerCaptureSession } from "../../../src/tools/register-capture-sess
 import { getServerVersion } from "../../../src/server-version.js";
 import {
   drainRecordedActions,
+  recordAction,
   resetRecordedActions,
 } from "../../../src/agda/session-capture/recorded-transport.js";
 import { clearToolManifest } from "../../../src/tools/manifest.js";
@@ -34,6 +35,25 @@ import {
   makeToolResult,
   okEnvelope,
 } from "../../../src/tools/tool-envelope.js";
+import { writeFileAtomic } from "../../../src/session/safe-source-io.js";
+
+// WR-01 concurrent-drop regression (below): mock only `writeFileAtomic`,
+// preserving every other export and — by default — its own REAL
+// behavior (`vi.fn(actual.writeFileAtomic)` calls through unless a
+// specific test overrides it with `mockImplementationOnce`). Every
+// other test in this file writes/reads real staged capture JSON on
+// disk and must keep doing so unmodified.
+vi.mock("../../../src/session/safe-source-io.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/session/safe-source-io.js")>();
+  return { ...actual, writeFileAtomic: vi.fn(actual.writeFileAtomic) };
+});
+
+// Captured once at module load, after the mock above has already
+// wrapped `writeFileAtomic` — this is the genuine implementation, used
+// by the one concurrency test below to still perform a real atomic
+// write while injecting a `recordAction()` call mid-flight.
+const realWriteFileAtomic = vi.mocked(writeFileAtomic).getMockImplementation()!;
 
 function makeCapturingServer() {
   const registrations = new Map<string, { callback: (args: any) => any }>();
@@ -448,6 +468,86 @@ test("agda_capture_session still resets the recorded-action buffer after a succe
     const { actions } = drainRecordedActions();
     const toolNames = actions.map((a: { tool: string }) => a.tool);
     expect(toolNames).not.toContain("prior_tool_wr01_happy");
+  } finally {
+    await session.destroy();
+  }
+});
+
+test("agda_capture_session preserves an action recorded concurrently between drain and write completion (WR-01 concurrent-drop fix)", async () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  clearToolManifest();
+
+  const server = makeCapturingServer();
+  const repoRoot = makeTempDir("agda-mcp-capture-session-");
+  const session = new AgdaSession(repoRoot);
+
+  try {
+    // Action A: recorded BEFORE the capture call, so it is part of
+    // C1's own non-destructive drain snapshot.
+    registerStructuredTool({
+      server: server as unknown as McpServer,
+      name: "prior_tool_wr01_race",
+      description: "test",
+      category: "analysis",
+      outputDataSchema: z.object({}),
+      callback: async () =>
+        makeToolResult(
+          okEnvelope({
+            tool: "prior_tool_wr01_race",
+            summary: "ok",
+            data: {},
+          }),
+        ),
+    });
+    await server.get("prior_tool_wr01_race")!.callback({});
+
+    registerCaptureSession(
+      server as unknown as McpServer,
+      session,
+      repoRoot,
+    );
+
+    // Action B: injected exactly once, at the callback's own
+    // `await writeFileAtomic(...)` point — i.e. strictly AFTER C1's
+    // drain (line ~121 in register-capture-session.ts) but strictly
+    // BEFORE C1's post-write commit. This is the real second,
+    // concurrently in-flight MCP tool call from WR-01's own trace: it
+    // resolves and calls `recordAction()` while C1 is still inside its
+    // async write pipeline. The real write still runs underneath so
+    // this capture completes exactly as a genuine success would.
+    vi.mocked(writeFileAtomic).mockImplementationOnce(async (...args) => {
+      recordAction({
+        tool: "concurrent_tool_wr01_race",
+        args: {},
+        timestamp: Date.now(),
+        normalizedResponse: undefined,
+      });
+      return realWriteFileAtomic(...args);
+    });
+
+    const result = await server.get("agda_capture_session")!.callback({});
+    expect(result.structuredContent.ok).toBe(true);
+
+    // Action A was drained by C1 and belongs to THIS staged artifact;
+    // Action B arrived too late for C1's own snapshot and must not be
+    // in it either.
+    const data = result.structuredContent.data;
+    const staged = JSON.parse(readFileSync(data.stagedPath, "utf8"));
+    const stagedToolNames = staged.recordedActions.map(
+      (a: { tool: string }) => a.tool,
+    );
+    expect(stagedToolNames).toContain("prior_tool_wr01_race");
+    expect(stagedToolNames).not.toContain("concurrent_tool_wr01_race");
+
+    // The fix under test: Action B must survive C1's post-write commit
+    // and remain live in the buffer for a SUBSEQUENT capture — not be
+    // silently discarded by a blanket reset. (Pre-fix, this assertion
+    // fails: `resetRecordedActions()`'s unconditional `buffer = []`
+    // wipes Action B along with Action A.)
+    const { actions } = drainRecordedActions();
+    const toolNames = actions.map((a: { tool: string }) => a.tool);
+    expect(toolNames).toContain("concurrent_tool_wr01_race");
+    expect(toolNames).not.toContain("prior_tool_wr01_race");
   } finally {
     await session.destroy();
   }

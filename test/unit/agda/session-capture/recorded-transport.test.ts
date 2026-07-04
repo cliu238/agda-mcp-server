@@ -3,7 +3,8 @@
 // Pin CAP-04's bounded ring-buffer recorder: gated by
 // AGDA_MCP_CAPTURE=1 (zero-cost no-op otherwise), drop-newest-once-
 // full (earliest actions of a long dogfooding session survive, per
-// D-05/D-06), read-only drain (only resetRecordedActions clears).
+// D-05/D-06), read-only drain (only resetRecordedActions/
+// commitDrainedActions clear).
 
 import { test, expect, beforeEach, afterEach } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -13,6 +14,7 @@ import {
   recordAction,
   drainRecordedActions,
   resetRecordedActions,
+  commitDrainedActions,
   MAX_RECORDED_ACTIONS,
   type RecordedActionCapacityOverride,
 } from "../../../../src/agda/session-capture/recorded-transport.js";
@@ -144,6 +146,67 @@ test("drainRecordedActions does not clear the buffer — calling it twice return
   const second = drainRecordedActions();
   expect(first).toEqual(second);
   expect(second.actions).toHaveLength(2);
+});
+
+// ── commitDrainedActions (WR-01 concurrent-drop fix) ────────────────────
+
+test("commitDrainedActions removes only the drained prefix, preserving an action recorded after the drain", () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  recordAction({ tool: "A", args: {}, timestamp: 1, normalizedResponse: undefined });
+
+  // Non-destructive snapshot — exactly what a capture's drain call sees.
+  const { actions } = drainRecordedActions();
+  expect(actions.map((a) => a.tool)).toEqual(["A"]);
+
+  // Simulate a second, concurrently in-flight tool call landing in the
+  // buffer AFTER the snapshot above but BEFORE the commit below — the
+  // exact WR-01 race window (a capture's own async write pipeline).
+  recordAction({ tool: "B", args: {}, timestamp: 2, normalizedResponse: undefined });
+
+  // On pre-fix code (a blanket `buffer = []`), this would silently
+  // discard "B" along with "A". The fix commits only what was drained.
+  commitDrainedActions(actions.length);
+
+  const remaining = drainRecordedActions();
+  expect(remaining.actions.map((a) => a.tool)).toEqual(["B"]);
+});
+
+test("commitDrainedActions clears the whole buffer when nothing was recorded concurrently", () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  recordAction({ tool: "A", args: {}, timestamp: 1, normalizedResponse: undefined });
+  const { actions } = drainRecordedActions();
+
+  commitDrainedActions(actions.length);
+
+  const drained = drainRecordedActions();
+  expect(drained.actions).toEqual([]);
+});
+
+test("commitDrainedActions only resets truncated/droppedCount once the buffer is genuinely empty afterward", () => {
+  process.env.AGDA_MCP_CAPTURE = "1";
+  const override: RecordedActionCapacityOverride = { capacity: 2 };
+  for (let i = 0; i < 4; i++) {
+    recordAction(
+      { tool: "agda_load", args: { seq: i }, timestamp: i, normalizedResponse: undefined },
+      override,
+    );
+  }
+  const { actions, truncated } = drainRecordedActions();
+  expect(truncated).toBe(true);
+
+  // A concurrently-recorded action survives the commit below (capacity
+  // override does not apply to this call — plenty of room left in the
+  // real MAX_RECORDED_ACTIONS-sized buffer).
+  recordAction({ tool: "concurrent", args: {}, timestamp: 99, normalizedResponse: undefined });
+
+  commitDrainedActions(actions.length);
+
+  // The buffer still holds the concurrently-recorded action, so the
+  // still-truncated window's flag/count must NOT be cleared yet.
+  const drained = drainRecordedActions();
+  expect(drained.actions.map((a) => a.tool)).toEqual(["concurrent"]);
+  expect(drained.truncated).toBe(true);
+  expect(drained.droppedCount).toBeGreaterThan(0);
 });
 
 // ── Hooked into registerStructuredTool's timedCallback ─────────────────

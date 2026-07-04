@@ -27,8 +27,8 @@ import type {
   CaptureReference,
 } from "../agda/session-capture/session-capture.js";
 import {
+  commitDrainedActions,
   drainRecordedActions,
-  resetRecordedActions,
 } from "../agda/session-capture/recorded-transport.js";
 import { buildOracleSubstrate } from "../agda/session-capture/oracle-substrate.js";
 import { deriveTriageFromActions } from "../agda/session-capture/triage-derivation.js";
@@ -195,14 +195,21 @@ export function registerCaptureSession(
           `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`,
         );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
-        // Reset only after the artifact is durably staged (WR-01): a
+        // Commit only after the artifact is durably staged (WR-01): a
         // write failure above (disk full, permissions, or the
         // mkdirSync above throwing) must leave the drained action log
         // intact so a retry - or manual recovery - never starts from
-        // an empty log. Each successful capture still gets a fresh
-        // recording window going forward, so two captures in the same
-        // session never double-report the same actions.
-        resetRecordedActions();
+        // an empty log. commitDrainedActions(actions.length) removes
+        // exactly the entries THIS capture drained rather than
+        // blanket-clearing the live buffer, so an action recorded by a
+        // second, concurrently in-flight tool call during this async
+        // window (buildOracleSubstrate / mkdirSync / writeFileAtomic
+        // all await) survives into the next capture instead of being
+        // silently dropped (WR-01 concurrent-drop fix). Each
+        // successful capture still gets a fresh recording window going
+        // forward, so two captures in the same session never
+        // double-report the same actions.
+        commitDrainedActions(actions.length);
 
         const data: CaptureReference = {
           stagedPath,

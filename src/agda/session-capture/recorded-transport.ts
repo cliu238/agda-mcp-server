@@ -67,9 +67,10 @@ export function recordAction(
 
 /**
  * Read-only snapshot of the current recorder state. Does NOT clear
- * the buffer — only `resetRecordedActions()` clears. Safe to call
- * repeatedly (e.g. once per `agda_capture_session` invocation without
- * losing data for a subsequent capture).
+ * the buffer — only `resetRecordedActions()` (blanket clear) or
+ * `commitDrainedActions()` (clear exactly what was drained) do. Safe
+ * to call repeatedly (e.g. once per `agda_capture_session` invocation
+ * without losing data for a subsequent capture).
  */
 export function drainRecordedActions(): {
   actions: RecordedAction[];
@@ -84,9 +85,44 @@ export function drainRecordedActions(): {
 }
 
 /**
+ * Commit exactly the actions a caller already read via
+ * `drainRecordedActions()`, without touching anything recorded since.
+ * `drainedCount` is the length of that caller's own snapshot
+ * (`actions.length`), NOT re-derived here — this function trusts the
+ * caller to pass the count it actually consumed.
+ *
+ * Unlike `resetRecordedActions()`'s blanket `buffer = []`, this slices
+ * off only the first `drainedCount` entries. The MCP SDK this server
+ * uses does not serialize tool-call dispatch across different tool
+ * names (`StdioServerTransport.processReadBuffer()` calls `onmessage`
+ * synchronously per buffered request without awaiting the handler),
+ * so a second, concurrently in-flight tool call can land a
+ * `recordAction()` in the window between a capture's drain and its
+ * eventual write completing. A blanket reset there would silently
+ * discard that action forever (WR-01 concurrent-drop fix); slicing
+ * off only the drained prefix lets it survive into the next capture.
+ *
+ * `truncated`/`droppedCount` describe whether the buffer has EVER
+ * overflowed capacity for the actions still pending commit. They are
+ * only cleared once the buffer is genuinely back to empty after this
+ * slice — a window carried forward by a concurrent action must not
+ * lose its own truncation signal just because an earlier window's
+ * actions were committed.
+ */
+export function commitDrainedActions(drainedCount: number): void {
+  buffer = buffer.slice(drainedCount);
+  if (buffer.length === 0) {
+    truncated = false;
+    droppedCount = 0;
+  }
+}
+
+/**
  * Clear the buffer, truncated flag, and dropped count back to their
- * initial empty state. Used for test isolation and by Plan 01-05's
- * per-capture drain-and-reset.
+ * initial empty state. Used for test isolation only — the per-capture
+ * commit path uses `commitDrainedActions()` instead (WR-01), which
+ * removes exactly what was drained rather than blanket-clearing a
+ * buffer that may already hold newer, concurrently-recorded actions.
  */
 export function resetRecordedActions(): void {
   buffer = [];
