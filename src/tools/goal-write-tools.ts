@@ -52,6 +52,7 @@ export function register(
       const shouldWrite = writeToFile !== false;
       const goalIdsBefore = session.getGoalIds();
       const result = await session.goal.caseSplit(goalId, variable as string);
+      throwIfWriteRejected("agda_case_split", goalId, variable as string, result);
       let output = `## Case split on \`${variable}\` in ?${goalId}\n\n`;
       let written = false;
       if (result.clauses.length > 0) {

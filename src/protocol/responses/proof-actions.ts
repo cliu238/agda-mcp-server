@@ -184,3 +184,18 @@ export function decodeCaseSplitResponses(responses: AgdaResponse[]): string[] {
     .map((event) => event.text)
     .filter(Boolean);
 }
+
+/**
+ * True iff `responses` contains at least one schema-conformant
+ * MakeCase response — i.e. Agda actually produced new clauses, as
+ * opposed to decodeCaseSplitResponses()'s raw-DisplayInfo fallback
+ * (which fires on a rejected/invalid Cmd_make_case too — a rejected
+ * case-split has no MakeCase response at all, only an Error
+ * DisplayInfo). caseSplit() uses this to require BOTH an Error
+ * display AND no genuine MakeCase response before classifying a
+ * result as rejected, the same two-sided guard give()/refine() use
+ * via hasReplacementText() (CR-02).
+ */
+export function hasMakeCaseResponse(responses: AgdaResponse[]): boolean {
+  return responses.some((resp) => parseResponseWithSchema(makeCaseResponseSchema, resp) !== null);
+}

@@ -18,6 +18,7 @@ import { decodeGoalDisplayResponses } from "../protocol/responses/goal-display.j
 import {
   decodeCaseSplitResponses,
   decodeGiveLikeResponse,
+  hasMakeCaseResponse,
   hasReplacementText,
   resolveGiveReplacementText,
 } from "../protocol/responses/proof-actions.js";
@@ -133,7 +134,18 @@ export async function goalTypeContextCheck(
   };
 }
 
-/** Case-split on a variable in a goal. */
+/**
+ * Case-split on a variable in a goal.
+ *
+ * decodeCaseSplitResponses() falls back to raw DisplayInfo text
+ * whenever no MakeCase response is present — exactly the shape a
+ * rejected/invalid Cmd_make_case takes. Without a rejection check,
+ * that fallback text (Agda's own error message) can be written into
+ * the source file as a fabricated case-split clause, replacing a real
+ * function clause (CR-02). rejected requires BOTH an Error display
+ * AND no genuine MakeCase response, the same two-sided guard give()
+ * uses via hasReplacementText().
+ */
 export async function caseSplit(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -144,7 +156,13 @@ export async function caseSplit(
     ctx.iotcm(goalCommand("Cmd_make_case", goalId, quoted(variable))),
   );
   throwOnFatalProtocolStderr(responses);
-  return { clauses: decodeCaseSplitResponses(responses) };
+  const errorText = detectResponseError(responses);
+  const rejected = errorText !== null && !hasMakeCaseResponse(responses);
+  return {
+    clauses: decodeCaseSplitResponses(responses),
+    rejected,
+    rejectionText: rejected ? errorText : null,
+  };
 }
 
 /**

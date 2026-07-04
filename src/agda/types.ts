@@ -186,6 +186,16 @@ export interface ContextResult {
 
 export interface CaseSplitResult {
   clauses: string[];
+  /**
+   * True when Agda rejected the case-split (an Error DisplayInfo
+   * response with no genuine MakeCase response) rather than producing
+   * new clauses. Without this, the raw error/rejection text can be
+   * written into the source file as a fabricated case-split clause —
+   * see hasMakeCaseResponse() in proof-actions.ts (CR-02).
+   */
+  rejected?: boolean;
+  /** Agda's rejection text when `rejected` is true, else null. */
+  rejectionText?: string | null;
 }
 
 export interface GiveResult {

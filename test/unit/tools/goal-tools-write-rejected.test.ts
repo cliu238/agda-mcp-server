@@ -32,7 +32,12 @@ function createCapturingServer() {
 }
 
 function fakeSession(
-  overrides: { refine?: any; refineExact?: any; intro?: any } = {},
+  overrides: {
+    refine?: any;
+    refineExact?: any;
+    intro?: any;
+    caseSplit?: any;
+  } = {},
 ) {
   return {
     getGoalIds: () => [0],
@@ -44,6 +49,7 @@ function fakeSession(
       refine: overrides.refine ?? vi.fn(),
       refineExact: overrides.refineExact ?? vi.fn(),
       intro: overrides.intro ?? vi.fn(),
+      caseSplit: overrides.caseSplit ?? vi.fn(),
     },
   } as any;
 }
@@ -143,4 +149,56 @@ test("agda_intro surfaces a rejected expression as ok:false / intro-rejected, wi
   expect(result.isError).toBe(true);
   expect(result.structuredContent.classification).toBe("intro-rejected");
   expect(result.structuredContent.data.written).toBe(false);
+});
+
+// ── CR-02: agda_case_split ────────────────────────────────────────
+
+test("agda_case_split surfaces a rejected Cmd_make_case as ok:false / case-split-rejected, without writing to the file", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const rejectionMessage = "1.1-5: error: Cannot split on variable notAVariable";
+  const caseSplit = vi.fn().mockResolvedValue({
+    clauses: [rejectionMessage],
+    rejected: true,
+    rejectionText: rejectionMessage,
+  });
+  const session = fakeSession({ caseSplit });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  // writeToFile defaults to true (and currentFile is set) so a
+  // regression that skips the rejection check would fall through to
+  // the real applyEditAndReload() against an incompatible fake
+  // session — surfacing as a crash/generic tool-error rather than the
+  // specific case-split-rejected classification asserted below.
+  const result = await server.get("agda_case_split")!.callback({
+    goalId: 0,
+    variable: "notAVariable",
+  });
+
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent.classification).toBe("case-split-rejected");
+  expect(result.structuredContent.diagnostics[0].message).toContain("Cannot split");
+  expect(result.structuredContent.data.written).toBe(false);
+});
+
+test("agda_case_split still returns an ok envelope and writes clauses for a successful split", async () => {
+  clearToolManifest();
+  const server = createCapturingServer();
+  const caseSplit = vi.fn().mockResolvedValue({
+    clauses: ["f zero = ?", "f (suc n) = ?"],
+    rejected: false,
+    rejectionText: null,
+  });
+  const session = fakeSession({ caseSplit });
+
+  registerGoalTools(server as unknown as McpServer, session, "/repo");
+  const result = await server.get("agda_case_split")!.callback({
+    goalId: 0,
+    variable: "n",
+    writeToFile: false,
+  });
+
+  expect(result.isError).toBe(false);
+  expect(result.structuredContent.classification).toBe("ok");
+  expect(result.structuredContent.data.clauses).toEqual(["f zero = ?", "f (suc n) = ?"]);
 });
