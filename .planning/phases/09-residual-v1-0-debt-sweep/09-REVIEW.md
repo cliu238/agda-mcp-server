@@ -16,10 +16,10 @@ files_reviewed_list:
   - .planning/phases/09-residual-v1-0-debt-sweep/09-SECURITY.md
 findings:
   critical: 0
-  warning: 3
+  warning: 0
   info: 3
-  total: 6
-status: issues_found
+  total: 3
+status: clean
 ---
 
 # Phase 09: Code Review Report
@@ -80,7 +80,7 @@ items below.
 
 ## Warnings
 
-### WR-01: WR-01's durability reorder widens the drain-to-reset window into a real concurrent-drop race
+### WR-01: WR-01 [RESOLVED — commit 0d66569]'s durability reorder widens the drain-to-reset window into a real concurrent-drop race
 
 **File:** `src/tools/register-capture-session.ts:121` and `:205` (root cause: `src/agda/session-capture/recorded-transport.ts:74-95`)
 **Issue:**
@@ -159,7 +159,7 @@ Add a regression test that injects a `recordAction()` call between the
 drain and the write (e.g. via a fake slow `writeFileAtomic`) and asserts
 the concurrently-recorded action survives into a subsequent capture.
 
-### WR-02: Stale `promoteCapture`-in-`dogfood-run.mjs` comment references survive the DEBT-02 deletion
+### WR-02 [RESOLVED — commit 5879fa0]: Stale `promoteCapture`-in-`dogfood-run.mjs` comment references survive the DEBT-02 deletion
 
 **File:** `scripts/dogfood/dogfood-wrapup.mjs:614` (same defect class, out-of-scope file: `scripts/dogfood/upload-run.mjs:548`)
 **Issue:**
@@ -205,7 +205,7 @@ commit `359069d`), e.g.:
 // this codebase's best-effort operations).
 ```
 
-### WR-03: `09-SECURITY.md` row T-05-02-05's Disposition value breaks the register's own declared vocabulary
+### WR-03 [RESOLVED — commit 1a06911]: `09-SECURITY.md` row T-05-02-05's Disposition value breaks the register's own declared vocabulary
 
 **File:** `.planning/phases/09-residual-v1-0-debt-sweep/09-SECURITY.md:45`
 **Issue:**
