@@ -16,9 +16,11 @@ import { relative } from "node:path";
 import { AgdaSession, filePathDescription } from "../agda-process.js";
 import {
   errorDiagnostic,
+  infoDiagnostic,
   makeToolResult,
   okEnvelope,
   registerStructuredTool,
+  type ToolDiagnostic,
   warningDiagnostic,
 } from "../tools/tool-helpers.js";
 import { loadDataSchema, renderLoadLikeText } from "./tool-presentation.js";
@@ -66,9 +68,50 @@ export function registerAgdaLoadNoMetas(
 
       try {
         const filePath = resolveExistingPathWithinRoot(repoRoot, requestedFilePath);
+
+        // Same session-history read agda_load performs (register-agda-load.ts)
+        // — fingerprint 3306edf4c2d01c53 (RT8): this tool previously
+        // hardcoded reloaded/staleBeforeLoad to false and never
+        // surfaced previousClassification, so a genuine reload
+        // regression (a dependency changed underneath an
+        // already-loaded file) was reported identically to a
+        // first-ever load. Report-side only — no new session-state
+        // tracking is introduced here.
+        const previousFile = session.getLoadedFile();
+        const isReload = previousFile === filePath;
+        const wasStale = isReload && session.isFileStale();
+        const previousClassification = isReload
+          ? (session.getLastClassification?.() ?? null)
+          : null;
+        const previousLoadedAtMs = isReload
+          ? (session.getLastLoadedAt?.() ?? null)
+          : null;
+
         const result = await session.loadNoMetas(filePath);
         const relPath = relative(repoRoot, requestedFilePath);
         const elapsedMs = Math.round(performance.now() - startMs);
+
+        const diagnostics: ToolDiagnostic[] = [
+          ...result.errors.map((message) => errorDiagnostic(message, "agda-error")),
+          ...result.warnings.map((message) => warningDiagnostic(message, "agda-warning")),
+        ];
+
+        const previousWasSuccess = previousClassification === "ok-complete"
+          || previousClassification === "ok-with-holes";
+        if (isReload && previousWasSuccess && !result.success) {
+          const ageSeconds = previousLoadedAtMs !== null
+            ? Math.max(0, Math.round((Date.now() - previousLoadedAtMs) / 1000))
+            : null;
+          const ageSuffix = ageSeconds !== null ? ` ${ageSeconds}s ago` : "";
+          diagnostics.push(
+            infoDiagnostic(
+              `Regression: this file loaded as ${previousClassification}${ageSuffix}. `
+                + "It may have been modified since, or a dependency may have changed.",
+              "session-regression",
+            ),
+          );
+        }
+
         const text = renderLoadLikeText({
           heading: "Loaded without metas",
           file: relPath,
@@ -79,6 +122,8 @@ export function registerAgdaLoadNoMetas(
           invisibleGoalCount: result.invisibleGoalCount,
           errors: result.errors,
           warnings: result.warnings,
+          reloaded: isReload,
+          staleBeforeLoad: wasStale,
           profiling: result.profiling,
           elapsedMs,
         });
@@ -99,14 +144,13 @@ export function registerAgdaLoadNoMetas(
               classification: result.classification,
               errors: result.errors,
               warnings: result.warnings,
-              reloaded: false,
-              staleBeforeLoad: false,
+              reloaded: isReload,
+              staleBeforeLoad: wasStale,
               profiling: result.profiling,
+              previousClassification,
+              previousLoadedAtMs,
             },
-            diagnostics: [
-              ...result.errors.map((message) => errorDiagnostic(message, "agda-error")),
-              ...result.warnings.map((message) => warningDiagnostic(message, "agda-warning")),
-            ],
+            diagnostics,
             stale: session.isFileStale() || undefined,
             provenance: { file: filePath, protocolCommands: ["Cmd_load_no_metas"] },
             elapsedMs,
