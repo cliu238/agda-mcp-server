@@ -348,16 +348,16 @@ test("sendFireAndForgetCommand terminates a wedged proc that never acknowledges 
   const transport = new AgdaTransport();
   const killSignals: Array<NodeJS.Signals | number | undefined> = [];
 
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: (...args: unknown[]) => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
     kill(signal?: NodeJS.Signals | number): boolean;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() { /* never delivers a response — proc is wedged */ } },
-    once(_event: string, _listener: (...args: unknown[]) => void) {
+    stdin: { write(...args: any[]): any { /* never delivers a response — proc is wedged */ } },
+    once(_event: string, _listener: (...args: any[]) => any) {
       return proc as unknown as ChildProcess;
     },
     kill(signal?: NodeJS.Signals | number) {
@@ -412,16 +412,16 @@ test("sendFireAndForgetCommand does NOT arm the escalation when armEscalation is
   const transport = new AgdaTransport();
   const killSignals: Array<NodeJS.Signals | number | undefined> = [];
 
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: () => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
     kill(signal?: NodeJS.Signals | number): boolean;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() { /* idle session — no response, no in-flight */ } },
-    once(_event: string, _listener: () => void) {
+    stdin: { write(...args: any[]): any { /* idle session — no response, no in-flight */ } },
+    once(_event: string, _listener: (...args: any[]) => any) {
       return proc as unknown as ChildProcess;
     },
     kill(signal?: NodeJS.Signals | number) {
@@ -456,22 +456,22 @@ test("sendFireAndForgetCommand clears the escalation timer once Agda emits DoneA
   const killSignals: Array<NodeJS.Signals | number | undefined> = [];
 
   let closeListener: (() => void) | null = null;
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: () => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
     kill(signal?: NodeJS.Signals | number): boolean;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() {
+    stdin: { write(...args: any[]): any {
       // Agda services the abort and emits DoneAborting promptly,
       // then stays alive serving subsequent commands.
       setTimeout(() => {
         transport.handleStdout(Buffer.from("JSON> {\"kind\":\"DoneAborting\"}\n"));
       }, 0);
     } },
-    once(event: string, listener: () => void) {
+    once(event: string, listener: (...args: any[]) => any) {
       if (event === "close") closeListener = listener;
       return proc as unknown as ChildProcess;
     },
@@ -514,16 +514,16 @@ test("sendFireAndForgetCommand does NOT terminate a proc that exits cleanly duri
   const killSignals: Array<NodeJS.Signals | number | undefined> = [];
 
   let closeListener: (() => void) | null = null;
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: () => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
     kill(signal?: NodeJS.Signals | number): boolean;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() { /* discard */ } },
-    once(event: string, listener: () => void) {
+    stdin: { write(...args: any[]): any { /* discard */ } },
+    once(event: string, listener: (...args: any[]) => any) {
       if (event === "close") closeListener = listener;
       return proc as unknown as ChildProcess;
     },
@@ -544,7 +544,12 @@ test("sendFireAndForgetCommand does NOT terminate a proc that exits cleanly duri
   // Proc exits cleanly before the escalation budget. The close
   // listener clears the escalation timer.
   (proc as { exitCode: number | null }).exitCode = 0;
-  closeListener?.();
+  // Cast back to the declared type: TypeScript's control-flow narrowing
+  // only sees the `= null` initializer in this scope's direct flow (the
+  // only reassignment happens inside the `once` closure above, which CFA
+  // does not track across function boundaries), so without this the
+  // read below narrows to literal `null` and the call becomes uncallable.
+  (closeListener as (() => void) | null)?.();
 
   await new Promise((resolve) => setTimeout(resolve, 120));
 
@@ -563,16 +568,16 @@ test("late DoneAborting that arrives AFTER the flush window closes still clears 
   const transport = new AgdaTransport();
   const killSignals: Array<NodeJS.Signals | number | undefined> = [];
 
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: () => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
     kill(signal?: NodeJS.Signals | number): boolean;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() { /* discard — DoneAborting arrives below */ } },
-    once(_event: string, _listener: () => void) {
+    stdin: { write(...args: any[]): any { /* discard — DoneAborting arrives below */ } },
+    once(_event: string, _listener: (...args: any[]) => any) {
       return proc as unknown as ChildProcess;
     },
     kill(signal?: NodeJS.Signals | number) {
@@ -671,21 +676,21 @@ test("sendCommand timeout kills the subprocess AND rejects the Promise", async (
   const transport = new AgdaTransport();
   const killCalls: Array<NodeJS.Signals | number | undefined> = [];
 
-  const proc: Partial<ChildProcess> & {
-    stdin: { write(): void };
-    once(event: string, listener: (...args: unknown[]) => void): unknown;
+  const proc: Omit<Partial<ChildProcess>, "stdin" | "once"> & {
+    stdin: { write(...args: any[]): any };
+    once(event: string, listener: (...args: any[]) => any): unknown;
   } = {
     exitCode: null,
     signalCode: null,
     killed: false,
-    stdin: { write() { /* discard */ } },
+    stdin: { write(...args: any[]): any { /* discard */ } },
     kill(signal?: NodeJS.Signals | number) {
       killCalls.push(signal);
       (proc as { killed: boolean }).killed = true;
       (proc as { exitCode: number | null }).exitCode = 143;
       return true;
     },
-    once(_event: string, _listener: (...args: unknown[]) => void) {
+    once(_event: string, _listener: (...args: any[]) => any) {
       return proc as unknown as ChildProcess;
     },
   };
