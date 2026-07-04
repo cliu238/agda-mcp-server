@@ -41,7 +41,15 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
   2. Feeding ORCL-02 a corpus whose `.agda-lib` name case-mismatches its policy filename (the real CHG-vs-`codex-homotopy-group.json` case) fails loudly with an explicit unresolved/mismatched-policy error — never silent cheat-filing abstention — proven by a test that runs on a case-sensitive filesystem (Linux container/CI), not just the maintainer's case-insensitive Mac. (POLICY-01)
   3. All 8 `needsReverify` entries in `test/fixtures/fix-queue.json` show `confirmed` (fresh capture + verdict evidence) or are closed as unreproducible (with evidence); zero remain `needsReverify`. (REVERIFY-01)
   4. Every confirmed live defect (the CHG-confirmed set — `agda_auto` CLI-flag leak, `agda_give` ok:true-wrapping-error, `agda_search_definitions` hardcoded `agda/` layout — plus whatever REVERIFY-01 confirms) reaches `locked` in the fix queue, or is explicitly re-triaged with a recorded reason — none silently stalled. (REVERIFY-02)
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — POLICY-01: --policy passthrough (run-oracle + wrapup), case-exact loud-fail resolution, real-CHG regression test (ubuntu-latest CI gate)
+- [ ] 06-02-PLAN.md — REVERIFY-01: RT1-RT4 re-verified live through dogfood-run -> capture -> dogfood-wrapup; queue transitions + evidence report
+- [ ] 06-03-PLAN.md — REVERIFY-01: RT5-RT8 re-verified; zero needsReverify remain (criterion 3 gate)
+- [ ] 06-04-PLAN.md — REVERIFY-02: fix agda_auto flag-hint injection + agda_give ok:true-wrapping-rejection (from-RED tests)
+- [ ] 06-05-PLAN.md — REVERIFY-02: fix agda_proof_status "All goals solved." mislabel + agda_search_definitions directory param (from-RED tests)
+- [ ] 06-06-PLAN.md — REVERIFY-02: queue ledger closeout — named-4 locked, RT confirms fixed-or-deferred-with-reason, acceptance sweep
 **Research**: Skip — standard pattern. Root cause and fix location are already identified (`judgeOrcl02` already accepts an override; this is pure CLI/options plumbing). The hard acceptance gate is a case-sensitive-filesystem test, not another Mac-only run.
 
 ### Phase 7: Team Feedback Channel — Local Wiring
@@ -91,7 +99,7 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
 | 03.1 Flagship false-green fix | v1.0 | 2/2 | Complete | 2026-07-02 |
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
-| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 0/TBD | Not started | - |
+| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 0/6 | Not started | - |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
