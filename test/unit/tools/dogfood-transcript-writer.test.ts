@@ -239,6 +239,39 @@ test("renderRunReportMarkdown includes the tool name, its count, and the staged 
   expect(markdown).toContain("abc123");
 });
 
+// ── Behavior 5b: getReport's taskManifestCorpora field (additive, Pattern 4) ──
+
+test("getReport defaults taskManifestCorpora to [] when omitted, preserving backward compatibility", () => {
+  const dir = makeTempDir("agda-mcp-dogfood-transcript-");
+  const transcriptPath = join(dir, "transcript.jsonl");
+  const recorder = createRunRecorder({ transcriptPath });
+
+  const report = recorder.getReport({
+    runId: "r1",
+    startedAt: new Date().toISOString(),
+    corpusRoot: "/tmp/corpus",
+    manifestPath: "/tmp/manifest.json",
+  });
+
+  expect(report.taskManifestCorpora).toEqual([]);
+});
+
+test("getReport returns the exact taskManifestCorpora array it was given", () => {
+  const dir = makeTempDir("agda-mcp-dogfood-transcript-");
+  const transcriptPath = join(dir, "transcript.jsonl");
+  const recorder = createRunRecorder({ transcriptPath });
+
+  const report = recorder.getReport({
+    runId: "r1",
+    startedAt: new Date().toISOString(),
+    corpusRoot: "/tmp/corpus",
+    manifestPath: "/tmp/manifest.json",
+    taskManifestCorpora: ["codex-homotopy-group"],
+  });
+
+  expect(report.taskManifestCorpora).toEqual(["codex-homotopy-group"]);
+});
+
 // ── Behavior 6: resolveRunsRoot ────────────────────────────────────────
 
 test("resolveRunsRoot defaults to <SERVER_REPO_ROOT>/.agda-mcp/runs and honors AGDA_MCP_DOGFOOD_RUNS_ROOT verbatim", () => {

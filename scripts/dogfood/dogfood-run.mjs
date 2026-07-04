@@ -143,8 +143,10 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
   // D-03's mechanical hard gate. Throws synchronously on a missing
   // --manifest, unparsable JSON, or an empty array — see
   // scripts/dogfood/task-manifest.mjs. Nothing below this line may run
-  // until the gate has passed.
-  loadTaskManifest(manifestPath);
+  // until the gate has passed. The parsed manifest is captured (not
+  // discarded) — finalize() below derives taskManifestCorpora from it
+  // for run-report.json (Pattern 4).
+  const manifest = loadTaskManifest(manifestPath);
 
   const runDir = join(resolveRunsRoot(), runId);
   mkdirSync(runDir, { recursive: true });
@@ -288,7 +290,12 @@ export async function runDogfoodProxy({ manifestPath, corpusRoot, runId }) {
         new Promise((resolveTimeout) => setTimeout(resolveTimeout, 2000).unref()),
       ]);
 
-      const report = recorder.getReport({ runId, startedAt, corpusRoot, manifestPath });
+      // Distinct corpus values this run's own task manifest referenced —
+      // the same dedup-and-array-from-Set idiom resolveWrapupPolicyKey
+      // already uses (dogfood-wrapup.mjs), so an unattended judge (07-05)
+      // can resolve a bundle's policyKey without a human typing --policy.
+      const taskManifestCorpora = [...new Set(manifest.map((entry) => entry.corpus))];
+      const report = recorder.getReport({ runId, startedAt, corpusRoot, manifestPath, taskManifestCorpora });
       await writeRunReport(runDir, report);
       process.stderr.write(
         `\n[dogfood-run] run ${runId} finished — ${report.totalToolCalls} tool call(s), `
