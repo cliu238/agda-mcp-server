@@ -113,11 +113,10 @@ export function registerCaptureSession(
         // just used internally to compute the fingerprint.
         const sessionClassification = session.getLastClassification() ?? null;
 
-        // Drain-then-reset: each capture gets a fresh recording window
-        // going forward, so two captures in the same session never
-        // double-report the same actions (Task 1 spec).
+        // Drain now; the reset is deliberately deferred until after a
+        // successful write (WR-01, see below) — a write failure in
+        // this window must never silently discard the drained log.
         const { actions, truncated, droppedCount } = drainRecordedActions();
-        resetRecordedActions();
 
         // QUEUE-03/D-10: derive triage + richer fingerprint identity
         // fields from the last load-family action's recorded error
@@ -194,6 +193,14 @@ export function registerCaptureSession(
           `${dedup.fingerprint}-${dedup.recurrence}-${stagedFileSequence++}-${randomUUID()}.json`,
         );
         await writeFileAtomic(stagedPath, JSON.stringify(artifact, null, 2));
+        // Reset only after the artifact is durably staged (WR-01): a
+        // write failure above (disk full, permissions, or the
+        // mkdirSync above throwing) must leave the drained action log
+        // intact so a retry - or manual recovery - never starts from
+        // an empty log. Each successful capture still gets a fresh
+        // recording window going forward, so two captures in the same
+        // session never double-report the same actions.
+        resetRecordedActions();
 
         const data: CaptureReference = {
           stagedPath,
