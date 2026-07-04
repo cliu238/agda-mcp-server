@@ -1,0 +1,179 @@
+name: Deploy agda-mcp ingest to k8s-dev
+
+# D-06 (.planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/08-CONTEXT.md):
+# deploy on EVERY push to main -- no conditional trigger gate, no tag
+# gate. This is litellm's own deploy.yml mechanism verbatim, MINUS its
+# own check-changes/dorny change-detection job. Explicit, locked user
+# choice: accepting that main-branch commits unrelated to the ingest
+# also rebuild the image and roll the endpoint, in exchange for
+# keeping CI/CD identical to the proven reference skill. Do NOT "fix"
+# this by re-adding a change-detection gate on specific file globs.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: Build and push image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ./Dockerfile
+          # D-10: linux/amd64 explicitly, even though GitHub-hosted
+          # runners are amd64 natively -- stated so the intent is
+          # self-documenting rather than relying on the runner's own
+          # default architecture.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            fuel_corpora_token=${{ secrets.FUEL_CORPORA_READ_TOKEN }}
+          # litellm gotcha #3: deploys look stale without this.
+          no-cache: true
+
+  verify-uncredentialed-build:
+    name: Verify uncredentialed build (D-10 public buildability)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build WITHOUT fuel_corpora_token (proves D-10 public buildability)
+        run: |
+          set +e
+          docker buildx build --platform linux/amd64 -f Dockerfile . > build.log 2>&1
+          BUILD_EXIT=$?
+          set -e
+          cat build.log
+
+          # This deliberately runs with NO --secret flag and NO
+          # GH_TOKEN/GITHUB_TOKEN in the environment, so
+          # scripts/team/clone-fuel-corpora.mjs sees an empty token AND
+          # an unauthenticated (absent) `gh` CLI inside the build
+          # container. By that script's own documented contract
+          # (scripts/team/clone-fuel-corpora.mjs), the 2 PUBLIC corpora
+          # (agda-stdlib, agda-unimath) clone successfully, the 2
+          # PRIVATE corpora (codex-homotopy-group, autoformalizing-hopf)
+          # each return `{ ok: false, reason: "private-repo-no-credential" }`
+          # without throwing, and scriptMain() THEN sets a non-zero
+          # process.exitCode because the overall batch was not 100%
+          # successful -- this is correct, by-design behavior for the
+          # REAL credentialed build path (a real deploy must fail loud
+          # if its token ever stops working), not a bug to route around.
+          #
+          # So an uncredentialed `docker build` of this Dockerfile is
+          # EXPECTED to stop with a non-zero exit at that RUN step.
+          # What this verification proves is that the failure is EXACTLY
+          # that -- every earlier layer (Agda-from-source build, npm ci,
+          # npm run build) needed zero credentials, and the 2 public
+          # corpora clone fine -- not an opaque crash. That is what
+          # "buildable on standard hosted runners or locally" (D-10)
+          # means for an uncredentialed external contributor. This
+          # step's own exit code is therefore driven by the assertions
+          # below, not by docker build's raw exit code.
+          if [ "$BUILD_EXIT" -eq 0 ]; then
+            echo "UNEXPECTED: uncredentialed build succeeded outright -- expected it to stop at the 2 private-corpus skips (see comment above)"
+            exit 1
+          fi
+
+          grep -q "clone-fuel-corpora: skipping codex-homotopy-group: private-repo-no-credential" build.log || { echo "MISSING expected skip line for codex-homotopy-group"; exit 1; }
+          grep -q "clone-fuel-corpora: skipping autoformalizing-hopf: private-repo-no-credential" build.log || { echo "MISSING expected skip line for autoformalizing-hopf"; exit 1; }
+          grep -qi "Cloning into '/opt/agda-mcp-fuel/agda-stdlib'" build.log || { echo "MISSING evidence agda-stdlib (public) cloned"; exit 1; }
+          grep -qi "Cloning into '/opt/agda-mcp-fuel/agda-unimath'" build.log || { echo "MISSING evidence agda-unimath (public) cloned"; exit 1; }
+
+          echo "OK: uncredentialed build reached the corpus-clone step; the 2 public corpora cloned and the 2 private corpora cleanly skipped with private-repo-no-credential -- D-10 public buildability confirmed."
+
+  deploy:
+    name: Deploy to k8s-dev via SSH
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Decode and setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.K8S_SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "SSH key fingerprint:"
+          ssh-keygen -lf ~/.ssh/id_rsa
+
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+
+      # 2-hop SSH DIRECT from the runner (dslogin01 -> k8slgn) -- this is
+      # litellm's own proven deploy.yml shape and needs NO Tailscale hop:
+      # GitHub-hosted runners reach dslogin01.pha.jhu.edu directly over
+      # the public internet using the key decoded above. The Tailscale
+      # 3-hop path is a SEPARATE, human/interactive access pattern used
+      # only when bootstrapping cluster secrets by hand (see
+      # .claude/skills/agda-mcp-k8s-deploy/SKILL.md) -- do not conflate
+      # the two.
+      - name: Deploy to k8s via SSH
+        env:
+          SSH_AUTH_SOCK: ${{ env.SSH_AUTH_SOCK }}
+        run: |
+          ssh -A -o StrictHostKeyChecking=no cliu238@dslogin01.pha.jhu.edu \
+            'ssh -A -p 14132 -o StrictHostKeyChecking=no k8slgn.idies.jhu.edu bash -s' << 'EOF'
+          export KUBECONFIG=/var/k8s/users/cliu238/k8s-dev-llm-gateway-admins.conf
+
+          cd ~
+          if [ -d agda-mcp-server ]; then
+            cd agda-mcp-server && git pull
+          else
+            git clone https://github.com/cliu238/agda-mcp-server.git && cd agda-mcp-server
+          fi
+
+          kubectl apply -f k8s/
+          kubectl rollout restart deployment/agda-mcp-ingest -n llm-gateway
+          kubectl rollout status deployment/agda-mcp-ingest -n llm-gateway --timeout=5m
+          kubectl get pods,ingress -n llm-gateway
+          EOF
+
+      - name: Deployment complete
+        run: |
+          echo "Deployment successful!"
+          echo "agda-mcp ingest: https://dev.sites.idies.jhu.edu/agda-mcp"
+          echo "Health: https://dev.sites.idies.jhu.edu/agda-mcp/healthz"
