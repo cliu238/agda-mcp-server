@@ -131,6 +131,27 @@ test("computeProxyExitCode: the proxy's own child.kill() teardown (agent disconn
   ).toBe(0);
 });
 
+test("computeProxyExitCode: childFailed is consulted in the SIGNAL branch too, not just the both-null branch (WR-10, from-RED)", () => {
+  // The pre-WR-07 formula was
+  // `childFailed || (childSignalCode != null && !proxyKilledChild) ? 1 : 0`,
+  // which ORs childFailed into the failure condition regardless of
+  // proxyKilledChild. WR-07's rewrite silently dropped childFailed once
+  // childSignalCode became non-null, so a child that fired an 'error'
+  // event and ALSO later received a legitimate, proxy-initiated signal
+  // death reported a false clean 0 (see the review's own direct
+  // repro: OLD => 1, WR-07-regressed => 0). Same inputs as the test
+  // directly above except childFailed:true — this must still be a
+  // failure, exactly like the pre-WR-07 formula.
+  expect(
+    computeProxyExitCode({
+      childExitCode: null,
+      childSignalCode: "SIGTERM",
+      childFailed: true,
+      proxyKilledChild: true,
+    }),
+  ).toBe(1);
+});
+
 test("computeProxyExitCode: a child that exited on its own passes its exit code straight through", () => {
   expect(
     computeProxyExitCode({

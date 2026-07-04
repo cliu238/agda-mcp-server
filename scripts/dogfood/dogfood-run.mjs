@@ -156,21 +156,34 @@ function parseDogfoodArgv(argv) {
  * wrapper gating on the proxy's exit status never reads "we gave up
  * waiting for the child to die" as success.
  *
+ * WR-10: the signal branch also consults `childFailed`, not just the
+ * both-null branch. The pre-WR-07 formula ORed `childFailed` into the
+ * failure condition unconditionally
+ * (`childFailed || (childSignalCode != null && !proxyKilledChild)`),
+ * but the WR-07 rewrite dropped it entirely once `childSignalCode`
+ * became non-null — narrowing this exported decision table's own
+ * documented contract: a child that fired an 'error' event and ALSO
+ * later received a legitimate, proxy-initiated signal death would
+ * report a false clean 0 instead of the failure it actually is.
+ * Currently unreachable via this file's one real call site (a
+ * pre-spawn 'error' leaves `child.signalCode` permanently null, since
+ * there was never a process to signal, so it always routes into the
+ * both-null branch instead), but `computeProxyExitCode` is an
+ * independently exported, independently unit-tested decision table per
+ * its own contract above — closing the gap defensively costs nothing
+ * and protects any future caller (e.g. an IPC channel or some other
+ * 'error' trigger that could make it reachable).
+ *
  * Pure and exported so the decision table is directly unit-testable
  * (test/unit/tools/dogfood-run-spawn-options.test.ts); the single
  * live call site is finalize()'s `finally` in runDogfoodProxy.
  */
-// `childFailed` is kept in the destructured signature for API
-// stability/self-documentation (every existing call site and test still
-// names it explicitly) even though the both-null branch below is now
-// unconditionally a failure regardless of its value.
 export function computeProxyExitCode({ childExitCode, childSignalCode, childFailed, proxyKilledChild }) {
-  void childFailed;
   if (typeof childExitCode === "number") {
     return childExitCode;
   }
   if (childSignalCode != null) {
-    return proxyKilledChild ? 0 : 1;
+    return proxyKilledChild && !childFailed ? 0 : 1;
   }
   // Both null: the child's terminal state was never actually observed
   // (a spawn 'error', or an unconfirmed-dead child even after finalize()'s
