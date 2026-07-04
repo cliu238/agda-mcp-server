@@ -25,7 +25,7 @@
   },
   {
     "fingerprint": "5abecc959e43fef3",
-    "status": "triaged",
+    "status": "locked",
     "defectKind": "false-green",
     "triageClass": "mechanical-import",
     "triageConfidence": 0.87,
@@ -40,12 +40,12 @@
       "004d161b839ce725"
     ],
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 2, re-verified alive 2026-07-02 against current main. buildAutoSearchPayload() (src/agda/refactor-helpers.ts) needs escaping/validation of hints/excludeHints. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_auto is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup. RT4 re-measurement 2026-07-04 run-id rt4-20260703 re-confirms the same root cause; fix + lock pending Phase 6 wave 3."
+    "closedAt": "2026-07-04T02:25:38.000Z",
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 2, re-verified alive 2026-07-02 against current main. buildAutoSearchPayload() (src/agda/refactor-helpers.ts) needs escaping/validation of hints/excludeHints. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_auto is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup. RT4 re-measurement 2026-07-04 run-id rt4-20260703 re-confirms the same root cause. FIXED (Phase 6 wave 3, plan 06-04): buildAutoSearchPayload() now rejects any flag-shaped or whitespace-containing hints/excludeHints token via a new assertValidAutoHint() boundary check before it reaches the Agsy payload (commits 26f8356 test / 235b0b2 feat). Regression lock: test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a flag-shaped hints token instead of injecting it into the payload; test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a flag-shaped excludeHints token instead of injecting it into the payload; test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a hint token containing whitespace (would split into a second Agsy token); test/unit/tools/goal-tools-give.test.ts :: agda_auto rejects a flag-shaped hint before calling session.goal.autoOne. Mechanism: from-RED vitest test (non-load-family defect — emit-regression/judgeRefusal + replayCaptureRegressionEntry support only load-family ORCL-01 false-green candidates; matrixEntryId intentionally null). Fixed in Phase 6 wave 3."
   },
   {
     "fingerprint": "bfcba437f5426fd6",
-    "status": "triaged",
+    "status": "locked",
     "defectKind": "false-green",
     "triageClass": "proof-obligation",
     "triageConfidence": 0.72,
@@ -57,12 +57,12 @@
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 3, re-verified alive 2026-07-02 against current main. session.goal.give() (src/agda/goal-operations.ts) should distinguish a rejected give from a real success. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_give is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup."
+    "closedAt": "2026-07-04T02:25:38.000Z",
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 3, re-verified alive 2026-07-02 against current main. session.goal.give() (src/agda/goal-operations.ts) should distinguish a rejected give from a real success. MANUAL-MERGE CANDIDATE: Plan 04-02's capture-time fingerprint enrichment scans ONLY load-family actions (agda_load/agda_load_no_metas/agda_typecheck); agda_give is not load-family, so a future live agda_capture_session recapture of this exact bug will NOT be enriched by that scan and will NOT match this hand-seeded fingerprint — it will land as a new, disconnected entry. A maintainer must manually cross-reference and merge (bump recurrence by hand) rather than assume automatic dedup. FIXED (Phase 6 wave 3, plan 06-04): give() now detects an Agda-rejected expression (an Error DisplayInfo with no confirmed replacement) and surfaces GiveResult.rejected/rejectionText; agda_give's tool callback throws giveRejectedError() (classification give-rejected) instead of wrapping the rejection in an ok:true envelope (commits c9c9b5b test / e11211c feat). Regression lock: test/unit/agda/goal-operations-give.test.ts :: give() marks an Agda rejection (Error DisplayInfo, no GiveAction) as rejected; test/unit/tools/goal-tools-give.test.ts :: agda_give surfaces a rejected expression as ok:false / give-rejected. Mechanism: from-RED vitest test (non-load-family defect — emit-regression/judgeRefusal + replayCaptureRegressionEntry support only load-family ORCL-01 false-green candidates; matrixEntryId intentionally null). Fixed in Phase 6 wave 3."
   },
   {
     "fingerprint": "eb7439cb3ed9d6b9",
-    "status": "triaged",
+    "status": "locked",
     "defectKind": "missing-feature",
     "triageClass": null,
     "triageConfidence": null,
@@ -74,12 +74,12 @@
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 4, re-verified alive 2026-07-02 against current main. Not an Agda compiler error (triageClass null, not applicable) - a server-side path-resolution bug in src/tools/file/search-definitions.ts."
+    "closedAt": "2026-07-04T02:25:38.000Z",
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 4, re-verified alive 2026-07-02 against current main. Not an Agda compiler error (triageClass null, not applicable) - a server-side path-resolution bug in src/tools/file/search-definitions.ts. FIXED (Phase 6 wave 3, plan 06-05): agda_search_definitions gained an optional sandboxed `directory` input (default \"agda\", unchanged) threaded through the same resolveFileWithinRoot + resolveExistingPathWithinRoot pair agda_project_progress already uses (commit 67d40a6). Regression lock: test/unit/tools/file-tools.test.ts :: agda_search_definitions searches a caller-supplied directory for src/-layout projects; test/unit/tools/file-tools.test.ts :: agda_search_definitions rejects a directory parameter that escapes the project root. Mechanism: from-RED vitest test (non-load-family defect — emit-regression/judgeRefusal + replayCaptureRegressionEntry support only load-family ORCL-01 false-green candidates; matrixEntryId intentionally null). Fixed in Phase 6 wave 3."
   },
   {
     "fingerprint": "fdc90bfde12fb938",
-    "status": "triaged",
+    "status": "locked",
     "defectKind": "wrong-result",
     "triageClass": null,
     "triageConfidence": null,
@@ -91,8 +91,8 @@
     "verdictPath": null,
     "matrixEntryId": null,
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 1's related sub-finding, re-verified 2026-07-02. A labeling/presentation bug in the server's own summary text, not a raw Agda error (triageClass null, not applicable). Cross-reference: Phase 6 plan 06-03 RT6 re-verification (run-id rt6-20260703, spec fingerprint ad2b6d31f58f1759) confirmed agda_load's own broader five-state conflation as a separate, related issue (missing-feature, not wrong-result); this entry's own no-goals-but-constraints-hold-an-error sub-case remains scoped to agda_proof_status specifically and is unaffected/unresolved by that finding -- still pending its own fix in a later wave."
+    "closedAt": "2026-07-04T02:25:38.000Z",
+    "notes": "Source: .planning/research/CHG-REVERIFY.md Defect 1's related sub-finding, re-verified 2026-07-02. A labeling/presentation bug in the server's own summary text, not a raw Agda error (triageClass null, not applicable). Cross-reference: Phase 6 plan 06-03 RT6 re-verification (run-id rt6-20260703, spec fingerprint ad2b6d31f58f1759) confirmed agda_load's own broader five-state conflation as a separate, related issue (missing-feature, not wrong-result); this entry's own no-goals-but-constraints-hold-an-error sub-case remains scoped to agda_proof_status specifically and is unaffected/unresolved by that finding. FIXED (Phase 6 wave 3, plan 06-05): the completeness branch now requires BOTH zero goals AND empty constraints.text before printing \"All goals solved.\"; a new branch prints an explicit NOT-confirmed-complete line when constraints hold a real error (commit 6caa279). Regression lock: test/unit/tools/analysis-tools.test.ts :: agda_proof_status reports NOT confirmed complete when goals are empty but constraints remain. Mechanism: from-RED vitest test (non-load-family defect — emit-regression/judgeRefusal + replayCaptureRegressionEntry support only load-family ORCL-01 false-green candidates; matrixEntryId intentionally null). Fixed in Phase 6 wave 3."
   },
   {
     "fingerprint": "03f7c711c0209369",
@@ -151,7 +151,7 @@
   },
   {
     "fingerprint": "004d161b839ce725",
-    "status": "triaged",
+    "status": "locked",
     "needsReverify": false,
     "defectKind": "false-green",
     "triageClass": null,
@@ -167,8 +167,8 @@
       "5abecc959e43fef3"
     ],
     "createdAt": "2026-07-02T00:00:00.000Z",
-    "closedAt": null,
-    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT4. Cross-references the re-verified-alive agda_auto entry - do not double-count on the dashboard; this spec is retained separately as its own future regression-test target. Re-verified 2026-07-04 (run-id rt4-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED, matching the re-verified-alive agda_auto entry (5abecc959e43fef3) byte-for-byte -- data.searchPayload came back as '-d 5 --list-candidates -h -t 999999 -x --unsafe' (hints/excludeHints concatenated unescaped) and hasSolution:true while data.solution is actually Agda's own NotInScope rejection text. Pre-fix measurement recorded per D-12/D-08 before the agda_auto fix lands. Full envelope in .planning/research/RT-REVERIFY.md."
+    "closedAt": "2026-07-04T02:25:38.000Z",
+    "notes": "Source: emilyriehl/Codex-Homotopy-Group agda-mcp-ux-report/README.md spec RT4. Cross-references the re-verified-alive agda_auto entry - do not double-count on the dashboard; this spec is retained separately as its own future regression-test target. Re-verified 2026-07-04 (run-id rt4-20260703) through dogfood-run/dogfood-wrapup against current main: CONFIRMED, matching the re-verified-alive agda_auto entry (5abecc959e43fef3) byte-for-byte -- data.searchPayload came back as '-d 5 --list-candidates -h -t 999999 -x --unsafe' (hints/excludeHints concatenated unescaped) and hasSolution:true while data.solution is actually Agda's own NotInScope rejection text. Pre-fix measurement recorded per D-12/D-08 before the agda_auto fix lands. Full envelope in .planning/research/RT-REVERIFY.md. FIXED (Phase 6 wave 3, plan 06-04) — same root cause and same fix as 5abecc959e43fef3 (cross-ref per D-08, not double-counted): buildAutoSearchPayload()'s new assertValidAutoHint() boundary check (commits 26f8356 test / 235b0b2 feat) closes this spec identically. Regression lock: test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a flag-shaped hints token instead of injecting it into the payload; test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a flag-shaped excludeHints token instead of injecting it into the payload; test/unit/agda/agent-ux.test.ts :: buildAutoSearchPayload > rejects a hint token containing whitespace (would split into a second Agsy token); test/unit/tools/goal-tools-give.test.ts :: agda_auto rejects a flag-shaped hint before calling session.goal.autoOne. Mechanism: from-RED vitest test (non-load-family defect — emit-regression/judgeRefusal + replayCaptureRegressionEntry support only load-family ORCL-01 false-green candidates; matrixEntryId intentionally null). Fixed in Phase 6 wave 3."
   },
   {
     "fingerprint": "a0ae86c7deb9754e",
