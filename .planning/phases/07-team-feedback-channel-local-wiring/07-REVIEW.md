@@ -12,11 +12,11 @@ files_reviewed_list:
   - scripts/dogfood/dogfood-run.mjs
   - scripts/dogfood/dogfood-wrapup.mjs
 findings:
-  critical: 1
-  warning: 3
+  critical: 0
+  warning: 0
   info: 4
-  total: 8
-status: issues_found
+  total: 4
+status: clean
 ---
 
 # Phase 07: Code Review Report
@@ -58,7 +58,10 @@ Full detail for each item follows below, organized by current severity.
 
 ## Critical Issues
 
-### CR-01: STILL OPEN — the colliding-fingerprint takeover is fixed for `locked`/`rejected` but fully reproducible against `triaged`/`fixing` entries
+### CR-01 [RESOLVED — commit 0c61f45]
+
+> **Resolution (fix pass 3):** guard widened to isProtected = existing !== undefined && existing.status !== "new" gated on isFilingCall alone — collision with any non-new entry yields loud terminal-conflict outcome (filed:false, entry untouched); from-RED test encodes the re-reviewer's triaged-clobber reproduction
+: STILL OPEN — the colliding-fingerprint takeover is fixed for `locked`/`rejected` but fully reproducible against `triaged`/`fixing` entries
 
 **File:** `scripts/team/cron-ingest-wrapup.mjs:182-225` (`wrapCronUpsertQueueEntry`), specifically the terminal-status check at line 194
 
@@ -108,7 +111,10 @@ This is a one-line change, preserves every currently-passing test (locked/reject
 
 ## Warnings
 
-### WR-08 (new): The advisory file lock's own stale-lock reclamation is a non-atomic check-then-act, so two racing reclaimers can both believe they hold the lock
+### WR-08 [RESOLVED — commit 701add0]
+
+> **Resolution (fix pass 3):** per-attempt owner token written+read-back in the same synchronous reclaim step; mismatch falls through to retry (fail-open preserved)
+ (new): The advisory file lock's own stale-lock reclamation is a non-atomic check-then-act, so two racing reclaimers can both believe they hold the lock
 
 **File:** `scripts/dogfood/upload-run.mjs:296-330` (`acquireRetryQueueLock`)
 
@@ -143,7 +149,10 @@ if (age > staleMs) {
 ```
 This narrows the remaining window to the read-back itself rather than eliminating it in a fully adversarial-scheduler sense, but is a substantial practical improvement consistent with the module's own "advisory, best-effort, D-14 no-new-dependencies" design constraints.
 
-### WR-09 (new): WR-07's SIGKILL escalation kills only the immediate child PID, never the process tree — the orphaned Agda grandchild the fix's own header comment names as the concern is not actually prevented
+### WR-09 [RESOLVED — commit 8dc65ae]
+
+> **Resolution (fix pass 3):** child spawned detached:true (own process group); killChildGroup() escalates via process.kill(-pid) so the Agda grandchild dies with the group — real process-tree test fixture proves it
+ (new): WR-07's SIGKILL escalation kills only the immediate child PID, never the process tree — the orphaned Agda grandchild the fix's own header comment names as the concern is not actually prevented
 
 **File:** `scripts/dogfood/dogfood-run.mjs:371-420` (`finalize`, specifically `child.kill()` at line 379 and `child.kill("SIGKILL")` at line 399); `scripts/dogfood/dogfood-run.mjs:61-84` (`buildDogfoodChildOptions`, no `detached` option); interacts with `src/agda/agda-process-spawn.ts:101-105` (the real Agda subprocess is spawned the same way, by the proxy's *child*, not by the proxy itself)
 
@@ -172,7 +181,10 @@ try { process.kill(-child.pid, "SIGKILL"); } catch { /* group already gone */ }
 ```
 (Negative PID targets the whole process group under POSIX semantics, reaching the Agda grandchild even when `dist/index.js` itself cannot run its own cleanup.)
 
-### WR-10 (new): `computeProxyExitCode`'s rewritten signal-branch silently drops the `childFailed` flag, narrowing the exported decision table's own contract
+### WR-10 [RESOLVED — commit 648bf53]
+
+> **Resolution (fix pass 3):** computeProxyExitCode signal branch now proxyKilledChild && !childFailed ? 0 : 1; direct-invocation test added
+ (new): `computeProxyExitCode`'s rewritten signal-branch silently drops the `childFailed` flag, narrowing the exported decision table's own contract
 
 **File:** `scripts/dogfood/dogfood-run.mjs:149-161` (`computeProxyExitCode`)
 
