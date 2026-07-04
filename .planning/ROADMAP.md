@@ -58,8 +58,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-04-PLAN.md — REVERIFY-02: fix agda_auto flag-hint injection + agda_give ok:true-wrapping-rejection (from-RED tests)
-- [ ] 06-05-PLAN.md — REVERIFY-02: fix agda_proof_status "All goals solved." mislabel + agda_search_definitions directory param (from-RED tests)
+- [x] 06-04-PLAN.md — REVERIFY-02: fix agda_auto flag-hint injection + agda_give ok:true-wrapping-rejection (from-RED tests)
+- [x] 06-05-PLAN.md — REVERIFY-02: fix agda_proof_status "All goals solved." mislabel + agda_search_definitions directory param (from-RED tests)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -123,7 +123,7 @@ Plans:
 | 03.1 Flagship false-green fix | v1.0 | 2/2 | Complete | 2026-07-02 |
 | 4. Triage / Fix Queue | v1.0 | 5/5 | Complete | 2026-07-02 |
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
-| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 3/6 | In Progress|  |
+| 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 5/6 | In Progress|  |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 0/TBD | Not started | - |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 0/TBD | Not started | - |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 0/TBD | Not started | - |
