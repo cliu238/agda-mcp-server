@@ -732,6 +732,24 @@ test("writeBackQueue: a thrown execFileSync error (e.g. \"nothing to commit\") i
   expect(result.error).toContain("nothing to commit");
 });
 
+test("writeBackQueue: a git push failure still reports committed:true — the commit already succeeded and must never be understated as committed:false (WR-02, from-RED)", () => {
+  const execFileSpy = vi.fn((...args: any[]) => {
+    if (args[1]?.[0] === "push") {
+      throw new Error("fatal: could not read from remote repository");
+    }
+    return "";
+  });
+  const queueJsonPath = join(SERVER_REPO_ROOT, "test", "fixtures", "fix-queue.json");
+
+  const result = writeBackQueue({ queueJsonPath, noPush: false, filedCount: 1, deps: { execFileSync: execFileSpy } });
+
+  expect(result.committed).toBe(true);
+  expect(result.error).toContain("could not read from remote");
+  expect(result.pushed).toBeUndefined();
+  // add + commit + the failing push — all 3 were attempted.
+  expect(execFileSpy).toHaveBeenCalledTimes(3);
+});
+
 test("writeBackQueue: a queueJsonPath outside SERVER_REPO_ROOT is skipped before any execFileSync call", () => {
   const execFileSpy = vi.fn();
 

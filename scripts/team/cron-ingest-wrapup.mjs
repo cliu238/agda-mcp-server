@@ -470,6 +470,17 @@ export function writeBackQueue({ queueJsonPath, noPush, filedCount, deps } = {})
     return { committed: false, skipped: "queue-path-outside-repo" };
   }
 
+  // WR-02: `committed` is tracked independently of `pushed` — a `git
+  // push` failure (network down, diverged remote, auth issue) used to
+  // be caught by the SAME block wrapping `add`+`commit`, so this
+  // function reported `{committed:false, ...}` even though `git commit`
+  // had already succeeded and a real commit now sat in the local repo.
+  // That understated the persisted run summary/stdout digest AND made
+  // the NEXT cron run attempt `git commit` again on a queue file that
+  // may no longer have any uncommitted changes. `committed` is now
+  // flipped to `true` the moment the commit call itself succeeds,
+  // BEFORE the push is ever attempted.
+  let committed = false;
   try {
     execFile("git", ["add", relQueuePath], { cwd: SERVER_REPO_ROOT, shell: false });
     execFile(
@@ -477,14 +488,14 @@ export function writeBackQueue({ queueJsonPath, noPush, filedCount, deps } = {})
       ["commit", "-m", `queue(team-cron): intake ${filedCount} confirmed finding(s) from unattended cron judge`],
       { cwd: SERVER_REPO_ROOT, shell: false },
     );
-    let pushed = false;
+    committed = true;
     if (!noPush) {
       execFile("git", ["push"], { cwd: SERVER_REPO_ROOT, shell: false });
-      pushed = true;
+      return { committed: true, pushed: true };
     }
-    return { committed: true, pushed };
+    return { committed: true, pushed: false };
   } catch (err) {
-    return { committed: false, error: err instanceof Error ? err.message : String(err) };
+    return { committed, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
