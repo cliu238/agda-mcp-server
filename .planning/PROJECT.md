@@ -130,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 — Milestone v1.1 Feed the Loop: requirements defined (16 REQs after the CACHE theme was deleted by consumer audit), roadmap reworked to 4 phases (6–9), infrastructure timeline recorded (JHU k8s server ~07-07, local-Mac-first).*
+*Last updated: 2026-07-04 — Phase 6 (Backlog Digestion) complete: POLICY-01 loud-fail policy resolution shipped (case-sensitivity proven on case-sensitive APFS + ubuntu CI), all 8 RT specs definitively verdicted, fix-queue ledger closed at 9 locked / 5 DEFERRED-with-reason / 1 rejected, plus a 2-pass review-fix chain extending the Error-DisplayInfo rejection guard across all write-capable proof tools. Next: Phase 7 (Team Feedback Channel — local wiring).*
