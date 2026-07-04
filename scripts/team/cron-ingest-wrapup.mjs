@@ -1,0 +1,495 @@
+// MIT License — see LICENSE
+//
+// TEAM-04 (Task 2): the unattended cron judge. Discovers archives
+// staged by 07-03's ingest-server.mjs under
+// `<storageDir>/<person>/<date>/<runId>.tar.gz`, extracts each one via
+// Task 1's sandboxed scripts/team/archive-extract.mjs, and drives every
+// staged capture through the SAME UNCHANGED oracle-triad + N-rerun
+// flake-gate + queue-intake pipeline local dogfooding already uses
+// (scripts/dogfood/dogfood-wrapup.mjs's own `wrapUpCapture`, imported
+// directly — never re-invoked as a CLI, per ARCHITECTURE.md's
+// import-not-reinvoke rule). policyKey is resolved from the archive's
+// OWN recorded `taskManifestCorpora` (07-04's schema addition) via the
+// SAME fuel-corpora.json lookup `resolveWrapupPolicyKey` already uses
+// — NEVER re-derived from a `.agda-lib` inside the extracted scratch
+// dir, which would silently repeat the W2/Pitfall-9 anti-pattern this
+// milestone's backlog-digestion phase (Phase 6) exists to close.
+//
+// Idempotency (Pitfall 7's cheap early-dedup layer): every archive,
+// once judged (successfully OR terminally failed), gets a sibling
+// `<archive>.processed.json` marker written NEXT to it — 07-03's
+// storage layout is keyed by person/date/runId and upload-run.mjs
+// always reuses the SAME stable runId across retries of one run, so a
+// retried upload of the same run lands at the SAME storage path and is
+// skipped here BEFORE the expensive oracle triad ever runs again. This
+// is cheaper and earlier than the existing fingerprint-based
+// `upsertQueueEntry` dedup (scripts/queue/intake.mjs), which remains
+// the correctness backstop it already was — this module never bypasses
+// it, only avoids re-paying for judging an archive already resolved.
+//
+// Server-version skew (Pitfall 10): each capture's own recorded
+// `manifest.serverVersion` is compared against this judge's own
+// `getServerVersion()`. A mismatch NEVER invalidates or alters a
+// verdict — it is recorded context, annotated onto the resulting queue
+// entry's `notes` field (a metadata-only, non-recurrence-bumping
+// `upsertQueueEntry` call, mirroring scripts/queue/mirror-github.mjs's
+// own backlink-persistence precedent) and tallied in the run summary.
+//
+// Write-back (D-01/D-02): once at least one capture across the whole
+// run was filed, the queue JSON is committed (and, absent --no-push,
+// pushed) directly to the current branch — no PR-per-batch. Every real
+// `git` invocation is `execFileSync`-argv-array + `shell:false`,
+// modeled on scripts/queue/mirror-github.mjs's own gh-CLI shape (the
+// closest prior art for "shell out to a VCS-adjacent CLI behind an
+// explicit dry-run-style gate" — `git commit`/`git push` themselves
+// have zero prior art anywhere else in this codebase).
+//
+// Run with: npx tsx scripts/team/cron-ingest-wrapup.mjs [--no-push]
+//   [--rerun-n <N>] [--storage-dir <path>] [--queue-path <path>]
+// (NOT plain `node` — this script's src/ + test/ imports use
+// .js-suffixed specifiers pointing at sibling .ts files; Node's native
+// TS type-stripping does not rewrite .js -> .ts. tsx resolves this
+// correctly, and so does vitest's own resolver when this module is
+// imported from a .test.ts file — see scripts/queue/intake.mjs's
+// header for the same note.)
+
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join, relative } from "node:path";
+
+import { isMainModule } from "../test-with-sentinel.mjs";
+
+import { extractArchiveSafely } from "./archive-extract.mjs";
+import { resolveTeamStorageDir } from "./ingest-server.mjs";
+import { wrapUpCapture } from "../dogfood/dogfood-wrapup.mjs";
+import { upsertQueueEntry } from "../queue/intake.mjs";
+
+import { writeFileAtomic } from "../../src/session/safe-source-io.js";
+import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
+import { getServerVersion } from "../../src/server-version.js";
+// Dual JSON-loader note (test/fixtures/fuel-corpora.ts's own header,
+// repeated verbatim from dogfood-wrapup.mjs since this is the SAME
+// import): this is the test-side typed constant resolved via tsx's
+// .js -> .ts specifier mapping — NOT src/json-data.ts's runtime
+// loadJsonData, which is a different loader entirely.
+import { fuelCorpora } from "../../test/fixtures/fuel-corpora.js";
+
+// ── discoverUnprocessedArchives ───────────────────────────────────────
+
+/**
+ * Walk `<storageDir>/<person>/<date>/*.tar.gz` three levels deep and
+ * return every archive WITHOUT a sibling `<archive>.processed.json`
+ * marker (Pitfall 7's cheap early-dedup layer — see header comment).
+ * An absent `storageDir` degrades to `[]`, never throws — a cron tick
+ * that fires before the FIRST upload ever lands must be a harmless
+ * no-op. Non-directory entries at the person/date level (a stray
+ * `.DS_Store`, say) are silently skipped rather than mis-walked.
+ * Results are sorted by `archivePath` for deterministic ordering —
+ * the plan places no ordering REQUIREMENT on this, but a stable order
+ * makes cron logs and tests alike easier to reason about.
+ */
+export function discoverUnprocessedArchives(storageDir) {
+  if (!existsSync(storageDir)) {
+    return [];
+  }
+
+  const found = [];
+  const personEntries = readdirSync(storageDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  for (const personEntry of personEntries) {
+    const personDir = join(storageDir, personEntry.name);
+    const dateEntries = readdirSync(personDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+    for (const dateEntry of dateEntries) {
+      const dateDir = join(personDir, dateEntry.name);
+      const archiveEntries = readdirSync(dateDir, { withFileTypes: true }).filter(
+        (entry) => entry.isFile() && entry.name.endsWith(".tar.gz"),
+      );
+      for (const archiveEntry of archiveEntries) {
+        const archivePath = join(dateDir, archiveEntry.name);
+        if (!existsSync(`${archivePath}.processed.json`)) {
+          found.push({ archivePath, person: personEntry.name, date: dateEntry.name });
+        }
+      }
+    }
+  }
+
+  return found.sort((a, b) => a.archivePath.localeCompare(b.archivePath));
+}
+
+// ── resolveCronPolicyKey ──────────────────────────────────────────────
+
+/**
+ * POLICY-01/D-03's unattended-judge policy resolution: returns the
+ * single fuel-corpora.json `policyKey` when `taskManifestCorpora` has
+ * EXACTLY one entry that matches a known `fuelCorpora[].key` — mirrors
+ * `resolveWrapupPolicyKey`'s own manifest-derived branch (b)
+ * (scripts/dogfood/dogfood-wrapup.mjs), minus the `--policy` flag and
+ * manifest-file branches that make no sense for an unattended,
+ * upload-sourced judge with no human present to pass a flag. Returns
+ * `undefined` for an empty array, a multi-value array, or an unknown
+ * corpus key — NEVER guesses, NEVER throws, and NEVER falls back to a
+ * `.agda-lib` name derivation (the W2/Pitfall-9 anti-pattern this
+ * milestone exists to close).
+ */
+export function resolveCronPolicyKey(taskManifestCorpora) {
+  const corpora = Array.isArray(taskManifestCorpora) ? [...new Set(taskManifestCorpora)] : [];
+  if (corpora.length !== 1) {
+    return undefined;
+  }
+  const entry = fuelCorpora.find((candidate) => candidate.key === corpora[0]);
+  return entry?.policyKey;
+}
+
+// ── processArchive ────────────────────────────────────────────────────
+
+/**
+ * Judge one discovered archive end to end: sandboxed extraction (Task
+ * 1) -> policy resolution -> per-staged-capture `wrapUpCapture` (the
+ * UNCHANGED Phase-5 pipeline) -> a `.processed.json` sidecar marking
+ * the archive done (success OR terminal failure alike, so a
+ * permanently-broken archive is never retried forever). `config`
+ * carries `{queueJsonPath, flakyLogPath, rerunN, deps}`; `deps`
+ * overrides `extractArchiveSafely`/`wrapUpCapture`/`upsertQueueEntry`
+ * (the SAME `options.deps` DI convention this codebase uses
+ * throughout), used by this module's own tests to inject fakes with
+ * zero real Agda/tar/subprocess cost.
+ *
+ * @returns {Promise<{archivePath: string, runId?: string, error?: string, results: object[]}>}
+ */
+export async function processArchive({ archivePath }, config = {}) {
+  const extractFn = config.deps?.extractArchiveSafely ?? extractArchiveSafely;
+  const wrapUpFn = config.deps?.wrapUpCapture ?? wrapUpCapture;
+  const upsertFn = config.deps?.upsertQueueEntry ?? upsertQueueEntry;
+
+  const extracted = await extractFn(archivePath);
+  if (!extracted.ok) {
+    await writeFileAtomic(
+      `${archivePath}.processed.json`,
+      JSON.stringify({ processedAt: new Date().toISOString(), ok: false, reason: extracted.reason }, null, 2),
+    );
+    return { archivePath, error: extracted.reason, results: [] };
+  }
+
+  try {
+    const runsDir = join(extracted.scratchDir, "runs");
+    const runIds = existsSync(runsDir) ? readdirSync(runsDir) : [];
+    if (runIds.length !== 1) {
+      await writeFileAtomic(
+        `${archivePath}.processed.json`,
+        JSON.stringify(
+          { processedAt: new Date().toISOString(), ok: false, reason: "unexpected-run-count", runCount: runIds.length },
+          null,
+          2,
+        ),
+      );
+      return { archivePath, error: "unexpected-run-count", results: [] };
+    }
+
+    const [runId] = runIds;
+    const reportPath = join(runsDir, runId, "run-report.json");
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+
+    const corpora = Array.isArray(report.taskManifestCorpora) ? [...new Set(report.taskManifestCorpora)] : [];
+    const policyKey = resolveCronPolicyKey(report.taskManifestCorpora);
+
+    // SECURITY: a corpus-bearing bundle (the run's own manifest DID
+    // declare at least one corpus) whose policy key cannot be resolved
+    // must never silently fall through to judgeOrcl02's own
+    // .agda-lib-derived default — an extracted scratch dir has no
+    // meaningful .agda-lib of its own, and silently degrading here
+    // would repeat the exact W2/Pitfall-9 anti-pattern this plan
+    // exists to close (T-07-22). Loud error, never silent — the same
+    // "loud, never silent" discipline D-03 already established for an
+    // explicitly-requested-but-unresolvable key, applied here at this
+    // NEW call site for the "declared-but-unmappable" case that
+    // discipline didn't originally have to cover. A bundle with NO
+    // declared corpus at all is a different, legitimate case: it flows
+    // through below with policyKey undefined and is honestly reported
+    // by the oracle itself as an abstention ("no-policy"/"no-target"),
+    // counted in the run summary's abstention rate, never as an error.
+    if (corpora.length > 0 && policyKey === undefined) {
+      await writeFileAtomic(
+        `${archivePath}.processed.json`,
+        JSON.stringify(
+          { processedAt: new Date().toISOString(), ok: false, reason: "unresolvable-policy-key", corpora },
+          null,
+          2,
+        ),
+      );
+      return { archivePath, error: "unresolvable-policy-key", results: [] };
+    }
+
+    const judgeVersion = getServerVersion();
+    const results = [];
+    for (const staged of Array.isArray(report.stagedCaptures) ? report.stagedCaptures : []) {
+      // NEVER the original (uploader-machine-only) absolute
+      // stagedPath — captures live at a fixed, top-level `captures/`
+      // dir under the extracted root regardless of where they were
+      // staged on the uploader's own machine.
+      const artifactPath = join(extracted.scratchDir, "captures", basename(staged.stagedPath));
+      try {
+        const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+
+        // Pitfall 10 / checker finding 3: record — never gate on — a
+        // server-version mismatch between capture time and judge time.
+        // Skew NEVER invalidates a verdict; it is recorded context,
+        // annotated onto the queue entry only once a verdict actually
+        // files one (below).
+        const capturedVersion = artifact?.manifest?.serverVersion;
+        const versionSkew = typeof capturedVersion === "string" && capturedVersion !== judgeVersion;
+
+        const outcome = await wrapUpFn(artifactPath, artifact, {
+          queueJsonPath: config.queueJsonPath,
+          flakyLogPath: config.flakyLogPath,
+          n: config.rerunN ?? 3,
+          policyKey,
+        });
+
+        if (versionSkew && outcome.filed) {
+          // Metadata-only annotation — mirrors mirror-github.mjs's own
+          // backlink-persistence precedent (bumpRecurrence:false):
+          // never bumps recurrence, never re-derives any other field,
+          // just appends the skew note onto the entry wrapUpCapture's
+          // OWN internal upsertQueueEntry call already filed under
+          // this fingerprint.
+          await upsertFn(
+            {
+              fingerprint: artifact.dedup.fingerprint,
+              notes: `version-skew: captured=${capturedVersion} judged=${judgeVersion}`,
+            },
+            config.queueJsonPath,
+            { bumpRecurrence: false },
+          );
+        }
+
+        results.push({ artifactPath, versionSkew, ...outcome });
+      } catch (err) {
+        results.push({
+          artifactPath,
+          versionSkew: false,
+          filed: false,
+          classification: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    await writeFileAtomic(
+      `${archivePath}.processed.json`,
+      JSON.stringify({ processedAt: new Date().toISOString(), ok: true, runId, results }, null, 2),
+    );
+    return { archivePath, runId, results };
+  } finally {
+    extracted.cleanup();
+  }
+}
+
+// ── writeBackQueue ─────────────────────────────────────────────────────
+
+/**
+ * D-01/D-02's automated write-back: once `filedCount > 0`, commit the
+ * queue JSON and (absent `noPush`) push directly to the current
+ * branch — no PR-per-batch. `filedCount <= 0` (nothing changed this
+ * run) short-circuits BEFORE any subprocess call — the same
+ * "return-before-any-subprocess-call" shape
+ * scripts/queue/mirror-github.mjs's own dry-run gate uses. Every real
+ * `git` call is `execFileSync`-argv-array + `shell:false`, gated
+ * behind `options.deps?.execFileSync` for zero-real-git-cost testing.
+ * A thrown error from any of the three git calls is caught and
+ * surfaced in the returned result object rather than propagating —
+ * scriptMain must never crash because "nothing to commit" or a
+ * detached-HEAD push failure occurred.
+ */
+export function writeBackQueue({ queueJsonPath, noPush, filedCount, deps } = {}) {
+  if (!filedCount || filedCount <= 0) {
+    return { committed: false, skipped: "nothing-to-commit" };
+  }
+
+  const execFile = deps?.execFileSync ?? execFileSync;
+  const relQueuePath = relative(SERVER_REPO_ROOT, queueJsonPath);
+  if (relQueuePath.startsWith("..")) {
+    // General, no-special-casing guard: a caller (typically a test)
+    // pointing queueJsonPath outside SERVER_REPO_ROOT must never
+    // reach `git add` with a path git itself would reject anyway.
+    return { committed: false, skipped: "queue-path-outside-repo" };
+  }
+
+  try {
+    execFile("git", ["add", relQueuePath], { cwd: SERVER_REPO_ROOT, shell: false });
+    execFile(
+      "git",
+      ["commit", "-m", `queue(team-cron): intake ${filedCount} confirmed finding(s) from unattended cron judge`],
+      { cwd: SERVER_REPO_ROOT, shell: false },
+    );
+    let pushed = false;
+    if (!noPush) {
+      execFile("git", ["push"], { cwd: SERVER_REPO_ROOT, shell: false });
+      pushed = true;
+    }
+    return { committed: true, pushed };
+  } catch (err) {
+    return { committed: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ── summarizeArchiveResults ────────────────────────────────────────────
+
+/**
+ * Pure aggregation (no I/O): flattens every archive's own `results[]`
+ * into one array and computes the run-level counts TEAM-04 requires —
+ * mirroring dogfood-wrapup.mjs's own summary-with-counts shape
+ * (totalCaptures/filed/flaky/replayInconclusive/notACandidate/errors),
+ * PLUS the abstention rate and version-skew count this plan
+ * additionally requires, PLUS `archiveErrors` (a count `errors` alone
+ * would silently miss, since an archive-level failure — extraction
+ * rejected, a malformed run report, an unresolvable corpus-bearing
+ * policy key — never contributes a per-capture result row at all, so
+ * it would otherwise vanish from every per-capture tally above).
+ *
+ * Exported as its own pure function — rather than inlined into
+ * scriptMain — specifically so this arithmetic (the abstention-rate
+ * computation is a first-class, explicitly-required TEAM-04 behavior)
+ * is independently unit-testable without invoking scriptMain's own CLI
+ * glue, which has a real, non-test-configurable side effect
+ * (persisting the run summary under this repo's own
+ * `.agda-mcp/team/cron-runs/`) that a unit test must never trigger.
+ */
+export function summarizeArchiveResults(totalArchives, allResults) {
+  const flattened = allResults.flatMap((archiveResult) =>
+    Array.isArray(archiveResult.results) ? archiveResult.results : [],
+  );
+  const totalCaptures = flattened.length;
+  const abstained = flattened.filter(
+    (r) =>
+      r.verdict?.orcl01?.kind === "inconclusive"
+      || r.verdict?.orcl02?.kind === "no-policy"
+      || r.verdict?.orcl02?.kind === "no-target",
+  ).length;
+
+  return {
+    totalArchives,
+    totalCaptures,
+    filed: flattened.filter((r) => r.filed).length,
+    flaky: flattened.filter((r) => r.classification === "flaky").length,
+    replayInconclusive: flattened.filter((r) => r.classification === "replay-inconclusive").length,
+    notACandidate: flattened.filter((r) => r.classification === "not-a-candidate").length,
+    errors: flattened.filter((r) => r.classification === "error").length,
+    archiveErrors: allResults.filter((r) => r.error).length,
+    abstained,
+    abstentionRate: totalCaptures > 0 ? abstained / totalCaptures : 0,
+    versionSkews: flattened.filter((r) => r.versionSkew).length,
+  };
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────
+
+/**
+ * Extracts `--no-push` / `--rerun-n <N>` / `--storage-dir <path>` /
+ * `--queue-path <path>` from a flat `--flag value` argv array —
+ * mirrors dogfood-wrapup.mjs's own (private) parseWrapupArgv shape:
+ * flat indexOf lookups, flag wins over env, positive-integer-or-throw
+ * for --rerun-n (never let a typo'd flag reach classifyFlakiness as
+ * NaN/0 downstream inside wrapUpCapture, which would classify every
+ * deterministic candidate as flaky on an EMPTY observation list).
+ */
+function parseCronArgv(argv) {
+  const noPush = argv.includes("--no-push");
+
+  const rerunNFlagIndex = argv.indexOf("--rerun-n");
+  const rerunNRaw =
+    rerunNFlagIndex !== -1 ? argv[rerunNFlagIndex + 1] : (process.env.AGDA_MCP_DOGFOOD_RERUN_N ?? "3");
+  const rerunN = Number(rerunNRaw);
+  if (!Number.isInteger(rerunN) || rerunN < 1) {
+    throw new Error(`--rerun-n / AGDA_MCP_DOGFOOD_RERUN_N must be a positive integer, got "${rerunNRaw}"`);
+  }
+
+  const storageDirFlagIndex = argv.indexOf("--storage-dir");
+  const storageDir = storageDirFlagIndex !== -1 ? argv[storageDirFlagIndex + 1] : resolveTeamStorageDir();
+
+  const queuePathFlagIndex = argv.indexOf("--queue-path");
+  const queueJsonPath =
+    queuePathFlagIndex !== -1 ? argv[queuePathFlagIndex + 1] : join(SERVER_REPO_ROOT, "test/fixtures/fix-queue.json");
+
+  return { noPush, rerunN, storageDir, queueJsonPath };
+}
+
+/**
+ * CLI entry point: discover every unprocessed archive, judge each in
+ * turn (per-archive error isolation — one wedged/corrupt archive must
+ * never zero out the rest of the run), aggregate a run summary
+ * (mirroring dogfood-wrapup.mjs's own summary-with-counts shape,
+ * renamed for archives, PLUS the abstention rate and version-skew
+ * count TEAM-04 additionally requires), write back the queue (D-01),
+ * persist the summary to `.agda-mcp/team/cron-runs/<timestamp>.json`,
+ * and print a one-line digest to stdout — no human is otherwise
+ * watching an unattended cron run (Pitfall 8).
+ *
+ * `options.deps` (optional, second argument) is forwarded verbatim to
+ * every `processArchive` call and to `writeBackQueue` — the same
+ * single-bag `deps` shape both of those functions already read
+ * specific keys from (`extractArchiveSafely`/`wrapUpCapture`/
+ * `upsertQueueEntry`/`execFileSync`). This lets this module's own
+ * tests exercise the FULL discover -> judge -> write-back pipeline
+ * with zero real Agda/tar/git/subprocess cost, without this CLI entry
+ * point's default (real) behavior changing in any way when `options`
+ * is omitted.
+ */
+export async function scriptMain(argv = process.argv.slice(2), options = {}) {
+  let parsed;
+  try {
+    parsed = parseCronArgv(argv);
+  } catch (err) {
+    process.stderr.write(`cron-ingest-wrapup: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const { noPush, rerunN, storageDir, queueJsonPath } = parsed;
+
+  const discoveredArchives = discoverUnprocessedArchives(storageDir);
+  const allResults = [];
+  for (const info of discoveredArchives) {
+    try {
+      const outcome = await processArchive(info, {
+        queueJsonPath,
+        flakyLogPath: join(SERVER_REPO_ROOT, ".agda-mcp", "team", "cron-flaky.jsonl"),
+        rerunN,
+        deps: options.deps,
+      });
+      allResults.push(outcome);
+    } catch (err) {
+      allResults.push({
+        archivePath: info.archivePath,
+        error: err instanceof Error ? err.message : String(err),
+        results: [],
+      });
+    }
+  }
+
+  const stats = summarizeArchiveResults(discoveredArchives.length, allResults);
+  const writeBack = writeBackQueue({ queueJsonPath, noPush, filedCount: stats.filed, deps: options.deps });
+
+  const summary = { ...stats, writeBack, archiveResults: allResults };
+
+  const summaryDir = join(SERVER_REPO_ROOT, ".agda-mcp", "team", "cron-runs");
+  mkdirSync(summaryDir, { recursive: true });
+  const summaryPath = join(summaryDir, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  await writeFileAtomic(summaryPath, JSON.stringify(summary, null, 2));
+
+  process.stdout.write(
+    `[cron-ingest-wrapup] processed ${summary.totalArchives} archive(s), ${summary.totalCaptures} capture(s) — `
+      + `${summary.filed} filed, ${summary.abstained} abstained (${(summary.abstentionRate * 100).toFixed(1)}%), `
+      + `${summary.errors} error(s).\n`,
+  );
+
+  if (summary.errors > 0 || summary.archiveErrors > 0) {
+    // The summary is complete, but at least one capture or archive
+    // went unjudged — surface that as a non-zero exit so a cron
+    // wrapper/CI can notice (mirrors dogfood-wrapup.mjs's own
+    // convention, extended to cover this module's own archive-level
+    // failure modes it alone can produce).
+    process.exitCode = 1;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
+  await scriptMain();
+}
