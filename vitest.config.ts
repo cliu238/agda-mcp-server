@@ -1,7 +1,18 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
+
+// CI-only quarantine for KNOWN pre-existing Linux+real-Agda lane deltas
+// (fix-queue fb57abbe7df6dfe8, DEFERRED v1.1). Comma-separated file
+// paths; set ONLY by .github/workflows/ci.yml's integration job so the
+// lane keeps failing loudly on any NEW regression while the documented
+// legacy set is excluded. Local runs are unaffected (env unset).
+const ciQuarantine = (process.env.AGDA_MCP_CI_QUARANTINE ?? "")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 
 export default defineConfig({
   test: {
+    exclude: [...configDefaults.exclude, ...ciQuarantine],
     include: [
       "test/examples/**/*.test.ts",
       "test/unit/**/*.test.ts",

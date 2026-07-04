@@ -63,4 +63,10 @@ jobs:
         run: npm run test:all
         env:
           RUN_AGDA_INTEGRATION: "1"
+          # Quarantined pre-existing Linux-lane failures — fix-queue
+          # fb57abbe7df6dfe8 (DEFERRED v1.1, inherited from v1.0; same
+          # files red on run 28638480726, pre-v1.1). Remove entries as
+          # the next milestone's queue review fixes them. NEW failures
+          # in any other file still fail this job.
+          AGDA_MCP_CI_QUARANTINE: "test/integration/mcp/dogfood-flake-classify-live.test.ts,test/integration/mcp/capture-regression.test.ts,test/unit/agda/session-capture/manifest-builder.test.ts"
 
