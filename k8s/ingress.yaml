@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agda-mcp-ingest
+  namespace: llm-gateway
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Matches AGDA_MCP_TEAM_INGEST_MAX_BYTES (536870912 bytes) in
+    # k8s/deployment.yaml — see TEAM-03's upload cap.
+    nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: dev.sites.idies.jhu.edu
+    http:
+      paths:
+      # Own path on the SHARED host — litellm uses /litellm on the SAME
+      # host via its OWN separate Ingress resource; this Ingress never
+      # touches litellm's.
+      - path: /agda-mcp(/|$)(.*)
+        pathType: ImplementationSpecific # NOT Prefix — the path is a regex
+        backend:
+          service:
+            name: agda-mcp-ingest
+            port:
+              number: 4000

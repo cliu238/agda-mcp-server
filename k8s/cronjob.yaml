@@ -1,0 +1,92 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agda-mcp-cron-judge
+  namespace: llm-gateway
+  labels:
+    app: agda-mcp-cron-judge
+spec:
+  # Daily 06:00 UTC — Claude's Discretion per 08-CONTEXT.md, tunable.
+  schedule: "0 6 * * *"
+  # The judge's own .processed.json-marker idempotency and writeBackQueue's
+  # file-level operations are NOT designed for two simultaneous cron pods
+  # racing the same PVC path.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # 6h — ORCL-01 cold replays against CHG/Hopf-scale corpora can run
+      # for hours per D-08.
+      activeDeadlineSeconds: 21600
+      template:
+        metadata:
+          labels:
+            app: agda-mcp-cron-judge
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 2231 # Must match Ceph directory owner for write access
+            fsGroup: 2231
+            seccompProfile:
+              type: RuntimeDefault
+          imagePullSecrets:
+            - name: ghcr-credentials
+          containers:
+            - name: agda-mcp-cron-judge
+              image: ghcr.io/cliu238/agda-mcp-server:latest
+              imagePullPolicy: Always
+              # D-09: BOTH the outside-repo --queue-path (which structurally
+              # disables writeBackQueue's git calls — see 08-02-PLAN.md's
+              # <interfaces> note) AND the explicit --no-push flag are
+              # present, redundant by design, so "no repo-write credential
+              # ever reaches the cluster" does not depend on remembering
+              # only one of the two.
+              command:
+                - npx
+                - tsx
+                - scripts/team/cron-ingest-wrapup.mjs
+                - --queue-path
+                - /data/cluster-queue/fix-queue.json
+                - --no-push
+              env:
+                - name: AGDA_MCP_TEAM_STORAGE_DIR
+                  # Same subPath as the ingest Deployment — the judge reads
+                  # what ingest wrote.
+                  value: /data/team-uploads
+                - name: GHCRTS
+                  # Caps Agda's own GHC heap at 5Gi WITHIN the pod's 6Gi
+                  # memory limit (1Gi headroom for Node/OS so GHC's own
+                  # graceful heap-limit exit fires before the kubelet's
+                  # cgroup OOM-killer would) — see 08-02-SUMMARY.md for the
+                  # full arithmetic.
+                  value: "-M5g"
+              volumeMounts:
+                - name: pvc-storage
+                  mountPath: /data/team-uploads
+                  subPath: agda-mcp/team-storage
+                - name: pvc-storage
+                  # Durable, outside-repo accumulation target for D-09's
+                  # fix-queue — a fresh CronJob pod has no other persistent
+                  # storage.
+                  mountPath: /data/cluster-queue
+                  subPath: agda-mcp/cluster-fix-queue
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  memory: "1Gi"
+                  cpu: "250m"
+                limits:
+                  memory: "6Gi"
+                  cpu: "2000m"
+          restartPolicy: Never
+          volumes:
+            - name: pvc-storage
+              persistentVolumeClaim:
+                # Reuse the existing PVC (do NOT create a new PVC) — see
+                # .claude/skills/agda-mcp-k8s-deploy/SKILL.md Verified Facts.
+                claimName: sciserver-datavolumes-01-rw
