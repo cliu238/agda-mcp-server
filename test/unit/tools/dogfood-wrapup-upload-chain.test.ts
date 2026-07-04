@@ -158,8 +158,14 @@ test("dogfood-wrapup.mjs's scriptMain calls chainUploadRun strictly AFTER the su
 
 // ── Behavior 7: spawn (never execFileSync) is used for the chain step (CWE-78 discipline) ──
 
-test("dogfood-wrapup.mjs imports spawn (not execFileSync) for the upload chain step", () => {
+test("dogfood-wrapup.mjs imports spawn (not execFileSync) from node:child_process for the upload chain step", () => {
   const source = readFileSync(DOGFOOD_WRAPUP_PATH, "utf8");
-  expect(source).toMatch(/import\s*\{[^}]*\bspawn\b[^}]*\}\s*from\s*["']node:child_process["']/);
-  expect(source).not.toMatch(/execFileSync/);
+  // Narrowly checks the actual node:child_process import specifier list
+  // (not the whole file) — a comment elsewhere explaining "spawn, never
+  // execFileSync, because ..." is legitimate established prose in this
+  // codebase and must not fail this check.
+  const importMatch = source.match(/import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/);
+  expect(importMatch).not.toBeNull();
+  expect(importMatch?.[1]).toMatch(/\bspawn\b/);
+  expect(importMatch?.[1]).not.toMatch(/execFileSync/);
 });
