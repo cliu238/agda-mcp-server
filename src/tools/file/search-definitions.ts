@@ -39,7 +39,7 @@ export function register(
   registerTextTool({
     server,
     name: "agda_search_definitions",
-    description: "Search for a definition, theorem, or type name across Agda modules.",
+    description: "Search for a definition, theorem, or type name across Agda modules. Defaults to the agda/ directory; pass `directory` (e.g. \"src\") for src/-layout projects like agda-unimath.",
     category: "navigation",
     // Pure filesystem grep across the project — no Agda session
     // required. Surface in the unloaded list so this is reachable
@@ -49,6 +49,7 @@ export function register(
       query: z.string().optional().describe("The name or pattern to search for"),
       typePattern: z.string().optional().describe("Type-shape query (wildcard `_` supported), e.g. `_ ≤ _ + _`"),
       tier: z.string().optional().describe("Optional tier to limit search (Kernel, Foundation, etc.)"),
+      directory: z.string().optional().describe("Directory under project root to search (default: agda/). Use e.g. \"src\" for src/-layout projects like agda-unimath."),
     },
     outputDataSchema: z.object({
       text: z.string(),
@@ -66,7 +67,7 @@ export function register(
       unreadableSubtrees: z.array(z.string()),
       unreadableFiles: z.array(z.string()),
     }),
-    callback: async ({ query, typePattern, tier }: { query?: string; typePattern?: string; tier?: string }) => {
+    callback: async ({ query, typePattern, tier, directory }: { query?: string; typePattern?: string; tier?: string; directory?: string }) => {
       const mode: "name" | "type-pattern" = typePattern ? "type-pattern" : "name";
       const actualQuery = (typePattern ?? query ?? "").trim();
       if (actualQuery.length === 0) {
@@ -85,11 +86,23 @@ export function register(
           data: { query: actualQuery, tier },
         });
       }
+      // Untrusted caller override: default to "agda" for backward
+      // compatibility, but let a src/-layout project (e.g.
+      // agda-unimath) point the search at its own root. Always routed
+      // through the same resolveFileWithinRoot/resolveExistingPathWithinRoot
+      // sandbox pair as agda_project_progress — never a bare join/resolve.
+      const baseDir = directory ?? "agda";
       const requestedSearchRoot = tier
-        ? resolveFileWithinRoot(repoRoot, join("agda", tier))
-        : resolveFileWithinRoot(repoRoot, "agda");
+        ? resolveFileWithinRoot(repoRoot, join(baseDir, tier))
+        : resolveFileWithinRoot(repoRoot, baseDir);
       if (!existsSync(requestedSearchRoot)) {
-        throw missingPathToolError("directory", requestedSearchRoot);
+        const notFoundError = missingPathToolError("directory", requestedSearchRoot);
+        for (const diagnostic of notFoundError.diagnostics) {
+          if (diagnostic.code === "not-found" && diagnostic.nextAction) {
+            diagnostic.nextAction += ` For src/-layout projects (e.g. agda-unimath) pass \`directory: "src"\`.`;
+          }
+        }
+        throw notFoundError;
       }
       const searchRoot = resolveExistingPathWithinRoot(repoRoot, requestedSearchRoot);
       // Ensure version detection has run so isAgdaSourceFile() filters by the
@@ -171,9 +184,10 @@ export function register(
       let output: string;
       const capped = matches.slice(0, 50);
       if (matches.length === 0) {
+        const displayRoot = tier ?? `${baseDir}/`;
         output = mode === "name"
-          ? `No matches for "${actualQuery}" in ${tier ?? "agda/"}`
-          : `No type-pattern matches for "${actualQuery}" in ${tier ?? "agda/"}`;
+          ? `No matches for "${actualQuery}" in ${displayRoot}`
+          : `No type-pattern matches for "${actualQuery}" in ${displayRoot}`;
       } else {
         output = `## Search (${mode}): "${actualQuery}" (${matches.length} matches${matches.length > 50 ? ", showing first 50" : ""})\n\n`;
         for (const m of capped) output += `- **${m.file}:${m.line}** \`${m.text}\`\n`;

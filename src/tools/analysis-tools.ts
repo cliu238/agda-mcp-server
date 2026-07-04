@@ -77,8 +77,10 @@ export function register(
         output += `### Constraints\n\n\`\`\`\n${constraints.text}\n\`\`\`\n`;
       }
 
-      if (metas.goals.length === 0) {
+      if (metas.goals.length === 0 && !constraints.text) {
         output += "All goals solved.\n";
+      } else if (metas.goals.length === 0 && constraints.text) {
+        output += "No visible goals, but constraints remain — the file is NOT confirmed complete. See the Constraints section above.\n";
       }
 
       return {

@@ -292,6 +292,113 @@ test("agda_search_definitions skips symlinked files that resolve outside the pro
   }
 });
 
+// ── agda_search_definitions directory parameter ────────────────
+//
+// Fingerprint eb7439cb3ed9d6b9: search-definitions hardcoded its
+// search root to <PROJECT_ROOT>/agda/, so a src/-layout project
+// (agda-unimath's real layout) was unsearchable. These tests cover
+// the new optional, sandboxed `directory` override.
+
+test("agda_search_definitions searches a caller-supplied directory for src/-layout projects", async () => {
+  clearToolManifest();
+  const sandbox = mkdtempSync(join(tmpdir(), "agda-mcp-search-definitions-directory-"));
+  try {
+    const srcDir = join(sandbox, "src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(
+      join(srcDir, "Target.agda"),
+      "module Target where\n\ndata TargetDatatype : Set where\n\ndefinitelyUniqueSymbolXyz : TargetDatatype\ndefinitelyUniqueSymbolXyz = {!!}\n",
+    );
+
+    const server = createCapturingServer();
+    registerFileTools(server as unknown as McpServer, { getAgdaVersion: () => null } as any, sandbox);
+
+    // Today (pre-fix) this call has no way to reach src/ and returns
+    // a not-found error; it must succeed once `directory` is honored.
+    const result = await server.get("agda_search_definitions")!.callback({
+      query: "definitelyUniqueSymbolXyz",
+      directory: "src",
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent.data.matchCount).toBeGreaterThanOrEqual(1);
+    expect(result.content[0].text).toMatch(/src\/Target\.agda/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test("agda_search_definitions still defaults to agda/ when directory is omitted", async () => {
+  clearToolManifest();
+  const sandbox = mkdtempSync(join(tmpdir(), "agda-mcp-search-definitions-default-"));
+  try {
+    const agdaDir = join(sandbox, "agda");
+    mkdirSync(agdaDir, { recursive: true });
+    writeFileSync(
+      join(agdaDir, "Target.agda"),
+      "module Target where\n\ndata TargetDatatype : Set where\n\ndefinitelyUniqueSymbolXyz : TargetDatatype\ndefinitelyUniqueSymbolXyz = {!!}\n",
+    );
+
+    const server = createCapturingServer();
+    registerFileTools(server as unknown as McpServer, { getAgdaVersion: () => null } as any, sandbox);
+
+    const result = await server.get("agda_search_definitions")!.callback({
+      query: "definitelyUniqueSymbolXyz",
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent.data.matchCount).toBeGreaterThanOrEqual(1);
+    expect(result.content[0].text).toMatch(/agda\/Target\.agda/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test("agda_search_definitions rejects a directory parameter that escapes the project root", async () => {
+  clearToolManifest();
+  const sandbox = mkdtempSync(join(tmpdir(), "agda-mcp-search-definitions-escape-"));
+  try {
+    const repoRoot = join(sandbox, "repo");
+    mkdirSync(repoRoot, { recursive: true });
+
+    const server = createCapturingServer();
+    registerFileTools(server as unknown as McpServer, { getAgdaVersion: () => null } as any, repoRoot);
+
+    const result = await server.get("agda_search_definitions")!.callback({
+      query: "x",
+      directory: "../../outside",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent.classification).toBe("invalid-path");
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test("agda_search_definitions not-found guidance names the directory parameter", async () => {
+  clearToolManifest();
+  const sandbox = mkdtempSync(join(tmpdir(), "agda-mcp-search-definitions-not-found-"));
+  try {
+    // No agda/ directory exists under this root at all.
+    const server = createCapturingServer();
+    registerFileTools(server as unknown as McpServer, { getAgdaVersion: () => null } as any, sandbox);
+
+    const result = await server.get("agda_search_definitions")!.callback({ query: "x" });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent.classification).toBe("not-found");
+    const nextActions = result.structuredContent.diagnostics
+      .map((d: { nextAction?: string }) => d.nextAction ?? "")
+      .join(" ");
+    // Specific to the new `directory` parameter, not just the
+    // pre-existing generic "confirm the directory exists" wording.
+    expect(nextActions).toContain('directory: "src"');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
 test("agda_check_postulates uses canonical relative path for symlinked repo roots", async (ctx) => {
   clearToolManifest();
   const fixture = ensureRepoSymlink(ctx);
