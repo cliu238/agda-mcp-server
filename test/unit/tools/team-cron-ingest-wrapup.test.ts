@@ -593,6 +593,37 @@ test("processArchive: a NON-colliding (brand-new fingerprint) filing is unaffect
   expect(newEntry.status).toBe("new");
 });
 
+// ── processArchive: WR-01 (stable capturePath/verdictPath) ───────────
+
+test("processArchive: a filed capture persists a STABLE <archivePath>::captures/<basename> capturePath/verdictPath, never the ephemeral scratchDir path that extracted.cleanup() unlinks (WR-01, from-RED)", async () => {
+  const queueJsonPath = throwawayQueuePath();
+  const scratchDir = buildFakeScratchDir({
+    stagedPaths: ["/uploader/only/staged/my-capture.json"],
+    artifacts: { "my-capture.json": baseArtifact({ fingerprint: "wr01-fp" }) },
+  });
+  const extractFn = fakeExtractOk(scratchDir);
+  const archivePath = makeArchiveFile();
+
+  const result = await processArchive(
+    { archivePath },
+    {
+      queueJsonPath,
+      flakyLogPath: throwawayFlakyLogPath(),
+      deps: { extractArchiveSafely: extractFn, runOracle: fakeCheatFlaggedRunOracle() },
+    },
+  );
+
+  expect(result.results[0].filed).toBe(true);
+  const queueAfter = JSON.parse(readFileSync(queueJsonPath, "utf8"));
+  const entry = queueAfter.find((e: { fingerprint: string }) => e.fingerprint === "wr01-fp");
+  expect(entry.capturePath).toBe(`${archivePath}::captures/my-capture.json`);
+  expect(entry.verdictPath).toBe(`${archivePath}::captures/my-capture.verdict.json`);
+  // The scratchDir is deleted by extracted.cleanup() before processArchive
+  // returns — a persisted path pointing into it would already be dangling.
+  expect(entry.capturePath).not.toContain(scratchDir);
+  expect(existsSync(scratchDir)).toBe(false);
+});
+
 // ── processArchive: CR-02 (malformed run-report.json) ─────────────────
 
 test("processArchive: a malformed run-report.json is marked processed as a terminal failure instead of throwing — never re-processed on the next tick (CR-02, from-RED)", async () => {

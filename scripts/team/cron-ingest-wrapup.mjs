@@ -142,54 +142,72 @@ export function resolveCronPolicyKey(taskManifestCorpora) {
 // ── wrapCronUpsertQueueEntry ────────────────────────────────────────────
 
 /**
- * CR-01: wraps the real upsertQueueEntry for the ONE call site this
- * exposes to wrapUpCapture's own internal filing path (threaded in via
- * config.deps when processArchive calls wrapUpFn, below — this wrapper
- * is NEVER applied to dogfood-wrapup.mjs's own shared local CLI
+ * CR-01 + WR-01: wraps the real upsertQueueEntry for the ONE call site
+ * this exposes to wrapUpCapture's own internal filing path (threaded in
+ * via config.deps when processArchive calls wrapUpFn, below — this
+ * wrapper is NEVER applied to dogfood-wrapup.mjs's own shared local CLI
  * invocation, nor to scripts/queue/intake.mjs itself, so the local
- * human-driven wrapup path keeps its current, unattended-write-back-free
- * semantics).
+ * human-driven wrapup path keeps its current semantics unchanged).
+ * Applies two cron-path-only corrections before ever delegating to the
+ * real upsert:
  *
- * Refuses to let an automated, unattended write-back regress an existing
- * locked/rejected entry's status (or clear its closedAt/matrixEntryId)
- * via a colliding, attacker-influenced dedup.fingerprint — publicly
- * visible fingerprints like this queue's own locked flagship entry make
- * this trivially targetable by anyone holding a valid upload key. A
- * collision against a terminal entry is NEVER a silent skip and NEVER a
- * silent overwrite: it is refused with a loud stderr warning, the
- * existing entry is left untouched except for one new evidence note
- * appended to its own `notes` field (a metadata-only upsertQueueEntry
- * call, bumpRecurrence:false — the SAME annotation idiom this module
- * already uses for its version-skew note below), and
- * `conflictState.conflict` is flipped so processArchive's own
- * per-capture result records classification:"terminal-conflict" instead
- * of a genuine filing — surfaced in the run summary via
- * summarizeArchiveResults, never silently reported as `filed`. The
- * frozen fix-queue schema gains no new status value, only a free-text
- * annotation the schema already allows.
+ *  (1) WR-01: rewrites a filing candidate's capturePath/verdictPath away
+ *      from the EPHEMERAL per-run scratchDir path (already unlinked by
+ *      extracted.cleanup() by the time anyone reads the queue — the
+ *      project's own fix-queue.json fingerprint 2eb1768df88bfb07 records
+ *      a maintainer having to hand-patch exactly this once) to the
+ *      STABLE `<archivePath>::captures/<basename>` reference: the
+ *      archive's own permanent on-disk location (this function's caller
+ *      never deletes it) plus the in-archive-relative path.
+ *
+ *  (2) CR-01: refuses to let an automated, unattended write-back regress
+ *      an existing locked/rejected entry's status (or clear its
+ *      closedAt/matrixEntryId) via a colliding, attacker-influenced
+ *      dedup.fingerprint — publicly-visible fingerprints like this
+ *      queue's own locked flagship entry make this trivially targetable
+ *      by anyone holding a valid upload key. A collision against a
+ *      terminal entry is NEVER a silent skip and NEVER a silent
+ *      overwrite: it is refused with a loud stderr warning, the existing
+ *      entry is left untouched except for one new evidence note appended
+ *      to its own `notes` field (a metadata-only upsertQueueEntry call,
+ *      bumpRecurrence:false — the SAME annotation idiom this module
+ *      already uses for its version-skew note below), and
+ *      `conflictState.conflict` is flipped so processArchive's own
+ *      per-capture result records classification:"terminal-conflict"
+ *      instead of a genuine filing — surfaced in the run summary via
+ *      summarizeArchiveResults, never silently reported as `filed`. The
+ *      frozen fix-queue schema gains no new status value, only a
+ *      free-text annotation the schema already allows.
  */
-function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, conflictState }) {
+function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, stableCapturePath, stableVerdictPath, conflictState }) {
   return async (entryData, targetQueueJsonPath, options) => {
     const effectiveQueueJsonPath = targetQueueJsonPath ?? queueJsonPath;
+    // Only a FULL filing candidate carries capturePath/verdictPath (the
+    // metadata-only version-skew annotation below never does) — rewrite
+    // those two fields to the stable reference before anything else.
+    const isFilingCall = entryData.capturePath !== undefined || entryData.verdictPath !== undefined;
+    const rewritten = isFilingCall
+      ? { ...entryData, capturePath: stableCapturePath, verdictPath: stableVerdictPath }
+      : entryData;
 
-    const existing = readQueueFile(effectiveQueueJsonPath).find((entry) => entry.fingerprint === entryData.fingerprint);
+    const existing = readQueueFile(effectiveQueueJsonPath).find((entry) => entry.fingerprint === rewritten.fingerprint);
     const isTerminal = existing?.status === "locked" || existing?.status === "rejected";
-    const attemptsRegression = isTerminal && entryData.status !== undefined && entryData.status !== existing.status;
+    const attemptsRegression = isTerminal && rewritten.status !== undefined && rewritten.status !== existing.status;
 
     if (attemptsRegression) {
       process.stderr.write(
-        `cron-ingest-wrapup: SECURITY WARNING — refusing to move fix-queue entry ${entryData.fingerprint} `
-          + `(currently "${existing.status}") to status "${entryData.status}" via an unattended cron write-back; `
+        `cron-ingest-wrapup: SECURITY WARNING — refusing to move fix-queue entry ${rewritten.fingerprint} `
+          + `(currently "${existing.status}") to status "${rewritten.status}" via an unattended cron write-back; `
           + "a colliding dedup.fingerprint from an untrusted archive must never silently reopen a "
           + "locked/rejected defect. The existing entry is left unchanged; this conflict is recorded on it "
           + "and counted in the run summary instead.\n",
       );
       await realUpsertFn(
         {
-          fingerprint: entryData.fingerprint,
+          fingerprint: rewritten.fingerprint,
           notes: `${existing.notes ? `${existing.notes} ` : ""}CONFLICT ${new Date().toISOString()}: an `
-            + `unattended cron write-back (candidate capturePath ${entryData.capturePath ?? "n/a"}) attempted to `
-            + `move this "${existing.status}" entry to status "${entryData.status}" via a colliding `
+            + `unattended cron write-back (candidate capturePath ${rewritten.capturePath ?? "n/a"}) attempted to `
+            + `move this "${existing.status}" entry to status "${rewritten.status}" via a colliding `
             + "dedup.fingerprint; the attempt was refused and this entry's own status/closedAt/matrixEntryId "
             + "were left untouched.",
         },
@@ -202,7 +220,7 @@ function wrapCronUpsertQueueEntry(realUpsertFn, { queueJsonPath, conflictState }
       return { ...existing };
     }
 
-    return realUpsertFn(entryData, effectiveQueueJsonPath, options);
+    return realUpsertFn(rewritten, effectiveQueueJsonPath, options);
   };
 }
 
@@ -336,6 +354,21 @@ export async function processArchive({ archivePath }, config = {}) {
         const capturedVersion = artifact?.manifest?.serverVersion;
         const versionSkew = typeof capturedVersion === "string" && capturedVersion !== judgeVersion;
 
+        // WR-01: the STABLE reference persisted into the queue entry if
+        // this capture is filed — the archive's own permanent on-disk
+        // location (never deleted by this function's own
+        // extracted.cleanup()) plus the in-archive-relative
+        // captures/<basename> path, NEVER the ephemeral artifactPath
+        // above (which points inside a scratchDir this same function
+        // deletes before it even returns to its own caller).
+        // verdictPath mirrors buildQueueEntryFromVerdict's OWN
+        // suffix-replace formula (dogfood-wrapup.mjs) so a cron-derived
+        // entry's path pair uses the exact same naming shape as a
+        // local-wrapup-derived one, rather than a double ".json.verdict.json".
+        const stableCapturePath = `${archivePath}::captures/${basename(staged.stagedPath)}`;
+        const stableVerdictPath = stableCapturePath.endsWith(".json")
+          ? `${stableCapturePath.slice(0, -".json".length)}.verdict.json`
+          : `${stableCapturePath}.verdict.json`;
         // CR-01: flipped by wrapCronUpsertQueueEntry when this specific
         // capture's filing attempt collided with an existing
         // locked/rejected entry and was refused rather than applied.
@@ -350,6 +383,8 @@ export async function processArchive({ archivePath }, config = {}) {
             ...config.deps,
             upsertQueueEntry: wrapCronUpsertQueueEntry(config.deps?.upsertQueueEntry ?? upsertQueueEntry, {
               queueJsonPath: config.queueJsonPath,
+              stableCapturePath,
+              stableVerdictPath,
               conflictState,
             }),
           },
