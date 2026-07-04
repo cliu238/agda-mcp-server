@@ -99,7 +99,19 @@ export async function context(
   return { goalId, context: decoded.context };
 }
 
-/** Get goal, context, and checked elaborated term for an expression in a goal. */
+/**
+ * Get goal, context, and checked elaborated term for an expression in
+ * a goal.
+ *
+ * A rejected `expr` (NotInScope, UnequalTerms, ...) arrives as a
+ * normal Error DisplayInfo response, not a fatal stderr line — with no
+ * dedicated schema match, `decodeGoalDisplayResponses`'s catch-all
+ * falls back to dumping the raw error text into `goalType` while
+ * `checkedExpr` stays empty, so the caller must reject it explicitly
+ * up front instead of decoding a success shape around it (fingerprint
+ * eaea6321183bdf7b; same `info.kind === "Error"` idiom as give()'s
+ * detectResponseError(), fingerprint bfcba437f5426fd6).
+ */
 export async function goalTypeContextCheck(
   ctx: AgdaCommandContext,
   goalId: number,
@@ -109,6 +121,10 @@ export async function goalTypeContextCheck(
   const responses = await ctx.sendCommand(
     ctx.iotcm(modeGoalCommand("Cmd_goal_type_context_check", "Normalised", goalId, quoted(expr))),
   );
+  const errorText = detectResponseError(responses);
+  if (errorText !== null) {
+    throw new Error(errorText);
+  }
   const decoded = decodeGoalExpressionDisplayResponses(responses);
   return {
     goalType: decoded.goalType,
