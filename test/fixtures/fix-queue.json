@@ -326,5 +326,24 @@
     "createdAt": "2026-07-04T16:12:25.669Z",
     "closedAt": null,
     "notes": "The cron-ingest-wrapup.mjs --no-push re-judging pass's own capturePath/verdictPath pointed at its transient per-run extraction sandbox (deleted by extracted.cleanup() immediately after judging, per scripts/team/cron-ingest-wrapup.mjs's own design) -- corrected here to the STABLE, permanent uploader-side path (this same capture's original location on the maintainer's own machine, gitignored under the CHG checkout) so this queue entry keeps pointing at a real, inspectable file. Verdict JSON confirmed byte-identical between the local dogfood-wrapup.mjs run and the cron re-judging pass (both computed against the same underlying staged capture)."
+  },
+  {
+    "fingerprint": "fb57abbe7df6dfe8",
+    "status": "triaged",
+    "needsReverify": false,
+    "defectKind": "wrong-result",
+    "triageClass": null,
+    "triageConfidence": null,
+    "recurrence": 2,
+    "title": "Linux+real-Agda integration lane: 6 test files fail on ubuntu CI (pre-existing since v1.0)",
+    "summary": "With RUN_AGDA_INTEGRATION=1 on ubuntu-latest, 6 test files fail that pass on macOS: dogfood-flake-classify-live (process-error where type-error expected), capture-regression, manifest-builder, tool-registration-error-safety, session-error-gate-wiring, spawn-error-listener. Platform-behavioral deltas in real-Agda process handling, NOT introduced by v1.1 (byte-identical file list already failing on the v1.0 cleanup commit); v1.1 fixed two additional pre-existing lane failures (oracle-orcl-01, oracle-orcl-03) in passing.",
+    "affectedTool": "agda_load",
+    "capturePath": null,
+    "verdictPath": null,
+    "matrixEntryId": null,
+    "relatedFingerprint": [],
+    "createdAt": "2026-07-04T22:30:00.000Z",
+    "closedAt": null,
+    "notes": "DEFERRED (v1.1): pre-existing Linux-lane debt inherited from v1.0, surfaced when the v1.1 push re-ran CI on origin. Evidence: run 28638480726 (2026-07-03, head=v1.0 cleanup commit, same 6 files failing) vs run 28721087256 (2026-07-04, v1.1 head). Out of v1.1 scope: Phase 8 is thin packaging (no new app logic) and Phase 9's P2 checklist never included this lane. DEPLOY-01 relevance: the cluster judge runs on Linux — Phase 8's cluster POLICY-01 re-verify must treat these 6 known deltas as pre-existing context, not new findings. Fix belongs to the next milestone's queue review (QUEUE-02 priority order)."
   }
 ]
