@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
 stopped_at: Phase 8 context gathered
-last_updated: "2026-07-04T19:35:54.768Z"
-last_activity: 2026-07-04 -- Phase 9 planning complete
+last_updated: "2026-07-04T19:36:11.729Z"
+last_activity: 2026-07-04 -- Phase 9 execution started
 progress:
   total_phases: 4
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Every real proof session reliably converts into a stronger server — the closed loop (use it → surface a defect → capture it → fix and lock it with a regression test → use it again) must work reproducibly by hand.
-**Current focus:** Phase 08 — pinned environment distribution thin k8s deployment
+**Current focus:** Phase 9 — Residual v1.0 Debt Sweep
 
 ## Current Position
 
-Phase: 08
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-04 -- Phase 9 planning complete
+Phase: 9 (Residual v1.0 Debt Sweep) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 9
+Last activity: 2026-07-04 -- Phase 9 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
