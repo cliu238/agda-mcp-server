@@ -84,12 +84,14 @@ test("extractArchiveSafely: a REAL crafted tar containing a literal ../ entry is
 
   const archiveDir = makeTempDir("agda-mcp-archive-extract-traversal-archive-");
   const archivePath = join(archiveDir, "evil.tar.gz");
-  // The exact recipe that produces a raw "../secret.txt" entry name:
-  // tar -C <childDir> -czf <archive> ../secret.txt — empirically
-  // verified on this repo's own tar (bsdtar/libarchive and GNU tar
-  // both preserve a relative ".." segment verbatim in the stored
-  // entry name; only a leading "/" absolute path is special-cased).
-  execFileSync("tar", ["-C", childDir, "-czf", archivePath, "../secret.txt"], { shell: false });
+  // The exact recipe that produces a raw "../secret.txt" entry name.
+  // -P is REQUIRED for a portable fixture: GNU tar (ubuntu CI, the
+  // cluster) strips leading "../" from member names at CREATE time
+  // (bsdtar preserves them), so without -P the crafted archive is
+  // silently defused on Linux and this test degenerates into listing a
+  // benign archive (caught live: CI-only failure 2026-07-04, run
+  // 28720847891).
+  execFileSync("tar", ["-C", childDir, "-c", "-z", "-P", "-f", archivePath, "../secret.txt"], { shell: false });
 
   const execFileSpy = vi.fn((...args: Parameters<typeof execFileSync>) => (execFileSync as any)(...args));
   const spawnSpy = vi.fn();

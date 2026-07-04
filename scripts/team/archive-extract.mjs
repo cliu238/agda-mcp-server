@@ -235,7 +235,16 @@ export async function extractArchiveSafely(archivePath, options = {}) {
   // offending entry, before any extraction is ever attempted.
   let listing;
   try {
-    listing = execFile("tar", ["-tf", archivePath], {
+    // -P on the LIST call only (NEVER on extraction): GNU tar otherwise
+    // TRANSFORMS displayed member names — a stored "../secret.txt" is
+    // shown as "secret.txt" (with only a stderr warning), making the
+    // name check below blind to traversal entries on Linux (the exact
+    // platform the cluster judge runs on). With -P both GNU tar and
+    // bsdtar print the raw stored name, so the check behaves
+    // identically cross-platform. Listing with -P writes nothing to
+    // disk; extraction below deliberately still omits -P so tar's own
+    // strip-on-extract remains an independent second layer.
+    listing = execFile("tar", ["-t", "-P", "-f", archivePath], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
@@ -289,7 +298,7 @@ export async function extractArchiveSafely(archivePath, options = {}) {
   // risk against real dogfooding uploads.
   let verboseListing;
   try {
-    verboseListing = execFile("tar", ["-tvf", archivePath], {
+    verboseListing = execFile("tar", ["-t", "-v", "-P", "-f", archivePath], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
