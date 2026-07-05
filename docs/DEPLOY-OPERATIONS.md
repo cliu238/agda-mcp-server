@@ -31,7 +31,12 @@ Two distinct access paths exist — do not conflate them:
 Both cluster secrets below live in the `llm-gateway` namespace and are synced
 imperatively (never `kubectl edit`'d directly, never committed to a manifest —
 see `k8s/team-keys-secret.yaml.template` for why). Re-running either sync
-command is safe (idempotent `--dry-run=client -o yaml | kubectl apply -f -`).
+command is safe: both end in an idempotent `kubectl apply -f -`.
+
+Both recipes run their `kubectl` on `k8slgn`, a **shared multi-user login
+node** — so neither may stage secret material on its filesystem at a
+predictable path, nor place secret values in remote command argv (visible
+to every local user via `ps` for the command's duration).
 
 ### `agda-mcp-ghcr` (GHCR image pull secret)
 
@@ -57,22 +62,48 @@ pulls; `repo` scope does not cover package pulls). To rotate:
      https://ghcr.io/v2/cliu238/agda-mcp-server/manifests/latest
    ```
 
-3. Run the one-shot script pattern from SKILL.md's "Cluster Access" section,
-   interpolating the token value into the remote step when writing the script
-   (never echo it):
+3. Build the secret payload **locally** and ship only sealed YAML to the
+   cluster. `kubectl create secret docker-registry` has no `--from-file`
+   form for the password, so running it on `k8slgn` would put the PAT in
+   the remote command's argv — visible in `ps` to every user on that
+   shared host (CWE-214). Instead, construct the `.dockerconfigjson`
+   payload on the local (single-user) machine with plain `printf`/`base64`
+   — no local `kubectl` needed:
 
    ```bash
-   kubectl create secret docker-registry agda-mcp-ghcr \
-     --namespace=llm-gateway \
-     --docker-server=ghcr.io \
-     --docker-username=cliu238 \
-     --docker-password="<token value>" \
-     --dry-run=client -o yaml | kubectl apply -f -
+   umask 077   # in case anything below is redirected to a scratch file
+   TOKEN=$(tr -d '\n' < ~/.agda-mcp-ghcr-token)
+   DCJ=$(printf '{"auths":{"ghcr.io":{"username":"cliu238","password":"%s","auth":"%s"}}}' \
+     "$TOKEN" "$(printf 'cliu238:%s' "$TOKEN" | base64 | tr -d '\n')" | base64 | tr -d '\n')
    ```
+
+   Then run the one-shot script pattern from SKILL.md's "Cluster Access"
+   section, interpolating **only `$DCJ`** (the base64 blob — never the raw
+   token) into the remote step when writing the script. The manifest
+   reaches `kubectl` on `k8slgn` via stdin, so nothing secret ever appears
+   in remote argv:
+
+   ```bash
+   kubectl apply -f - <<YAML
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: agda-mcp-ghcr
+     namespace: llm-gateway
+   type: kubernetes.io/dockerconfigjson
+   data:
+     .dockerconfigjson: ${DCJ}
+   YAML
+   ```
+
+   This is equivalent to what `kubectl create secret docker-registry ...
+   --dry-run=client -o yaml` generates, and `kubectl apply` keeps the sync
+   idempotent. Treat `$DCJ` itself as the secret — it base64-decodes to
+   the PAT. Do not paste it anywhere except the remote step.
 
 4. Delete `~/.agda-mcp-ghcr-token` once the rollout pulls successfully.
 
-Never echo the token value in any script output — only the resulting
+Never echo the raw token value in any script output — only the resulting
 `secret/agda-mcp-ghcr configured` confirmation line should ever be printed.
 
 ### `agda-mcp-team-keys` (team upload Bearer-key registry)
@@ -92,18 +123,25 @@ Adding or revoking a teammate's key is a two-step local-then-sync flow:
    capture it immediately and hand it to the teammate out-of-band; it is
    never written to disk anywhere.
 
-2. **Sync to the cluster**, via the same one-shot script pattern:
+2. **Sync to the cluster**, via the same one-shot script pattern. No
+   staging file on `k8slgn` at all: a fixed, default-umask `/tmp` path on
+   a shared host is world-readable and pre-creatable/symlinkable by any
+   local user (CWE-377), so the decoded registry flows pipe-to-stdin
+   end to end instead:
 
    ```bash
    base64 -i scripts/team/data/team-keys.json | tr -d '\n'
    # embed the resulting single-line blob in the remote step:
-   echo '<base64 blob>' | base64 -d > /tmp/agda-mcp-team-keys.json.sync
-   kubectl create secret generic agda-mcp-team-keys \
+   echo '<base64 blob>' | base64 -d | kubectl create secret generic agda-mcp-team-keys \
      --namespace=llm-gateway \
-     --from-file=team-keys.json=/tmp/agda-mcp-team-keys.json.sync \
+     --from-file=team-keys.json=/dev/stdin \
      --dry-run=client -o yaml | kubectl apply -f -
-   rm -f /tmp/agda-mcp-team-keys.json.sync
    ```
+
+   If a future recipe ever must stage secret-bearing bytes in a file on a
+   shared host, use `umask 077` plus a `mktemp`-generated name (0600,
+   unpredictable, symlink-safe) and remove it in the same script — never
+   a fixed `/tmp/<name>` path.
 
    `readKeyRegistry` (`scripts/team/issue-key.mjs`) always re-reads from disk
    on every request, so a Secret-volume update propagates to the ingest
