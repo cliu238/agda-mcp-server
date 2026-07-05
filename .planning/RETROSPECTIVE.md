@@ -47,6 +47,51 @@
 
 ---
 
+## Milestone: v1.1 — Feed the Loop
+
+**Shipped:** 2026-07-05
+**Phases:** 4 (6–9) | **Plans:** 24 | **Timeline:** ~2 days (2026-07-03 → 2026-07-05), single autonomous `/gsd-autonomous` run spanning multiple context windows
+
+### What Was Built
+- Backlog digested to zero stalled entries: all 8 `needsReverify` CHG defects re-verified live to definitive verdicts; 8 confirmed defects locked with from-RED regressions; POLICY-01 case-exact loud-fail policy resolution closed v1.0's W2 headline debt.
+- Team feedback channel, local-first then cluster: hash-only revocable Bearer keys, fail-open upload with bounded retry queue, streamed-cap ingest endpoint, two-layer-sandboxed unattended cron judge — one code path for both environments.
+- E2E-01 at its strongest form: a live Codex session on the pinned CHG corpus surfaced a real defect (`0bc76d15c2fec8df`) that flowed capture → upload → ingest → judge → queue → fix → lock, zero fixture shortcuts.
+- Thin k8s deployment on the JHU IDIES cluster: digest-pinned 2-stage image (cabal-built Agda 2.8.0), auto-deploy-on-main CI/CD with a D-10 uncredentialed-build proof job, live public healthz, daily cron judge on the Ceph PVC, POLICY-01 re-proven 6/6 in-pod.
+- Pinned-environment onboarding (git install, latest-tag pin, no npm) with a genuinely-executed fresh-teammate walkthrough test; v1.0's whole P2 debt list swept.
+
+### What Worked
+- **Local-first, cluster-as-thin-step paid off exactly as designed** — the cluster leg reused Phase 7's scripts verbatim (config-only differences), so 4 of the 6 deploy plans were pure packaging; the integration audit found zero cluster-only code forks.
+- **The 4-attempt first deploy was the loop's own philosophy applied to ops**: each failed attempt surfaced a distinct real defect (false-green remote-clone deploy, shared-pull-secret 403, SSH idle-timeout, D-10 asserts grepping swallowed output, stdio-CMD CrashLoop, PVC subPath ACL ownership, quota-on-init, PSA-forbids-root) — all captured into the deploy skill + runbook as durable lessons, not tribal memory.
+- **Direct kubectl apply for fix validation before pushing** shortened the debug cycle from ~30-min CI rebuilds to ~2-min cluster round-trips; push only after live-validated.
+- **The review chain's capped 3-iteration loop earned its budget again**: 1 Critical + 11 Warnings found → all fixed → re-review verified all 12 AND caught a genuine regression the fixes introduced (WR-12 SSH-origin clobber) → final pass fixed it with cohort regression tests.
+- **Checkpoint-handoff discipline across context windows** (.continue-here.md with exact run IDs, postmortems, pending user actions) made the multi-window autonomous run resumable with near-zero re-derivation.
+
+### What Was Inefficient
+- **The installer's false-green (CR-01) shipped in the v1.1 tag** — the review chain ran after the tag was cut, so the fix lives only in later commits and the latest-tag-pinning installer serves the pre-fix tree until v1.1.1 is tagged. Lesson: run the review chain BEFORE cutting a distribution-pinned tag, or treat the tag as the review gate's output.
+- **Plan-spec impossibilities discovered only at execution**: the fine-grained-PAT spec (T-08-15) is platform-impossible for cross-owner private repos, and litellm's `gh auth token` pull-secret recipe can't read our package — both cost a blocked round-trip with the user. Verify credential-model assumptions during planning research, not first deploy.
+- **The D-10 job's original asserts grepped for output that could never appear** (git's "Cloning into" swallowed by `stdio:"pipe"`) — an assertion written against imagined rather than observed output; it masked nothing but stayed red across two runs.
+- Deploy defects clustered in the "never exercised until now" seams (fresh-teammate path, exists-branch re-runs, first PVC write) — exactly where the phase's own live acceptance couldn't reach; the review chain was the right backstop there.
+
+### Patterns Established
+- **Dedicated per-app cluster credentials** (`agda-mcp-ghcr`): never share/overwrite another app's secret — verified mutual 403s make the blast radius concrete.
+- **Every k8s workload on a stdio-server image must override `command:`** — image CMD is a footgun when the default entrypoint is an MCP stdio server.
+- **`pvc-dirs` initContainer pattern** for ACL-enabled CephFS under restricted PSA: pre-create uid-owned trees before subPath resolution; any new subPath goes under a pre-created parent.
+- **Assert a script's own observable contract, not its subprocesses' output** (D-10 job greps the clone script's summary lines, not git's).
+- **Ops lessons land in the skill file the moment they're learned** — the deploy skill's "First-deploy lessons" section was written mid-incident, so the next session (or agent) can't re-lose them.
+
+### Key Lessons
+1. A distribution tag is a release gate: everything the installer will serve must be inside the tag, so the review/fix chain belongs before the tag, not after.
+2. Live acceptance proves the happy path; adversarial review finds the paths acceptance can't reach (fresh machines, re-runs, interrupted states). Both are load-bearing; neither substitutes for the other.
+3. Cluster admission surfaces (PSA, ResourceQuota-on-init, ACL masks vs fsGroup) fail at pod-create time with evidence only in `describe rs/job` events — a stalled `rollout status` is the symptom, never the diagnosis.
+4. Fixes can regress cohorts the original bug never touched (WR-12: hardening for token hygiene broke SSH-auth teammates) — re-review after fixing is not optional ceremony.
+
+### Cost Observations
+- Model mix: fable orchestrator + per-agent-config executors/reviewers/verifier (profile `quality`).
+- The Phase-8 endgame (review → fix → re-review → WR-12 fix → verify → integration audit) used 6 subagents ≈ 900k subagent tokens; it converted 1 Critical + 12 Warnings into fixes with tests and caught 1 fix-introduced regression — again roughly the cost of one deploy-cycle's debugging, for strictly higher-confidence output.
+- Notable: background `gh run watch` + cache-aware sleep intervals kept the ~30-min deploy cycles from blocking foreground orchestration.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -54,8 +99,11 @@
 | Milestone | Phases | Plans | Timeline | Verification | Notable process change |
 |-----------|--------|-------|----------|--------------|------------------------|
 | v1.0 | 6 | 26 | ~2 days | 6/6 passed; audit tech_debt (19/19 reqs) | First milestone; established capture→judge→file→fix→lock loop and MVP+wave-parallel execution |
+| v1.1 | 4 | 24 | ~2 days | 4/4 passed; audit tech_debt (17/17 reqs, 5/5 seams) | Single autonomous run across context windows with checkpoint handoffs; live-cluster debugging via direct kubectl before push; integration-checker added at milestone audit |
 
 ### Recurring Themes
 
-- False-green elimination is the project's center of gravity — it shaped the oracle design, the regression-test philosophy, and the flake gate. Watch that new features keep passing through that lens.
+- False-green elimination is the project's center of gravity — it shaped the oracle design, the regression-test philosophy, the flake gate, and now the deploy pipeline itself (attempt 1's false-green deploy job, the D-10 assert rewrite, CR-01's installer false-green). Watch that new features keep passing through that lens.
 - Artifact hygiene (summaries' frontmatter, verification statuses, superseded plans) drifts under autonomous execution; the milestone audit is the backstop — consider tightening per-phase closeout instead.
+- Both milestones' review chains found real defects the execution-time acceptance could not reach, and both needed the re-review pass to catch a fix-introduced regression. The 3-iteration capped loop is earning permanent-fixture status.
+- Sequencing debt: v1.0 left gap plans dangling until audit; v1.1 cut its distribution tag before the review chain. Same shape — a closeout artifact produced before the last quality gate ran. Next milestone: order the gates explicitly in the phase plan.
