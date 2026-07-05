@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Upstream Reconcile
 status: planning
-last_updated: "2026-07-05T16:52:12.571Z"
+last_updated: "2026-07-05T18:30:00.000Z"
 last_activity: 2026-07-05
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,15 +19,17 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-07-03)
 
-**Core value:** Every real proof session reliably converts into a stronger server — the closed loop (use it → surface a defect → capture it → fix and lock it with a regression test → use it again) must work reproducibly by hand.
-**Current focus:** Phase 09 — residual v1 0 debt sweep
+**Core value:** Every real proof session reliably converts into a stronger server — and upstream divergence must stop accumulating so that loop keeps compounding on a reconciled base.
+**Current focus:** Phase 10 — Upstream Merge & Test-Suite Reconciliation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-05 — Milestone v1.2 started
+Phase: 10 of 13 (Upstream Merge & Test-Suite Reconciliation)
+Plan: — (not yet planned)
+Status: Roadmap created — ready to plan Phase 10
+Last activity: 2026-07-05 — ROADMAP.md created (Phases 10-13, 11/11 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -64,6 +66,7 @@ Last activity: 2026-07-05 — Milestone v1.2 started
 
 ### Roadmap Evolution
 
+- v1.2 roadmap created 2026-07-05: Phases 10–13 (continuing numbering from v1.1's Phase 9), covering all 11 v1.2 requirements — Upstream Merge & Test-Suite Reconciliation (10, MERGE-01/02) → Load-Terminus Semantic Adjudication (11, MERGE-03) → Feature Adoption & Post-Merge Acceptance (12, ADOPT-01/02 + ACCEPT-01/02/03) → Auto-Sync Productionization (13, SYNC-01/02/03). Hard ordering constraint honored: Phases 10–12 (one-time reconcile) must complete before Phase 13 (recurring sync) is armed.
 - v1.1 roadmap created 2026-07-03 and reworked the same day after the CACHE theme was deleted by consumer audit: Phases 6–9 (continuing numbering from v1.0's Phase 5 + 03.1), covering all 17 v1.1 requirements — Backlog Digestion (6) → Team Feedback Channel Local Wiring incl. the live-CHG full-loop E2E-01 acceptance (7) → Pinned-Env + Thin k8s Deploy (8, gated ~2026-07-07) → Residual Debt Sweep (9, independent, can fill the server-wait gap).
 - Phase 03.1 inserted after Phase 3 (v1.0): Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (sequenced by 03-CONTEXT D-09) (URGENT)
 
@@ -105,6 +108,7 @@ None yet.
 | 260705-79k | Upstream auto-sync: bounded-autonomy skill shipped (ed20063); cloud probe/routine BLOCKED by claude.ai org GitHub-sync gate — deferred with re-arm path; interim carrier = local headless | 2026-07-05 | ed20063 | [260705-79k-upstream-auto-sync-via-scheduled-cloud-r](./quick/260705-79k-upstream-auto-sync-via-scheduled-cloud-r/) |
 | 260705-gn0 | Rewrite README.md for end users: why this fork exists, how to use, how to develop (615 → 104 lines, upstream-marketing content deleted, canonical docs linked) | 2026-07-05 | 5b09997 | [260705-gn0-rewrite-readme-md-for-end-users-why-this](./quick/260705-gn0-rewrite-readme-md-for-end-users-why-this/) |
 | 260705-h78 | Fix README CI regression (extensions-catalog link), add Codex `codex mcp add` config, split user (Agda 2.6.4.3–2.9.0, no corpora) vs team (pinned-env) install paths, simplify TEAM-ONBOARDING (199 → 92 lines, TL;DR fast path, live-endpoint fact) | 2026-07-05 | 5a6eedd | [260705-h78-fix-readme-ci-regression-add-codex-clien](./quick/260705-h78-fix-readme-ci-regression-add-codex-clien/) |
+| 260705-hu3 | Team-facing HTML explainer docs/team-intro.html (433 lines, self-contained, light/dark): Loop ② stage-by-stage with oracle-triad box, team feedback channel pipeline + privacy callout, plain-user vs team-member comparison table | 2026-07-05 | 18016f5 | [260705-hu3-team-facing-html-explainer-self-improvem](./quick/260705-hu3-team-facing-html-explainer-self-improvem/) |
 
 ## Deferred Items
 
@@ -117,10 +121,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-07-05 (active)
-Stopped at: quick 260705-79k closed — upstream-sync skill shipped; cloud routine org-blocked (GitHub sync unavailable for JHU DSAI Engineering org), local-headless is the interim carrier
+Stopped at: v1.2 ROADMAP.md created (Phases 10-13, 11/11 requirements mapped, coverage validated) — REQUIREMENTS.md traceability updated
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone — carried theme: upstream reconcile phase (2-3 plans, guarded-seam ①load-terminus裁决) THEN auto-sync productionization (launchd headless carrier + GSD-native bookkeeping; cloud routine re-arm if org enables GitHub sync)
-- Optional unblock: ask the claude.ai org admin (JHU DSAI Engineering) to enable GitHub sync; then re-run the 260705-79k Task 2 probe verbatim
+- Approve the v1.2 roadmap, then run /gsd:plan-phase 10 (Upstream Merge & Test-Suite Reconciliation)
+- Remember the hard ordering constraint: do not plan/execute Phase 13 (auto-sync) until Phases 10-12 (the one-time reconcile) are fully complete
+- Optional unblock (unrelated to sequencing): ask the claude.ai org admin (JHU DSAI Engineering) to enable GitHub sync; then re-run the 260705-79k Task 2 probe verbatim
