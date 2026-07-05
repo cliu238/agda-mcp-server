@@ -87,8 +87,13 @@ function resolveCloneUrl(entry, deps, token) {
  * Clone (or update, if already present) one `{key, repo, access,
  * pinnedRef}` fuel-corpus entry into `<destRoot>/<entry.key>`.
  *
- * - Already cloned (destDir exists): `git fetch origin <pinnedRef>`
- *   (idempotent re-run — never re-clones from scratch).
+ * - Already cloned (destDir exists): first re-asserts the clean
+ *   (token-free) origin URL — a prior run interrupted between `git
+ *   clone` and the T-08-02 scrub leaves a token-bearing origin in
+ *   .git/config forever otherwise — then fetches `pinnedRef` from an
+ *   EXPLICIT URL (credentialed for private corpora when a token is
+ *   available; fetching by URL never touches .git/config). Idempotent
+ *   re-run — never re-clones from scratch.
  * - Public, fresh: `git clone https://github.com/<repo>.git destDir`.
  * - Private, fresh, credentialed (GH_TOKEN/GITHUB_TOKEN/deps.ghToken):
  *   clone via an embedded x-access-token URL, then IMMEDIATELY scrub
@@ -116,16 +121,50 @@ function resolveCloneUrl(entry, deps, token) {
 export function cloneFuelCorpus(entry, destRoot, deps = {}) {
   const execFile = deps.execFileSync ?? execFileSync;
   const destDir = join(destRoot, entry.key);
-  const gitOpts = { stdio: "pipe", shell: false };
+  // GIT_TERMINAL_PROMPT=0 on every git/gh invocation: a credential-less
+  // private fetch/clone must fail fast, never hang on an interactive
+  // username/password prompt — git prompts on /dev/tty directly, which
+  // stdio:"pipe" does NOT suppress.
+  const gitOpts = {
+    stdio: "pipe",
+    shell: false,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  };
+  // Hoisted to function scope: the exists-branch fetch and the
+  // catch-block error scrub both need it. Only private entries ever
+  // resolve a token.
+  const token =
+    entry.access === "public"
+      ? null
+      : (deps.ghToken ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? null);
 
   try {
     if (existsSync(destDir)) {
-      execFile("git", ["-C", destDir, "fetch", "origin", entry.pinnedRef], gitOpts);
+      // Re-scrub defensively before anything else: a prior run
+      // interrupted between `git clone <token-url>` and the T-08-02
+      // set-url scrub persists the token in destDir/.git/config, and
+      // this exists-branch is the only path a re-run ever takes — an
+      // idempotent one-subprocess re-assert closes that crash hole.
+      execFile(
+        "git",
+        ["-C", destDir, "remote", "set-url", "origin", resolveCloneUrl(entry, deps, null)],
+        gitOpts,
+      );
+      // Fetch via an EXPLICIT URL — credentialed for private corpora
+      // when a token is available. `git fetch origin` against the
+      // scrubbed clean URL has no credential mechanism at all (git
+      // never reads GH_TOKEN), so a private-corpus re-run or pinnedRef
+      // bump could otherwise never fetch. Fetching by URL leaves
+      // .git/config untouched, so the token still never persists.
+      execFile(
+        "git",
+        ["-C", destDir, "fetch", resolveCloneUrl(entry, deps, token), entry.pinnedRef],
+        gitOpts,
+      );
     } else if (entry.access === "public") {
       const url = resolveCloneUrl(entry, deps, null);
       execFile("git", ["clone", url, destDir], gitOpts);
     } else {
-      const token = deps.ghToken ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
       if (token) {
         const url = resolveCloneUrl(entry, deps, token);
         execFile("git", ["clone", url, destDir], gitOpts);
@@ -156,12 +195,15 @@ export function cloneFuelCorpus(entry, destRoot, deps = {}) {
 
     return { ok: true, key: entry.key, destDir };
   } catch (error) {
-    return {
-      ok: false,
-      key: entry.key,
-      reason: "clone-failed",
-      error: error instanceof Error ? error.message : String(error),
-    };
+    // Never store the raw credential: execFileSync failures embed the
+    // full argv in error.message ("Command failed: git clone
+    // https://x-access-token:<token>@github.com/..."), and this string
+    // is returned to callers — one console.log away from a log leak.
+    let message = error instanceof Error ? error.message : String(error);
+    if (token) {
+      message = message.split(token).join("***");
+    }
+    return { ok: false, key: entry.key, reason: "clone-failed", error: message };
   }
 }
 

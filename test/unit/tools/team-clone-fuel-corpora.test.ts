@@ -11,7 +11,7 @@
 
 import { afterEach, expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -237,6 +237,122 @@ test("a credentialed private clone scrubs the embedded token from origin immedia
   expect(config.includes("x-access-token")).toBe(false);
   expect(config.includes("fake-token-value")).toBe(false);
   expect(config.includes("https://github.com/example/private-corpus.git")).toBe(true);
+});
+
+// ── re-run token hygiene: WR-01 re-scrub, WR-03 credentialed fetch ───────
+
+test("a re-run against an existing clone re-scrubs a token-bearing origin left by an interrupted prior run (WR-01)", () => {
+  const { bareRepoPath, pinnedRef } = createBareFixtureRepo();
+  const destRoot = makeTempDir("agda-mcp-fuel-dest-");
+  const entry = { key: "fixture-corpus", repo: "example/fixture-corpus", access: "public", pinnedRef };
+
+  const first = cloneFuelCorpus(entry, destRoot, { cloneUrl: () => bareRepoPath });
+  expect(first.ok).toBe(true);
+  const destDir = join(destRoot, "fixture-corpus");
+
+  // Simulate a prior run killed between `git clone <token-url>` and the
+  // T-08-02 set-url scrub: the token-bearing URL persists as origin.
+  execFileSync(
+    "git",
+    [
+      "-C",
+      destDir,
+      "remote",
+      "set-url",
+      "origin",
+      "https://x-access-token:leaked-token@github.com/example/fixture-corpus.git",
+    ],
+    GIT_OPTS,
+  );
+
+  const second = cloneFuelCorpus(entry, destRoot, { cloneUrl: () => bareRepoPath });
+
+  expect(second.ok).toBe(true);
+  const config = readFileSync(join(destDir, ".git", "config"), "utf8");
+  expect(config.includes("x-access-token")).toBe(false);
+  expect(config.includes("leaked-token")).toBe(false);
+});
+
+test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_TERMINAL_PROMPT=0, origin stays clean (WR-03)", () => {
+  const destRoot = makeTempDir("agda-mcp-fuel-dest-");
+  const destDir = join(destRoot, "private-corpus");
+  mkdirSync(destDir, { recursive: true });
+  const entry = {
+    key: "private-corpus",
+    repo: "example/private-corpus",
+    access: "private",
+    pinnedRef: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  };
+
+  const calls: string[][] = [];
+  const optsSeen: Array<{ env?: Record<string, string | undefined> }> = [];
+  const fakeExecFileSync = (
+    cmd: string,
+    args: string[],
+    opts: { env?: Record<string, string | undefined> },
+  ) => {
+    calls.push([cmd, ...args]);
+    optsSeen.push(opts);
+    return Buffer.from("");
+  };
+
+  // No deps.cloneUrl override: this exercises the PRODUCTION URL
+  // resolution for both the re-scrub and the credentialed fetch.
+  const result = cloneFuelCorpus(entry, destRoot, { ghToken: "tok", execFileSync: fakeExecFileSync });
+
+  expect(result.ok).toBe(true);
+  // Re-scrub first (WR-01) with the clean URL...
+  expect(calls[0]).toEqual([
+    "git",
+    "-C",
+    destDir,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/example/private-corpus.git",
+  ]);
+  // ...then fetch via the explicit token URL — never `fetch origin`,
+  // which would have no credential path at all (git never reads GH_TOKEN).
+  expect(calls[1]).toEqual([
+    "git",
+    "-C",
+    destDir,
+    "fetch",
+    "https://x-access-token:tok@github.com/example/private-corpus.git",
+    entry.pinnedRef,
+  ]);
+  // WR-03: every git invocation is prompt-proof — fail fast, never hang.
+  expect(optsSeen.length).toBeGreaterThan(0);
+  for (const opts of optsSeen) {
+    expect(opts.env?.GIT_TERMINAL_PROMPT).toBe("0");
+  }
+});
+
+// ── clone-failed error strings: token never retained (WR-02) ────────────
+
+test("clone-failed error strings scrub the raw token before it is stored (WR-02)", () => {
+  const destRoot = makeTempDir("agda-mcp-fuel-dest-");
+  const entry = {
+    key: "private-corpus",
+    repo: "example/private-corpus",
+    access: "private",
+    pinnedRef: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  };
+
+  // Mimic execFileSync's real failure shape: error.message embeds the
+  // full argv, token-bearing clone URL included.
+  const fakeExecFileSync = (cmd: string, args: string[]) => {
+    throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
+  };
+
+  const result = cloneFuelCorpus(entry, destRoot, {
+    ghToken: "sekret-token",
+    execFileSync: fakeExecFileSync,
+  });
+
+  expect(result).toMatchObject({ ok: false, key: "private-corpus", reason: "clone-failed" });
+  expect(result.error).toContain("***");
+  expect(result.error.includes("sekret-token")).toBe(false);
 });
 
 // ── cloneAllFuelCorpora: one bad entry never aborts the batch ────────────
