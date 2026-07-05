@@ -113,8 +113,18 @@ jobs:
 
           grep -q "clone-fuel-corpora: skipping codex-homotopy-group: private-repo-no-credential" build.log || { echo "MISSING expected skip line for codex-homotopy-group"; exit 1; }
           grep -q "clone-fuel-corpora: skipping autoformalizing-hopf: private-repo-no-credential" build.log || { echo "MISSING expected skip line for autoformalizing-hopf"; exit 1; }
-          grep -qi "Cloning into '/opt/agda-mcp-fuel/agda-stdlib'" build.log || { echo "MISSING evidence agda-stdlib (public) cloned"; exit 1; }
-          grep -qi "Cloning into '/opt/agda-mcp-fuel/agda-unimath'" build.log || { echo "MISSING evidence agda-unimath (public) cloned"; exit 1; }
+
+          # git's own "Cloning into ..." lines NEVER reach the build log:
+          # clone-fuel-corpora.mjs runs every git command with
+          # stdio:"pipe" (captured, discarded). The script's observable
+          # contract is its OWN stdout/stderr lines: per-corpus
+          # `skipping <key>: <reason>` on failure, and a final
+          # `<ok>/<total> corpora ready` summary. So public-clone
+          # success is asserted as: exactly 2/4 ready AND no skip line
+          # for either public corpus.
+          grep -q "clone-fuel-corpora: 2/4 corpora ready under /opt/agda-mcp-fuel" build.log || { echo "MISSING '2/4 corpora ready' summary -- public corpora did not both clone"; exit 1; }
+          if grep -q "clone-fuel-corpora: skipping agda-stdlib" build.log; then echo "UNEXPECTED skip line for agda-stdlib (public)"; exit 1; fi
+          if grep -q "clone-fuel-corpora: skipping agda-unimath" build.log; then echo "UNEXPECTED skip line for agda-unimath (public)"; exit 1; fi
 
           echo "OK: uncredentialed build reached the corpus-clone step; the 2 public corpora cloned and the 2 private corpora cleanly skipped with private-repo-no-credential -- D-10 public buildability confirmed."
 
@@ -163,9 +173,15 @@ jobs:
           # still exited 0 (false-green). base64 survives the two-hop
           # shell quoting; the remote script is fail-fast so any kubectl
           # error now fails this step.
+          # ServerAliveInterval on BOTH hops: the rollout wait below is
+          # silent for minutes at a time; attempt 2 died there with
+          # `client_loop: send disconnect: Broken pipe` (idle timeout),
+          # not a real failure. 10m rollout budget: the amd64 image is
+          # ~1.8 GB compressed, so a cold node pull + 150s startup-probe
+          # window doesn't fit 5m reliably.
           MANIFESTS_B64=$(tar -czf - k8s/deployment.yaml k8s/ingress.yaml k8s/cronjob.yaml | base64 | tr -d '\n')
-          ssh -A -o StrictHostKeyChecking=no cliu238@dslogin01.pha.jhu.edu \
-            "ssh -A -p 14132 -o StrictHostKeyChecking=no k8slgn.idies.jhu.edu bash -s" <<EOF
+          ssh -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 cliu238@dslogin01.pha.jhu.edu \
+            "ssh -A -p 14132 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 k8slgn.idies.jhu.edu bash -s" <<EOF
           set -euo pipefail
           export KUBECONFIG=/var/k8s/users/cliu238/k8s-dev-llm-gateway-admins.conf
           WORK=\$(mktemp -d)
@@ -173,7 +189,7 @@ jobs:
           echo "${MANIFESTS_B64}" | base64 -d | tar -xzf - -C "\$WORK"
           kubectl apply -f "\$WORK/k8s/"
           kubectl rollout restart deployment/agda-mcp-ingest -n llm-gateway
-          kubectl rollout status deployment/agda-mcp-ingest -n llm-gateway --timeout=5m
+          kubectl rollout status deployment/agda-mcp-ingest -n llm-gateway --timeout=10m
           kubectl get pods,ingress -n llm-gateway
           EOF
 

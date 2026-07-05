@@ -22,7 +22,12 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       imagePullSecrets:
-        - name: ghcr-credentials
+        # Dedicated secret for THIS project's private GHCR package.
+        # Do NOT point this back at litellm's shared `ghcr-credentials`:
+        # that secret's PAT cannot read ghcr.io/cliu238/agda-mcp-server
+        # (verified 403), and overwriting it with our PAT would break
+        # litellm's own pulls (our PAT gets 403 on ghcr.io/jh-dsai/litellm).
+        - name: agda-mcp-ghcr
       containers:
         - name: agda-mcp-ingest
           image: ghcr.io/cliu238/agda-mcp-server:latest
