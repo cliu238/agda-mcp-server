@@ -38,7 +38,7 @@ Full phase details: `milestones/v1.1-ROADMAP.md` · Audit: `milestones/v1.1-MILE
 
 **Milestone Goal:** Merge upstream v0.6.8 for real (`git merge`, never rebase), adjudicate load-terminus semantics per sub-behavior with our from-RED regression locks as referee, adopt upstream's new term-search/Mimer feature, and run full post-merge acceptance — then, and only then, productionize the unattended every-3-days auto-sync so upstream divergence stops accumulating. Phase numbering continues from v1.1 (which ended at Phase 9); v1.2 starts at Phase 10. **Hard ordering constraint (settled, do not deviate):** Phase 10 (the one-time reconcile) must fully complete before Phase 11 (auto-sync) is armed — arming recurring sync before reconciling guarantees an escalation every 3 days.
 
-- [ ] **Phase 10: Upstream Reconcile** - The entire one-time reconcile: upstream v0.6.8 merged (real merge, never rebase), load-terminus semantics adjudicated with from-RED locks as referee, upstream #70 features adopted, and full acceptance (real-Agda suite + dogfood session + deploy watched green)
+- [x] **Phase 10: Upstream Reconcile** - The entire one-time reconcile: upstream v0.6.8 merged (real merge, never rebase), load-terminus semantics adjudicated with from-RED locks as referee, upstream #70 features adopted, and full acceptance (real-Agda suite + dogfood session + deploy watched green) (completed 2026-07-05)
 - [ ] **Phase 11: Auto-Sync Productionization** - The `upstream-sync` skill runs unattended every 3 days via a local headless carrier with GSD-native bookkeeping, so upstream divergence stops re-accumulating
 
 ## Phase Details
@@ -56,7 +56,7 @@ Full phase details: `milestones/v1.1-ROADMAP.md` · Audit: `milestones/v1.1-MILE
   4. `agda_goal_candidates` (type-directed term search + Mimer auto fix) is adopted end-to-end: registered in the tool manifest (SSOT), surfaced by tool-recommendation, and documented in the README / tool catalog well enough that a driving agent (Codex/Claude Code) can discover and use it without reading source. (ADOPT-01, ADOPT-02)
   5. Acceptance holds: full verify green (real-Agda integration suite, `typecheck:test`, build), a real dogfood session runs to completion against the merged server (the loop verifying its own upstream merge), and the final push's auto-deploy (D-06) is watched to green with cluster `/healthz` returning `ok`. (ACCEPT-01, ACCEPT-02, ACCEPT-03)
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -74,7 +74,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 10-05-PLAN.md — Full acceptance: combined verify, real dogfood session, single push watched to green deploy
+- [x] 10-05-PLAN.md — Full acceptance: combined verify, real dogfood session, single push watched to green deploy
 
 ### Phase 11: Auto-Sync Productionization
 
@@ -103,7 +103,7 @@ Plans:
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 6/6 | Complete | 2026-07-05 |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete | 2026-07-04 |
-| 10. Upstream Reconcile | v1.2 | 4/5 | In Progress|  |
+| 10. Upstream Reconcile | v1.2 | 5/5 | Complete    | 2026-07-05 |
 | 11. Auto-Sync Productionization | v1.2 | 0/TBD | Not started | - |
 
 ### Phase 12: Simplification overhaul: project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity

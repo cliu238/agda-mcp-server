@@ -24,9 +24,9 @@ recurring sync; 3-day sync cadence; each auto-merge push costs one accepted ~30 
 
 ### Acceptance
 
-- [ ] **ACCEPT-01**: Post-merge full verify green: real-Agda full suite, `typecheck:test`, build
-- [ ] **ACCEPT-02**: One real dogfood session runs against the merged server as acceptance — the loop verifying its own upstream merge
-- [ ] **ACCEPT-03**: The final push's auto-deploy (D-06) watched to green — cluster healthz `ok`
+- [x] **ACCEPT-01**: Post-merge full verify green: real-Agda full suite, `typecheck:test`, build
+- [x] **ACCEPT-02**: One real dogfood session runs against the merged server as acceptance — the loop verifying its own upstream merge
+- [x] **ACCEPT-03**: The final push's auto-deploy (D-06) watched to green — cluster healthz `ok`
 
 ### Auto-Sync Productionization
 
@@ -71,9 +71,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MERGE-03 | Phase 10 | Complete |
 | ADOPT-01 | Phase 10 | Complete |
 | ADOPT-02 | Phase 10 | Complete |
-| ACCEPT-01 | Phase 10 | Pending |
-| ACCEPT-02 | Phase 10 | Pending |
-| ACCEPT-03 | Phase 10 | Pending |
+| ACCEPT-01 | Phase 10 | Complete |
+| ACCEPT-02 | Phase 10 | Complete |
+| ACCEPT-03 | Phase 10 | Complete |
 | SYNC-01 | Phase 11 | Pending |
 | SYNC-02 | Phase 11 | Pending |
 | SYNC-03 | Phase 11 | Pending |
