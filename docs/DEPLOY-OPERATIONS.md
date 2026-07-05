@@ -136,5 +136,137 @@ collected.
 
 ## Verification
 
-_Placeholder — extended by Plans 08-05 and 08-06 with the deploy-verification
-and cron-judge-verification command recipes once those plans land._
+Every recipe below was proven live against the deployed cluster on 2026-07-05
+(Plan 08-05). Re-run the whole section after any redeploy — it is the
+functional acceptance for DEPLOY-01, on top of 08-04's deploy-pipeline checks.
+
+### PVC directory ownership (pvc-dirs initContainer) — read before adding any subPath
+
+First real PVC write initially failed `EACCES` (mkdir under
+`/data/team-uploads`). Root cause chain, all verified live:
+
+1. kubelet auto-creates a missing `subPath` directory **root-owned** at pod
+   start.
+2. This CephFS volume is ACL-enabled, and the ACL **mask** defeats
+   `fsGroup`-granted group-`rwx`: `drwxrwsr-x+ root:agdamcp` still denies a
+   uid/gid-2231 write. Only uid **ownership** grants write on this mount
+   (same lesson as litellm's `/data/logs`, owned `2231:2231`).
+3. A root-`chown` pod cannot fix it: the namespace enforces PodSecurity
+   `restricted:latest`, which rejects any root pod (`FailedCreate`, tested).
+4. The `llm-gateway-compute` ResourceQuota also rejects **init containers**
+   without explicit `resources.requests`+`limits` (`FailedCreate`, tested).
+
+The live fix (commit `bc2f873`): both workloads run a restricted-compliant
+`pvc-dirs` initContainer (runs as 2231, explicit resources) that mounts the
+PVC **root** and `mkdir -p`s the data tree *before* the main container's
+`subPath` resolution, so kubelet finds the directories already existing and
+2231-owned. Storage subPaths moved to `agda-mcp-data/team-storage` and
+`agda-mcp-data/cluster-fix-queue`; in-pod mount paths are unchanged
+(`/data/team-uploads`, `/data/cluster-queue`).
+
+Rules going forward:
+
+- Any NEW `subPath` for this project MUST live under a parent that the
+  `pvc-dirs` initContainer pre-creates 2231-owned (extend its `mkdir -p`
+  list in `k8s/deployment.yaml` **and** `k8s/cronjob.yaml` together).
+- The old kubelet-created, root-owned `agda-mcp/` tree on the PVC is
+  orphaned junk — only an IDIES admin (root on the Ceph mount) can remove
+  it. Pending IDIES-side cleanup; harmless meanwhile.
+
+### Real upload end-to-end (off-cluster → ingress → Ceph PVC)
+
+Proves TEAM-02's client → TEAM-03's ingest → D-07/D-10 storage layout on
+the real cluster. Run from any off-cluster machine (this is the teammate
+path — no SSH needed until the final landing check).
+
+1. **Healthz** (no auth):
+
+   ```bash
+   curl -sf https://dev.sites.idies.jhu.edu/agda-mcp/healthz   # → ok
+   ```
+
+2. **Key on hand?** If not, mint/rotate + sync per "Secret rotation" above
+   (`issue-key.mjs issue <person>` → base64 registry → `kubectl apply`).
+   Hold the raw key ONLY in a `chmod 600` scratch file outside the repo;
+   never echo it. After the sync, poll for kubelet Secret propagation
+   (measured ~15–90 s; do NOT restart the pod):
+
+   ```bash
+   KEY=$(cat /path/to/scratch/key.txt)
+   curl -s -o /dev/null -w '%{http_code}' -X POST \
+     -H "Authorization: Bearer ${KEY}" \
+     https://dev.sites.idies.jhu.edu/agda-mcp/ingest
+   # 401 = key not propagated yet, retry after ~20s; 400 = auth OK
+   # (missing run-id header), proceed.
+   ```
+
+3. **Minimal run fixture**, OUTSIDE the repo (`stagedCaptures: []` keeps the
+   later cron-judge run fast — transport proof, not verdict proof):
+
+   ```bash
+   SCRATCH=/path/to/scratch   # chmod 700
+   RUN_ID="08-05-accept-$(date -u +%Y%m%dT%H%M%SZ)"   # [A-Za-z0-9._-]+ only
+   mkdir -p "$SCRATCH/runs/$RUN_ID"
+   cat > "$SCRATCH/runs/$RUN_ID/run-report.json" <<EOF
+   {
+     "schemaVersion": 1,
+     "runId": "$RUN_ID",
+     "startedAt": "$(date -u -v-60S +%Y-%m-%dT%H:%M:%S.000Z)",
+     "endedAt": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)",
+     "corpusRoot": "/nonexistent/agda-mcp-acceptance-fixture",
+     "manifestPath": "/nonexistent/manifest.json",
+     "totalToolCalls": 0,
+     "perTool": {},
+     "stagedCaptures": [],
+     "transcriptPath": "$SCRATCH/runs/$RUN_ID/transcript.jsonl"
+   }
+   EOF
+   : > "$SCRATCH/runs/$RUN_ID/transcript.jsonl"
+   ```
+
+   A nonexistent `corpusRoot` guarantees the agent-log selectors match
+   nothing — no real session logs get swept into a test archive (T-08-17).
+
+4. **Upload via the real exported function** (same call pattern as the
+   Plan 08-03 acceptance test — no CLI env plumbing needed for key/url):
+
+   ```bash
+   cat > "$SCRATCH/upload-driver.mjs" <<'EOF'
+   import { readFileSync } from "node:fs";
+   import { runUploadForRun } from "<repo>/scripts/dogfood/upload-run.mjs";
+
+   const [runId, keyPath] = process.argv.slice(2);
+   const key = readFileSync(keyPath, "utf8").trim();
+   const result = await runUploadForRun(runId, {
+     key,
+     url: "https://dev.sites.idies.jhu.edu/agda-mcp/ingest",
+   });
+   console.log(JSON.stringify(result));
+   EOF
+   cd <repo>
+   AGDA_MCP_DOGFOOD_RUNS_ROOT="$SCRATCH/runs" \
+   AGDA_MCP_TEAM_UPLOAD_QUEUE_PATH="$SCRATCH/upload-queue.jsonl" \
+     npx tsx "$SCRATCH/upload-driver.mjs" "$RUN_ID" "$SCRATCH/key.txt"
+   ```
+
+   Expected output, exactly: `{"attempted":true,"uploaded":true}`.
+   (`AGDA_MCP_TEAM_UPLOAD_QUEUE_PATH` points the failure-path retry queue —
+   which would persist the raw key — at the scratch dir, never the repo.)
+
+5. **PVC landing check**, via the one-shot SSH pattern (SKILL.md):
+
+   ```bash
+   kubectl exec deployment/agda-mcp-ingest -n llm-gateway -- \
+     find /data/team-uploads -name '*.tar.gz'
+   ```
+
+   Literal output from the 2026-07-05 acceptance run:
+
+   ```text
+   /data/team-uploads/eric/2026-07-05/08-05-accept-20260705T031840Z.tar.gz
+   ```
+
+   i.e. the documented `<person>/<UTC-date>/<runId>.tar.gz` layout, with
+   every directory level owned `2231:2231` (`ls -lanR /data/team-uploads`).
+
+6. **Hygiene**: shred/delete the scratch key file and driver once done.
