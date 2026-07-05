@@ -21,7 +21,16 @@ FROM haskell:9.10-bookworm@sha256:c8c84efbcf7bd7106b94d8e83ae150489adb57116ec01d
 # mismatch that could otherwise arise between this build stage and the final
 # stage below — both stages are bookworm-based here, but pinning the flag
 # keeps that true even if either base image line drifts in the future.
-RUN cabal update && \
+#
+# WR-06: the Hackage index is pinned to the same date the base-image
+# digests were resolved (2026-07-04), so Agda-2.8.0's TRANSITIVE
+# dependency solve is reproducible too. Without it, every deliberately
+# no-cache rebuild re-resolves against the latest index — a newly
+# published (broken or malicious) transitive dep would change the
+# shipped judge binary with no diff in this repo, the one unpinned link
+# in an otherwise fully digest/SHA-pinned supply chain. Bump this
+# timestamp deliberately, together with the image-digest pins.
+RUN cabal update 'hackage.haskell.org,2026-07-04T00:00:00Z' && \
     cabal install Agda-2.8.0 \
       --install-method=copy \
       --installdir=/agda-bin \
