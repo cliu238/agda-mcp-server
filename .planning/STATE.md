@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
-stopped_at: 08-04 complete -- first live deploy green (healthz ok); 08-05 next
-last_updated: "2026-07-05T03:05:00Z"
-last_activity: 2026-07-05 -- 08-04 complete (4-attempt first deploy, service live)
+stopped_at: "Completed 08-04-PLAN.md — first live deploy green (4 attempts, 4 real defects fixed); next: 08-05 cluster functional acceptance"
+last_updated: "2026-07-05T02:56:32.561Z"
+last_activity: "2026-07-05 -- 08-04 complete: first live deploy green (run 28726436348), ingest live at dev.sites.idies.jhu.edu/agda-mcp"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 24
   completed_plans: 22
-  percent: 92
+  percent: 75
 ---
 
 # Project State
@@ -91,6 +91,7 @@ None yet.
 - Phase 8 (Pinned-Env + Thin k8s Deployment) flagged for `/gsd:plan-phase --research-phase` once the JHU IDIES-style server has actually arrived (~2026-07-07): the k8s namespace name, PVC provisioning mode, and the Ceph PVC's backing-store mode (RBD vs. CephFS — determines whether `fs.rename`-based atomic writes are safe) are unknowns until then. Also needs an explicit taste decision on TEAM-05's exact fixed-clone-path convention.
 - Phases 6 and 9 are standard, well-documented patterns — skip research-phase (root causes/fix locations already identified, or a closed pre-itemized checklist).
 - v1.0-era blockers (RecordedTransport cassette design, oracle triad correctness risk, CHG re-verification) are resolved by the shipped v1.0 milestone — see `milestones/v1.0-MILESTONE-AUDIT.md` and PROJECT.md's Key Decisions table for the historical record.
+- 08-05 BLOCKED (DEPLOY-01 functional acceptance): first real PVC write fails — ingest pod EACCES on mkdir /data/team-uploads/eric/2026-07-05. Root cause: kubelet auto-created the CephFS subPath dirs (agda-mcp/team-storage; agda-mcp/cluster-fix-queue will hit the same on first cron mount) owned root, and on this acl-mounted CephFS the fsGroup-applied group-rwx bits do NOT grant write (drwxrwsr-x+ root:agdamcp yet touch as uid/gid 2231 denied — ACL mask blocks owning-group). Working pattern proven by litellm on the SAME PVC: uid-2231-OWNED dir (drwxrwsr-x+ 2231:2231 /data/logs; litellm skill lesson 16: runAsUser must match Ceph directory OWNER). Fix requires a root-capable context to chown -R 2231:2231 the agda-mcp/ subtree: (a) one-off root Job mounting the PVC, (b) root initContainer in deployment+cronjob manifests (push->deploy cycle), or (c) IDIES-side chown (glemson1/Charles Glaser). Namespace PSA labels unreadable (ns get Forbidden) so root-pod feasibility unverified. Everything upstream of the storage write is PROVEN green: key issuance, registry secret sync, kubelet secret propagation (~15s, 401->400 probe), Bearer auth, public ingress POST path.
 
 ### Quick Tasks Completed
 
@@ -108,9 +109,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05 (active)
+Last session: 2026-07-05T02:56:17.966Z
 Stopped at: Completed 08-04-PLAN.md — first live deploy green (4 attempts, 4 real defects fixed); next: 08-05 cluster functional acceptance
-Resume file: .planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/.continue-here.md
+Resume file: None
 
 ## Operator Next Steps
 
