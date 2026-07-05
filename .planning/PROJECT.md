@@ -23,7 +23,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 
 ## Next Milestone Goals
 
-Not yet defined — run `/gsd:new-milestone`. Standing candidates carried forward: CACHE-04 oracle prewarm (trigger: TEAM-04 INCONCLUSIVE/timeout rate becomes the bottleneck), Loop ① exploration (turn-based proof guidance), npm publishing (PUB-01), external-user issue template (FEED-01), the 2 deferred large-redesign fix-queue rows (RT6 five-state conflation, RT7 timeout diagnostics), and the v1.1 audit's tech-debt ledger.
+Not yet defined — run `/gsd:new-milestone`. **Lead candidate theme (user-selected 2026-07-05, seed with measured data + settled decisions at `.planning/research/UPSTREAM-SYNC.md`): upstream reconcile + auto-sync** — Phase A: first merge of upstream v0.6.8 (488/5 divergence, 6-file conflict, load-terminus semantic adjudication with from-RED locks as referee, adopt upstream #70's agda_goal_candidates/term-search features); Phase B: productionize recurring sync (launchd headless carrier executing the shipped `.agents/skills/upstream-sync` skill, GSD-native bookkeeping; cloud-routine carrier blocked by claude.ai org GitHub-sync gate, re-arm path recorded). Other standing candidates: CACHE-04 oracle prewarm (trigger: TEAM-04 INCONCLUSIVE/timeout rate becomes the bottleneck), Loop ① exploration (turn-based proof guidance), npm publishing (PUB-01), external-user issue template (FEED-01), the 2 deferred large-redesign fix-queue rows (RT6 five-state conflation, RT7 timeout diagnostics), and the v1.1 audit's tech-debt ledger.
 
 ## Requirements
 
