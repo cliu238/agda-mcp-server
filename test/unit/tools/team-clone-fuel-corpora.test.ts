@@ -19,6 +19,7 @@ import {
   cloneAllFuelCorpora,
   cloneFuelCorpus,
   readFuelCorpora,
+  resolveCloneUrl,
   resolveFuelRoot,
   // @ts-expect-error script module lacks types
 } from "../../../scripts/team/clone-fuel-corpora.mjs";
@@ -201,28 +202,58 @@ test("a private entry with no GH_TOKEN/gh auth returns ok:false without throwing
 
 // ── cloneFuelCorpus: credentialed private clone scrubs the token ────────
 
+test("resolveCloneUrl builds the x-access-token URL pre-scrub, the plain URL without a token, and honors the test seam (WR-10)", () => {
+  expect(resolveCloneUrl({ key: "k", repo: "example/private-corpus" }, {}, "tok")).toBe(
+    "https://x-access-token:tok@github.com/example/private-corpus.git",
+  );
+  expect(resolveCloneUrl({ key: "k", repo: "example/pub" }, {}, null)).toBe(
+    "https://github.com/example/pub.git",
+  );
+  expect(
+    resolveCloneUrl({ key: "k", repo: "example/pub" }, { cloneUrl: () => "/local/fixture.git" }, "tok"),
+  ).toBe("/local/fixture.git");
+});
+
 test("a credentialed private clone scrubs the embedded token from origin immediately after cloning", () => {
   const { bareRepoPath, pinnedRef } = createBareFixtureRepo();
   const destRoot = makeTempDir("agda-mcp-fuel-dest-");
   const entry = { key: "private-corpus", repo: "example/private-corpus", access: "private", pinnedRef };
+  const destDir = join(destRoot, "private-corpus");
+  const tokenUrl = "https://x-access-token:fake-token-value@github.com/example/private-corpus.git";
 
+  // NO deps.cloneUrl override: the clone argv carries the PRODUCTION
+  // token-bearing URL (WR-10 — the old cloneUrl-seam version never got
+  // the token anywhere near .git/config, making the negative
+  // assertions below vacuous). The spy intercepts only the
+  // network-bound `git clone`: it clones from the local fixture
+  // instead, then persists the token URL as origin — byte-for-byte
+  // what a real `git clone <token-url>` leaves in .git/config.
+  // Everything after (the scrub under test, checkout, submodule) runs
+  // against real git.
   const calls: string[][] = [];
   const spy = (cmd: string, args: string[], opts: unknown) => {
     calls.push([cmd, ...args]);
+    if (cmd === "git" && args[0] === "clone") {
+      execFileSync("git", ["clone", bareRepoPath, args[2]], GIT_OPTS);
+      execFileSync("git", ["-C", args[2], "remote", "set-url", "origin", args[1]], GIT_OPTS);
+      return Buffer.from("");
+    }
     return execFileSync(cmd, args, opts as never);
   };
 
   const result = cloneFuelCorpus(entry, destRoot, {
     ghToken: "fake-token-value",
-    cloneUrl: () => bareRepoPath,
     execFileSync: spy,
   });
 
   expect(result.ok).toBe(true);
-  const destDir = join(destRoot, "private-corpus");
 
-  const cloneCallIndex = calls.findIndex((call) => call.includes("clone"));
+  // (a) The clone argv contained the production x-access-token URL.
+  const cloneCallIndex = calls.findIndex((call) => call[1] === "clone");
   expect(cloneCallIndex).toBeGreaterThanOrEqual(0);
+  expect(calls[cloneCallIndex]).toEqual(["git", "clone", tokenUrl, destDir]);
+
+  // (b) The T-08-02 scrub was the IMMEDIATE next call, with the clean URL.
   expect(calls[cloneCallIndex + 1]).toEqual([
     "git",
     "-C",
@@ -233,6 +264,9 @@ test("a credentialed private clone scrubs the embedded token from origin immedia
     "https://github.com/example/private-corpus.git",
   ]);
 
+  // (c) Final on-disk state, now NON-vacuous: the token genuinely was
+  // in .git/config after the clone (planted above exactly as git
+  // persists it), so a deleted scrub turns these assertions red.
   const config = readFileSync(join(destDir, ".git", "config"), "utf8");
   expect(config.includes("x-access-token")).toBe(false);
   expect(config.includes("fake-token-value")).toBe(false);

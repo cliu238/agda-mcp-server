@@ -66,14 +66,17 @@ export function readFuelCorpora(fuelCorporaJsonPath = resolveFuelCorporaJsonPath
 }
 
 /**
- * Resolve the URL `git clone` should use for `entry`. `deps.cloneUrl`
- * — when supplied — overrides this entirely; it exists ONLY so this
- * module's own tests can substitute a local bare-repo fixture path
- * for the real `https://github.com/...` URL. Production behavior
- * embeds `token` (x-access-token basic-auth form) for a credentialed
- * private clone, else builds the plain public URL.
+ * Resolve the URL `git clone`/`git fetch` should use for `entry`.
+ * `deps.cloneUrl` — when supplied — overrides this entirely; it exists
+ * ONLY so this module's own tests can substitute a local bare-repo
+ * fixture path for the real `https://github.com/...` URL. Production
+ * behavior embeds `token` (x-access-token basic-auth form) for a
+ * credentialed private clone, else builds the plain public URL.
+ *
+ * Exported so tests can pin the production token-bearing URL form
+ * directly (WR-10) — the deps.cloneUrl seam bypasses it entirely.
  */
-function resolveCloneUrl(entry, deps, token) {
+export function resolveCloneUrl(entry, deps, token) {
   if (deps.cloneUrl) {
     return deps.cloneUrl(entry);
   }
