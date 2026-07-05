@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
-stopped_at: Phase 8 context gathered
-last_updated: "2026-07-04T22:48:17.854Z"
+stopped_at: context exhaustion at 75% (2026-07-05)
+last_updated: "2026-07-05T01:07:17.461Z"
 last_activity: 2026-07-04 -- Phase 8 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 24
-  completed_plans: 18
+  completed_plans: 21
   percent: 75
 ---
 
@@ -105,9 +105,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-03T23:15:03.118Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/08-CONTEXT.md
+Last session: 2026-07-05 (resumed)
+Stopped at: resumed mid-08-04 — dedicated agda-mcp-ghcr pull secret created on cluster; deploy workflow fixes (keepalives + D-10 asserts) pushed; watching deploy run
+Resume file: .planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/.continue-here.md
 
 ## Operator Next Steps
 
