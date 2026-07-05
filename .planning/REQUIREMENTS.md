@@ -14,7 +14,7 @@ recurring sync; 3-day sync cadence; each auto-merge push costs one accepted ~30 
 ### Merge & Adjudication
 
 - [x] **MERGE-01**: Upstream v0.6.8 (5 commits, head `d4497a2`) merged into `main` via `git merge` (never rebase), all 6 conflict files resolved, build + `typecheck:test` green
-- [ ] **MERGE-02**: Upstream's fail-suite-on-unexpected-`logger.warn` test strictness reconciled with our full suite — ~1600 tests green, with expected-warn registrations wherever our best-effort-catch convention legitimately warns
+- [x] **MERGE-02**: Upstream's fail-suite-on-unexpected-`logger.warn` test strictness reconciled with our full suite — ~1600 tests green, with expected-warn registrations wherever our best-effort-catch convention legitimately warns
 - [x] **MERGE-03**: Load-terminus semantics adjudicated per sub-behavior (ours / theirs / hybrid vs upstream #68/#69), with our from-RED regression locks (#64/#61 flagship, RT8) as referee and BOTH repos' regression suites green; adjudication decisions recorded
 
 ### Feature Adoption
@@ -67,7 +67,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MERGE-01 | Phase 10 | Complete |
-| MERGE-02 | Phase 10 | Pending |
+| MERGE-02 | Phase 10 | Complete |
 | MERGE-03 | Phase 10 | Complete |
 | ADOPT-01 | Phase 10 | Complete |
 | ADOPT-02 | Phase 10 | Complete |

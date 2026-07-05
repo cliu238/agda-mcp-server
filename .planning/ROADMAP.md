@@ -56,7 +56,7 @@ Full phase details: `milestones/v1.1-ROADMAP.md` · Audit: `milestones/v1.1-MILE
   4. `agda_goal_candidates` (type-directed term search + Mimer auto fix) is adopted end-to-end: registered in the tool manifest (SSOT), surfaced by tool-recommendation, and documented in the README / tool catalog well enough that a driving agent (Codex/Claude Code) can discover and use it without reading source. (ADOPT-01, ADOPT-02)
   5. Acceptance holds: full verify green (real-Agda integration suite, `typecheck:test`, build), a real dogfood session runs to completion against the merged server (the loop verifying its own upstream merge), and the final push's auto-deploy (D-06) is watched to green with cluster `/healthz` returning `ok`. (ACCEPT-01, ACCEPT-02, ACCEPT-03)
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -70,7 +70,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 10-04-PLAN.md — Reconcile the full suite under upstream's fail-on-unexpected-warn harness
+- [x] 10-04-PLAN.md — Reconcile the full suite under upstream's fail-on-unexpected-warn harness
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -103,7 +103,7 @@ Plans:
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete | 2026-07-04 |
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 6/6 | Complete | 2026-07-05 |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete | 2026-07-04 |
-| 10. Upstream Reconcile | v1.2 | 3/5 | In Progress|  |
+| 10. Upstream Reconcile | v1.2 | 4/5 | In Progress|  |
 | 11. Auto-Sync Productionization | v1.2 | 0/TBD | Not started | - |
 
 ### Phase 12: Simplification overhaul: project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity
