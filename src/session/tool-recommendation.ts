@@ -170,6 +170,14 @@ export function deriveToolRecommendations(
     });
 
     addIfAvailable(recommendations, toolSet, input.availableTools, {
+      tool: "agda_goal_candidates",
+      rationale: "Type-directed search for local terms that already fill a goal, across every open goal in one call — distinct from agda_auto's full proof search and agda_case_split's structural splitting.",
+      priority: 4.5,
+      knownArgs: {},
+      blockers: [],
+    });
+
+    addIfAvailable(recommendations, toolSet, input.availableTools, {
       tool: "agda_auto",
       rationale: "Try automatic proof search.",
       priority: 5,
