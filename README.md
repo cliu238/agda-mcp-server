@@ -1,443 +1,88 @@
 # agda-mcp-server
 
-[![npm version](https://img.shields.io/npm/v/agda-mcp-server)](https://www.npmjs.com/package/agda-mcp-server)
-[![CI](https://github.com/LionOfJewdah/agda-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/LionOfJewdah/agda-mcp-server/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node >=24](https://img.shields.io/badge/node-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
-
 `agda-mcp-server` is a stateful [Model Context Protocol](https://modelcontextprotocol.io)
-server for interactive [Agda](https://agda.readthedocs.io/) proof development.
+server for interactive [Agda](https://agda.readthedocs.io/) proof development. It keeps a
+long-lived `agda --interaction-json` process alive so an AI agent can load a file, inspect
+goals, and iterate on a proof — case-split, refine, give, compute, search — without
+restarting Agda per request.
 
-It keeps a long-running Agda process alive in `--interaction-json` mode so MCP
-clients can use Agda the way a human does in an editor: load a file, inspect
-goals, split on variables, refine holes, infer types, normalize expressions,
-search the local environment, and iterate on proofs without restarting Agda for
-every request.
+## Why this fork exists
 
-## What this server provides
+This fork tracks [InvariantHoldings/agda-mcp-server](https://github.com/InvariantHoldings/agda-mcp-server)
+but runs its own closed self-improvement loop on top of it: use the server on a real proof
+session, capture any defect that surfaces, judge it, fix it, lock the fix in with a
+regression test, then reuse the hardened server on the next session. That loop needs a live
+team feedback channel (an ingest endpoint on a JHU cluster) and a pinned-environment
+distribution model, both of which require controlling release cadence and infrastructure
+that upstream does not provide. Active development happens here, and fixes land in this
+fork first — sync between the two repos is one-way, upstream to fork only. If you just want
+the plain upstream server without this workflow, use the upstream repo directly.
 
-- Persistent interactive Agda sessions.
-- Goal-aware proof actions over MCP.
-- Stateless batch type-checking when you only want a quick validation pass.
-- Navigation and scope-inspection helpers for large Agda codebases.
-- Literate Agda support — extract code blocks from all seven literate formats.
-- Structured semantic outputs for every tool, alongside human-readable text.
-- Agent-native session introspection (`agda_session_snapshot`, `agda_goal_catalog`, `agda_tool_recommend`).
-- Bug-report and issue-update bundle generation with stable fingerprints.
-- A small extension system for project-specific or domain-specific tools.
+## Using it
 
-## How it works
-
-The server launches Agda in `--interaction-json` mode and communicates through
-Agda's IOTCM protocol over standard input and output.
-
-In practice, the workflow is:
-
-1. Load an Agda file with `agda_load`.
-2. Agda assigns interaction point IDs to all open goals.
-3. Use those goal IDs with proof-oriented tools such as `agda_goal_type`,
-   `agda_case_split`, `agda_refine`, or `agda_give`.
-4. Reload the file after applying source edits so Agda can refresh its goals.
-
-This statefulness is the main difference between `agda_load` and the stateless
-`agda_typecheck` command.
-
-## Requirements
-
-Before using the server, make sure you have:
+### Requirements
 
 - Node.js `>= 24`
-- An Agda installation available as `agda` on your `PATH`, or
-- A repo-local pinned runner at `tooling/scripts/run-pinned-agda.sh`
+- `git`
+- Agda `2.8.0` on `PATH` (matches the pinned fuel corpora)
 
-If both are available, the pinned runner is preferred.
+### Install
 
-## Installation
-
-### From source
+This is a git install, not an npm package — this fork is never installed globally via npm
+and holds no npm account anywhere in its distribution model.
 
 ```bash
-npm install
+git clone https://github.com/cliu238/agda-mcp-server.git
+cd agda-mcp-server
+git fetch --tags
+git checkout "$(git tag --list 'v*' | sort -V | tail -1)"
+bash scripts/team/install-pinned-env.sh
+```
+
+The installer verifies your Agda version and runs `npm ci`. For the full walkthrough
+(multi-teammate setup, fuel corpora, upload keys), see
+[docs/TEAM-ONBOARDING.md](docs/TEAM-ONBOARDING.md).
+
+### Run it
+
+```bash
 npm run build
+AGDA_MCP_ROOT=/path/to/your/agda/project node dist/index.js
 ```
 
-This produces the distributable server in `dist/`.
+`AGDA_MCP_ROOT` defaults to the current working directory if omitted.
 
-### Local CLI entry point
+### Connect an MCP client
 
-After building, the executable entry point is:
-
-```bash
-node dist/index.js
-```
-
-The published package also exposes the `agda-mcp-server` binary through the
-`bin` field in `package.json`.
-
-Use `--help` or `--version` to inspect the installed binary without starting
-the MCP server:
-
-```bash
-agda-mcp-server --version   # prints the server version
-agda-mcp-server --help      # prints usage and all environment variables
-```
-
-## Quick start
-
-Start the server on stdio with a project root:
-
-```bash
-AGDA_MCP_ROOT=/path/to/agda/project node dist/index.js
-```
-
-If `AGDA_MCP_ROOT` is omitted, the current working directory is used.
-
-## Examples
-
-### Example: load a file and inspect goals
-
-```text
-1. agda_load file="Nat/Properties.agda"
-  → reports load status and goal IDs
-
-2. agda_session_status
-  → shows the loaded file and active goals
-
-3. agda_goal_type goalId=0
-  → returns the local context and expected type for `?0`
-```
-
-### Example: refine a proof hole
-
-```text
-1. agda_goal_type goalId=0
-  → inspect the goal before editing
-
-2. agda_refine goalId=0 expr="suc"
-  → apply a constructor or function
-
-3. agda_metas
-  → inspect any new subgoals created by the refinement
-```
-
-### Example: check an expression before committing to it
-
-```text
-1. agda_elaborate goalId=0 expr="map f xs"
-  → see Agda's elaborated form
-
-2. agda_infer goalId=0 expr="map f xs"
-  → confirm the inferred type
-
-3. agda_give goalId=0 expr="map f xs"
-  → fill the goal once the expression looks correct
-```
-
-### Example: stateless validation in CI or editor automation
-
-```text
-agda_typecheck file="MyModule.agda"
-```
-
-Use this when you want errors and warnings without creating a persistent session.
-
-## Semantic outputs
-
-Every tool returns:
-
-- Human-readable text for existing MCP clients (in `content[].text`).
-- Structured content with stable envelope fields (`tool`, `ok`, `classification`, `summary`, `data`, `diagnostics`, `provenance`, `elapsedMs`).
-
-Every tool's `data` carries at least the rendered text plus a tool-specific
-structured payload — e.g. `solutions` / `rawSolutions` / `written` for
-`agda_solve_*`, parsed `clauses` for `agda_case_split`, `goalType` and
-`context` arrays for goal queries, `success` and `output` for backends,
-display-state snapshots for the toggle/show family, and so on. Agents
-should prefer the structured fields over scraping the markdown body.
-
-Core session tools (`agda_load`, `agda_load_no_metas`, `agda_typecheck`)
-expose completeness fields — `goalCount`, `invisibleGoalCount`,
-`hasHoles`, `isComplete`, and a `classification` of `ok-complete` /
-`ok-with-holes` / `type-error` — derived from a merged source-hole +
-protocol-counts signal so explicit hole markers (`{!!}` / `?`) inside
-`abstract` blocks cannot trick the load into a false `ok-complete`.
-
-## MCP client configuration
-
-### Claude Code
-
-Add a server entry similar to this in your Claude Code settings:
+For example, a Claude Code `mcpServers` entry:
 
 ```json
 {
   "mcpServers": {
     "agda": {
       "command": "node",
-      "args": ["mcp/agda-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/agda-mcp-server/dist/index.js"],
       "env": {
-        "AGDA_MCP_ROOT": "."
+        "AGDA_MCP_ROOT": "/path/to/your/agda/project"
       }
     }
   }
 }
 ```
 
-### Other MCP clients
+Any stdio-capable MCP client works the same way: command `node`, args pointing at
+`dist/index.js`, env setting `AGDA_MCP_ROOT` to the target project root.
 
-Any MCP client that can spawn a stdio server can run this package. Use the same
-pattern:
+### What it can do
 
-- command: `node`
-- args: path to `dist/index.js`
-- environment: set `AGDA_MCP_ROOT` to the Agda project root
+The server exposes tools across load/typecheck, goal inspection (`agda_goal_type`,
+`agda_metas`, `agda_goal_catalog`), proof actions (`agda_case_split`, `agda_give`,
+`agda_refine`, `agda_auto`), expression queries (`agda_compute`, `agda_infer`),
+navigation/search, and session capture for bug reports. For the full current tool list,
+call the `agda_tools_catalog` MCP tool itself — it is manifest-derived and always in sync
+with the running server, unlike a hand-maintained doc.
 
-## Session model
-
-This server is intentionally stateful.
-
-- One shared Agda session is kept alive.
-- The session tracks the currently loaded file.
-- Goal IDs are meaningful only for the currently loaded file and current Agda state.
-- If the file changes on disk, reload it with `agda_load` before continuing.
-
-If you only want a quick compile check and do not need goals, use
-`agda_typecheck` instead of creating a session.
-
-### Write-back for proof actions
-
-The proof-action tools (`agda_give`, `agda_refine`, `agda_refine_exact`,
-`agda_intro`, `agda_auto`, `agda_case_split`, `agda_solve_one`, `agda_solve_all`)
-persist their result to the source file by default and auto-reload, so the
-session and disk stay in sync without a separate edit step. Pass
-`writeToFile: false` on any of those calls for session-only behavior (old
-default).
-
-`agda_apply_edit(file, oldText, newText, occurrence?)` is a sibling primitive
-for non-goal edits — adding imports, renaming symbols, fixing typos. It
-substitutes `oldText` with `newText` in the named file and reloads. `oldText`
-must match exactly once unless `occurrence` (1-based) is provided.
-
-Both paths share the same safety guarantees:
-
-- **Agda source files only.** `agda_apply_edit` refuses anything outside the
-  `.agda` / `.lagda[.md/.rst/.tex/.org/.typ]` allowlist — it cannot be used
-  to modify `.git/config`, `package.json`, shell scripts, or other
-  non-Agda files inside the project root.
-- **Path containment.** All edits resolve the target path through
-  `realpath` and verify it stays inside the project root; a symlink that
-  physically points outside the root is refused.
-- **Symlink race defense.** Source reads use `O_NOFOLLOW`; if a symlink is
-  planted at the canonical path after path resolution, the read fails with
-  `ELOOP` instead of silently following it.
-- **File size cap.** The edit pipeline refuses to read or write any Agda
-  source file larger than **512 KiB** (524288 bytes). This protects memory,
-  scanner cost, and blast radius — it is a deliberate soft cap, not a
-  protocol limit. If you have a legitimate Agda source file that trips
-  this, treat it as a sign that the file should be split rather than as a
-  bug to work around.
-- **Atomic writes.** Edits go through a temp-file-rename so readers never
-  observe a partially-written state. The temp filename mixes pid and
-  `randomUUID()` and is created with `O_EXCL` so it cannot be pre-planted
-  by a concurrent process.
-- **Staleness guard.** If the loaded file has been modified on disk since
-  the last `agda_load`, the edit is refused and the session is reloaded
-  to match disk — writes never clobber external changes.
-
-## Tool reference
-
-## Protocol coverage
-
-This repository now tracks full command-inventory parity with Agda's interactive
-IOTCM command constructors listed in `Agda.Interaction.Base`
-(verification date: 2026-03-24).
-
-- The current protocol inventory lives in `src/protocol/command-registry.ts`.
-- The protocol parity matrix lives in `src/protocol/parity-matrix.ts`.
-- The inventory and parity tests enforce that every tracked upstream command has
-  a parity row, but semantic parity is tracked separately from mere command
-  mapping.
-- Architecture still keeps a clean separation between transport, protocol
-  decoding, and MCP presentation layers.
-
-Use `agda_protocol_parity` for the current matrix, including known gaps.
-
-At the current milestone, the server now exposes:
-
-- `agda_goal_type_context_infer` for goal, context, and inferred-type queries
-- `agda_goal_type_context_check` for goal, context, and checked-term queries
-- `agda_goal` for exact goal-only display
-- `agda_context` for exact context-only display
-- `agda_refine_exact` for exact `Cmd_refine`
-- `agda_intro` for exact `Cmd_intro`
-- `agda_solve_one` for exact `Cmd_solveOne`
-- `agda_load_no_metas` for strict loading without unresolved goals
-- `agda_abort` and `agda_exit` for process control
-- `agda_show_version` for the running Agda process version
-- `agda_load_highlighting_info`, `agda_token_highlighting`, and `agda_highlight` for highlighting control
-- `agda_show_implicit_args` / `agda_toggle_implicit_args` and `agda_show_irrelevant_args` / `agda_toggle_irrelevant_args` for display toggles
-- `agda_compile`, `agda_backend_top`, and `agda_backend_hole` for backend interaction commands
-- `agda_tools_catalog` for manifest-derived tool and schema introspection
-- `agda_session_snapshot` for one-call agent session introspection with suggested actions
-- `agda_goal_catalog` for one-call full proof-state inspection across all goals
-- `agda_tool_recommend` for priority-ordered next-tool recommendations based on proof state
-- `agda_bug_report_bundle` and `agda_bug_report_update_bundle` for structured bug intake
-
-### Session management
-
-| Tool                  | Description                                                                                                     |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `agda_load`           | Load and type-check a file, establish the active interactive session, and return current goal IDs               |
-| `agda_load_no_metas`  | Load and type-check a file, failing if any unsolved metavariables remain                                        |
-| `agda_session_status` | Show the currently loaded file and available goal IDs                                                           |
-| `agda_show_version`   | Show the version string reported by the running Agda process                                                    |
-| `agda_abort`          | Send Agda's `Cmd_abort` to the running process                                                                  |
-| `agda_exit`           | Send Agda's `Cmd_exit` to the running process                                                                   |
-| `agda_typecheck`      | Run a stateless batch type-check without creating or updating the interactive session                           |
-| `agda_apply_edit`     | Apply a targeted text substitution to an Agda source file and reload (imports, renames, typos; Agda files only) |
-| `agda_tools_catalog`  | Return the manifest-derived catalog of tools, categories, and schema field names                                |
-
-### Display and highlighting
-
-| Tool                          | Description                                         |
-| ----------------------------- | --------------------------------------------------- |
-| `agda_load_highlighting_info` | Load highlighting metadata for a file               |
-| `agda_token_highlighting`     | Keep or remove token highlighting output for a file |
-| `agda_highlight`              | Highlight an expression in a goal context           |
-| `agda_show_implicit_args`     | Set implicit-argument visibility                    |
-| `agda_toggle_implicit_args`   | Toggle implicit-argument visibility                 |
-| `agda_show_irrelevant_args`   | Set irrelevant-argument visibility                  |
-| `agda_toggle_irrelevant_args` | Toggle irrelevant-argument visibility               |
-
-### Backend commands
-
-| Tool                | Description                                                            |
-| ------------------- | ---------------------------------------------------------------------- |
-| `agda_compile`      | Compile a module through Agda using a selected backend (`Cmd_compile`) |
-| `agda_backend_top`  | Send backend-specific top-level payload (`Cmd_backend_top`)            |
-| `agda_backend_hole` | Send backend-specific goal-hole payload (`Cmd_backend_hole`)           |
-
-### Reporting and agent introspection
-
-| Tool                            | Description                                                                                       |
-| ------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `agda_session_snapshot`         | Return a structured snapshot of session state: phase, goal counts, completeness, staleness, and prioritised suggested next actions |
-| `agda_tool_recommend`           | Suggest likely next MCP tool calls ordered by priority, with rationale and pre-filled arguments   |
-| `agda_bug_report_bundle`        | Generate a structured bundle for a new bug report or regression                                   |
-| `agda_bug_report_update_bundle` | Generate a structured bundle for updating an existing bug report with new data                    |
-
-### Goal inspection and proof interaction
-
-These tools require a file to be loaded first via `agda_load`.
-
-| Tool                           | Description                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `agda_goal_catalog`            | Return a structured catalog of all open goals: types, contexts, splittable variables, and per-goal suggestions |
-| `agda_goal_type`               | Show the goal type and local context for one interaction point                            |
-| `agda_goal`                    | Show only the goal type for one interaction point                                         |
-| `agda_context`                 | Show only the local context for one interaction point                                     |
-| `agda_metas`                   | List unsolved goals in the loaded file                                                    |
-| `agda_case_split`              | Case-split on a variable in a goal and return the generated clauses                       |
-| `agda_give`                    | Fill a goal with a proposed expression                                                    |
-| `agda_refine`                  | Refine a goal by applying a function or constructor                                       |
-| `agda_refine_exact`            | Refine a goal using Agda's exact `Cmd_refine` command                                     |
-| `agda_intro`                   | Introduce a lambda or constructor using Agda's exact `Cmd_intro` command                  |
-| `agda_auto`                    | Attempt proof search for a single goal                                                    |
-| `agda_auto_all`                | Attempt proof search across all goals                                                     |
-| `agda_solve_all`               | Solve goals that have unique solutions                                                    |
-| `agda_solve_one`               | Solve one goal if Agda already knows it has a unique solution                             |
-| `agda_compute`                 | Normalize an expression, either in goal context or at top level                           |
-| `agda_infer`                   | Infer the type of an expression, either in goal context or at top level                   |
-| `agda_constraints`             | Show Agda's current constraint set                                                        |
-| `agda_elaborate`               | Elaborate an expression in a goal context                                                 |
-| `agda_helper_function`         | Generate a helper function type from a goal-local expression                              |
-| `agda_goal_type_context_infer` | Show a goal's context and type together with the inferred type of an expression           |
-| `agda_goal_type_context_check` | Show a goal's context and type together with the checked elaborated form of an expression |
-
-### Navigation and environment inspection
-
-| Tool                      | Description                                                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `agda_read_module`        | Read a module from disk with line numbers; pass `codeOnly: true` to extract just Agda blocks from literate files       |
-| `agda_list_modules`       | List Agda modules in a directory tier; paginated (`offset`, `limit`, `pattern`) with total count in every response     |
-| `agda_impact`             | List files that transitively import a given file — direct and transitive dependents and dependencies                   |
-| `agda_cache_info`         | Show the `.agdai` interface cache paths for the loaded file                                                            |
-| `agda_check_postulates`   | Check a file for `postulate` declarations                                                                              |
-| `agda_search_definitions` | Search source files for matching identifiers or text                                                                   |
-| `agda_why_in_scope`       | Explain why a name is in scope, either at top level or in a goal                                                       |
-| `agda_show_module`        | Show what a module exports                                                                                             |
-| `agda_search_about`       | Search the loaded environment for names whose types mention the query                                                  |
-
-## Typical interactive workflow
-
-```text
-1. agda_load file="MyModule.agda"
-     → Status: OK, 3 unsolved goals (?0, ?1, ?2)
-
-2. agda_goal_type goalId=0
-     → Context: (x : Nat), (p : x ≡ zero)
-     → Goal: x + zero ≡ x
-
-3. agda_auto goalId=0
-     → No automatic solution found.
-
-4. agda_elaborate goalId=0 expr="+-identityʳ x"
-     → Elaborated: +-identityʳ x : x + zero ≡ x
-
-5. agda_give goalId=0 expr="+-identityʳ x"
-     → Goal solved.
-
-6. Apply edits to the source file if needed.
-
-7. agda_load file="MyModule.agda"
-     → Reload to refresh remaining goals.
-```
-
-## Stateless vs stateful operations
-
-Use `agda_typecheck` when you want:
-
-- a quick yes or no answer about whether a file checks,
-- error and warning output only,
-- no interactive goal information,
-- no persistent Agda session.
-
-Use `agda_load` when you want:
-
-- stable goal IDs,
-- interactive commands against holes,
-- proof search, refinement, elaboration, and local type information,
-- a persistent Agda subprocess.
-
-## Environment variables
-
-| Variable                     | Default | Description                                                            |
-| ---------------------------- | ------- | ---------------------------------------------------------------------- |
-| `AGDA_MCP_ROOT`              | `cwd`   | Root directory used to resolve Agda files and relative extension paths |
-| `AGDA_MCP_EXTENSION_MODULES` | unset   | Colon-separated list of extension module paths or package specifiers   |
-
-## Extension modules
-
-The core server is intentionally generic and supports external extension modules.
-
-For complete setup instructions and multiple extension examples, see:
-
-- [docs/extensions.md](docs/extensions.md)
-- [examples/extensions/README.md](examples/extensions/README.md)
-
-## Development
-
-### Scripts
-
-| Script                     | Purpose                                                         |
-| -------------------------- | --------------------------------------------------------------- |
-| `npm run build`            | Compile TypeScript into `dist/`                                 |
-| `npm run dev`              | Run the TypeScript entry point directly with `tsx`              |
-| `npm test`                 | Build first, then run the Node test suite                       |
-| `npm run test:examples`    | Run tests focused on extension examples and extension docs links |
-| `npm run test:integration` | Run the Agda-backed integration test scaffold                   |
-| `npm run verify`           | Run tests and verify package contents with `npm pack --dry-run` |
-
-### Local development flow
+## Developing
 
 ```bash
 npm install
@@ -446,169 +91,14 @@ npm test
 npm run verify
 ```
 
-### Tests
-
-The test suite currently focuses on lightweight, deterministic behavior such as:
-
-- response parsing,
-- Agda command string escaping,
-- Agda binary discovery,
-- session cleanup behavior.
-
-The tests intentionally avoid depending on a live Agda installation so they can
-run reliably in normal CI environments.
-
-An integration scaffold is also available for environments where Agda is
-installed:
-
-```bash
-RUN_AGDA_INTEGRATION=1 npm run test:integration
-```
-
-Backend integration commands can be exercised with:
-
-```bash
-RUN_AGDA_BACKEND_INTEGRATION=1 AGDA_BACKEND_EXPR=GHC npm run test:integration
-```
-
-`AGDA_BACKEND_EXPR` accepts backend constructor expressions such as `GHC`,
-`GHCNoMain`, `LaTeX`, `QuickLaTeX`, or `OtherBackend "Name"`.
-
-## Publishing
-
-The package is configured for public npm publishing.
-
-Before publishing:
-
-1. Update the version in `package.json`.
-2. Run `npm run verify`.
-3. Publish with npm using your normal release process.
-
-The `prepublishOnly` script runs verification automatically before publish.
-
-Only the following files are published:
-
-- `dist/`
-- `README.md`
-- `LICENSE`
-
-## Continuous integration
-
-This repository includes a GitHub Actions workflow at
-[.github/workflows/ci.yml](.github/workflows/ci.yml) that:
-
-- installs dependencies with `npm ci`,
-- runs on pushes and pull requests,
-- verifies the package on Node.js 24.
-
-## Community and maintenance files
-
-This repository also includes:
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) for contributor setup and workflow guidance
-- [SECURITY.md](SECURITY.md) for vulnerability reporting guidance
-- [CHANGELOG.md](CHANGELOG.md) for release history
-- [.github/ISSUE_TEMPLATE/config.yml](.github/ISSUE_TEMPLATE/config.yml) and issue forms for structured reports
-- [.github/pull_request_template.md](.github/pull_request_template.md) for consistent pull requests
-- [.nvmrc](.nvmrc) and the `packageManager` field in [package.json](package.json) for local toolchain alignment
-
-## Architecture overview
-
-```text
-src/
-  index.ts
-    Bootstraps the MCP server, registers core tools, and loads extensions.
-
-  agda-process.ts
-    Public barrel for the Agda integration layer.
-
-  agda/
-    session.ts
-      Owns the Agda subprocess, transport, buffering, and session state.
-    batch.ts
-      Stateless batch type-checking.
-    goal-operations.ts
-      Goal-centric interactive commands.
-    expression-operations.ts
-      Expression normalization and type inference.
-    advanced-queries.ts
-      Constraints, scope, elaboration, module inspection, and search.
-    display-operations.ts
-      Highlighting and display-toggle command delegates.
-    backend-operations.ts
-      Compile and backend payload command delegates.
-    backend-expression.ts
-      Backend expression validation and normalization.
-    response-parsing.ts
-      Helpers for extracting user-facing messages from Agda responses.
-    types.ts
-      Shared types for the Agda integration layer.
-
-  protocol/
-    command-registry.ts
-      Upstream command inventory and parity metadata.
-    responses/
-      goal-display.ts
-      proof-actions.ts
-      process-controls.ts
-      backend.ts
-        Focused response decoders per command family.
-
-  tools/
-    session.ts
-      MCP tool registration for loading and status operations.
-    proof.ts
-      MCP tool registration for goal-oriented proof actions.
-    navigation.ts
-      MCP tool registration for source and environment navigation.
-    display.ts
-      MCP tool registration for highlighting and display toggles.
-    backend.ts
-      MCP tool registration for compile and backend payload commands.
-
-  session/
-    session-state.ts
-      High-level session phase derivation used to keep process lifecycle concerns explicit.
-```
-
-## Protocol notes
-
-The server communicates with Agda using the
-[IOTCM protocol](https://hackage.haskell.org/package/Agda-2.7.0.1/docs/Agda-Interaction-Base.html)
-over `--interaction-json` mode.
-
-At a high level:
-
-- commands are written to Agda on stdin as IOTCM strings,
-- Agda emits newline-delimited JSON responses on stdout,
-- stderr output is captured for diagnostics,
-- session completion is inferred from status and running-info messages.
-
-## Troubleshooting
-
-### `agda` cannot be found
-
-Make sure either:
-
-- `agda` is installed and on your `PATH`, or
-- `tooling/scripts/run-pinned-agda.sh` exists in the repo root.
-
-### Goal IDs stop working
-
-Goal IDs are tied to the current loaded file and the current Agda state. If the
-source changed or you applied a case split, reload the file with `agda_load`.
-
-### Top-level commands fail with "No file loaded"
-
-Most interactive commands require an active loaded file because they need the
-Agda session context. Start with `agda_load`.
-
-### Proof search or elaboration returns unexpected output
-
-Agda response formatting varies across commands. When in doubt, inspect the goal
-again with `agda_goal_type` and retry with a simpler expression.
+Integration tests need a real Agda binary: run them with
+`RUN_AGDA_INTEGRATION=1 npm run test:integration`. See [ARCHITECTURE.md](ARCHITECTURE.md)
+for the layering/module map and [AGENTS.md](AGENTS.md) for repo conventions for coding
+agents (`CLAUDE.md` mirrors the same constraints for Claude Code specifically). Constraints
+worth knowing up front: Node >= 24, TypeScript strict/ESM, a 500-line-per-file ceiling in
+`src/`, tests via `vitest`. Extension authors should see
+[docs/extensions.md](docs/extensions.md).
 
 ## License
 
-This project is licensed under the MIT License. External extension modules may
-use different licenses.
+MIT — see [LICENSE](LICENSE).
