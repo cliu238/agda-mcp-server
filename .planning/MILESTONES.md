@@ -1,5 +1,41 @@
 # Milestones
 
+## v1.1 Feed the Loop (Shipped: 2026-07-05)
+
+**Phases completed:** 4 phases, 24 plans, 48 tasks
+**Stats:** 202 commits, 175 files changed (+25,236 / −1,685), 2026-07-03 → 2026-07-05
+**Audit:** tech_debt — 17/17 requirements, 5/5 integration seams, zero blockers (`milestones/v1.1-MILESTONE-AUDIT.md`)
+**Known deferred items at close:** 0 genuinely open (audit-open's single flag — quick task `260702-29k` — was a false positive: PLAN + SUMMARY exist and commit `6aa28e4` is in history; STATE.md records it completed 2026-07-02)
+
+**Key accomplishments:**
+
+- Case-exact, loud-fail ORCL-02 policy resolution (`PolicyResolutionError` + `resolvePolicyStrict`) plus `--policy` CLI passthrough and corpus-derived resolution on `run-oracle.mjs`/`dogfood-wrapup.mjs`, closing the v1.0 audit's W2 defect.
+- Re-verified RT1-RT4 live through the shipped dogfood-run/capture/wrapup pipeline against current main: RT1 does not reproduce (response schema now structurally prevents the v0.6.7 shape), RT2/RT3/RT4 all confirmed alive with corrected affectedTool identities and root causes pinpointed in source.
+- Re-verified RT5-RT8 live through the shipped dogfood-run/capture/wrapup pipeline against current main: all 4 CONFIRMED (RT5 mutation-tool false-success, RT6 agda_load five-state conflation as missing-feature, RT7 misleading timeout diagnostics, RT8 agda_load_no_metas's total silence on stale-reload transitions) — completing REVERIFY-01 with zero needsReverify entries remaining, plus a precisely-diagnosed oracle-tooling fidelity gap discovered as a byproduct and flagged for the next wave.
+- Closed the two highest-priority QUEUE-02 confirmed live defects — agda_auto's CLI-flag hint injection and agda_give's ok:true-wrapping-rejection — each with a from-RED regression pair proving the fix.
+- Fixed two of the four D-09/D-10 named confirmed defects — agda_proof_status's contradictory "All goals solved." tagline and agda_search_definitions' hardcoded agda/ layout — both from RED, both path-sandboxed where applicable.
+- Locked 8 confirmed defects (the mandatory named-4 plus RT2/RT3/RT4/RT8) via from-RED vitest regression tests, explicitly deferred 5 rows with recorded large-redesign reasons, and closed both REVERIFY-01 and REVERIFY-02 on a green 1627-test suite — zero queue rows left silently stalled.
+- Maintainer-run `issue-key.mjs` CLI mints/rotates/revokes per-person Bearer keys against a gitignored, sha256-hash-only registry, verified via `crypto.timingSafeEqual`, with a 12-case regression suite proving the security invariants.
+- Fail-open tar.gz upload client (system `tar` + `node:zlib`, zero new npm deps) with AppleDouble exclusion and a D-08-bounded NDJSON local retry queue, feeding TEAM-03's ingest endpoint.
+- Locally-running ~330-line `node:http` ingest endpoint authenticates uploads via 07-01's key registry, caps streamed bodies at 512 MiB (env-tunable) before any byte is buffered, and stores archives byte-identical and untouched under `<storageDir>/<person>/<date>/<runId>.tar.gz`.
+- run-report.json now records taskManifestCorpora (fed by dogfood-run.mjs's already-loaded task manifest), and dogfood-wrapup.mjs unconditionally chains upload-run.mjs via a fail-open spawn, proven never to touch its own judging-error exit code.
+- Two-layer sandboxed bounded tar.gz extraction (`archive-extract.mjs`) feeding an unattended cron judge (`cron-ingest-wrapup.mjs`) that reuses the unchanged oracle-triad wrap-up pipeline, resolves policyKey from `taskManifestCorpora` (never `.agda-lib`), tracks server-version skew, surfaces the abstention rate, and writes back to `test/fixtures/fix-queue.json` via `git add/commit/push` with a `--no-push` dev escape hatch.
+- Found, fixed, and live-re-verified a real SIGKILL-data-loss defect in the dogfooding loop's own recording proxy (dogfood-run.mjs), then drove the fixed proxy through a complete capture -> upload -> ingest -> cron-judge -> fix-queue loop against the real pinned codex-homotopy-group corpus, surfacing a second, genuinely new oracle-triad-tooling finding along the way.
+- Plain-node fuel-corpus clone primitive + Agda verify-and-instruct installer, with immediate token-scrub after every credentialed private clone (T-08-02).
+- Digest-pinned 2-stage Dockerfile (cabal-built Agda 2.8.0 on haskell:9.10-bookworm -> node:24-slim, UID 2231, 4 baked-in fuel-corpus clones behind a BuildKit secret mount) plus Deployment/Service/Ingress/CronJob manifests targeting the live-verified llm-gateway namespace and sciserver-datavolumes-01-rw PVC.
+- Zero-to-uploading onboarding doc plus a genuinely-executed fresh-teammate test that drives install-pinned-env.mjs's Agda-verify/clone orchestration into a real local ingest-server.mjs upload over loopback — proving TEAM-05's local-mode fallback before any k8s cluster exists.
+- Auto-deploy-on-main CI/CD (GHCR build+push with BuildKit corpus token, D-10 uncredentialed-build proof, SSH-jump kubectl apply) driven through 4 real deploy attempts to a fully green run and a live public healthz — each attempt surfaced a distinct, real deploy defect that is now fixed and documented.
+- Real teammate-shaped upload landed on the live Ceph PVC through the public ingress with a real rotated Bearer key, and a real manual cron-judge run completed with the D-09 write-back-disabled property proven in-pod — DEPLOY-01's functional core works, not just deploys.
+- POLICY-01 re-proven 6/6 on the live cluster pod's own filesystem, local mode re-proven 96/96 at phase end, and annotated tag v1.1 cut on 6c0d716d and pushed — the installer's latest-tag resolution now lands on a tag that actually contains Phases 6-9 (D-11).
+- Deleted two orphaned/dead-ended v1.0 maintainer scripts (verify-cold-replay.mjs, promote-capture.mjs), removed promote-capture's one real call site from the dogfood-run.mjs proxy, corrected four scripts' dangling comment references, and recorded both decisions in PROJECT.md with re-verified zero-importer evidence.
+- Deferred `resetRecordedActions()` until after a durable `writeFileAtomic` succeeds (WR-01), moved `register-capture-session.test.ts` off the shared tracked fixture tree onto per-test `mkdtempSync` sandboxes (WR-12), and recorded WR-08's already-resolved status with grep-verified evidence instead of silently skipping it.
+- Consolidated 40-row STRIDE threat register (14 Phase-5 process-spawning + 26 Phase-7 network-surface threats) into `.planning/phases/09-residual-v1-0-debt-sweep/09-SECURITY.md`, verified with zero dropped threat IDs via an actual grep/diff completeness check.
+- Cleared 20 of 21 tsconfig.test.json-erroring test files to zero tsc errors via six mechanical error families (missing `profiling`/`requiresLoadedSession`/`projectRootExists` fields, `@ts-expect-error` multi-line-import placement, `ReplayManifest` mistyped as `Record<string,unknown>`, and mock-arity inference collapse), plus closed the W5 audit gap by schema-validating dogfood-wrapup-filing.test.ts's mocked fix-queue entries against the real `fixQueueEntrySchema`.
+- Hardened both dogfood CLI argv parsers against flag-shaped/path-traversing run-ids, closed install-dogfood-skill.mjs's dangling-symlink false-success gap, tightened its gitignore test's exit-status assertion, and hoisted a safe stagedPath so a corrupt wrap-up entry can no longer abort the whole judging run.
+- Closed the final 13 tsc errors (all in one file's fake-ChildProcess mocks) with a type-only diff, confirmed `npx tsc -p tsconfig.test.json --noEmit` exits 0 across the whole repository, wired a permanent `typecheck:test` CI step into the verify job, and recorded DEBT-07's map-codebase refresh as an explicit orchestrator-level deferral in PROJECT.md.
+
+---
+
 ## v1.0 Self-Improvement Loop (Shipped: 2026-07-03)
 
 **Phases completed:** 6 phases, 26 plans, 53 tasks
