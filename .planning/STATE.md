@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 Phase: Milestone v1.1 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-05 - Completed quick task 260705-gn0: Rewrite README.md for end users
+Last activity: 2026-07-05 - Completed quick task 260705-h78: README CI fix + Codex config + user/team install split + TEAM-ONBOARDING simplification
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ None yet.
 | 260702-29k | Re-verify CHG v0.6.7 defect list against current main | 2026-07-02 | 6aa28e4 | [260702-29k-re-verify-chg-v0-6-7-defect-list-against](./quick/260702-29k-re-verify-chg-v0-6-7-defect-list-against/) |
 | 260705-79k | Upstream auto-sync: bounded-autonomy skill shipped (ed20063); cloud probe/routine BLOCKED by claude.ai org GitHub-sync gate — deferred with re-arm path; interim carrier = local headless | 2026-07-05 | ed20063 | [260705-79k-upstream-auto-sync-via-scheduled-cloud-r](./quick/260705-79k-upstream-auto-sync-via-scheduled-cloud-r/) |
 | 260705-gn0 | Rewrite README.md for end users: why this fork exists, how to use, how to develop (615 → 104 lines, upstream-marketing content deleted, canonical docs linked) | 2026-07-05 | 5b09997 | [260705-gn0-rewrite-readme-md-for-end-users-why-this](./quick/260705-gn0-rewrite-readme-md-for-end-users-why-this/) |
+| 260705-h78 | Fix README CI regression (extensions-catalog link), add Codex `codex mcp add` config, split user (Agda 2.6.4.3–2.9.0, no corpora) vs team (pinned-env) install paths, simplify TEAM-ONBOARDING (199 → 92 lines, TL;DR fast path, live-endpoint fact) | 2026-07-05 | 5a6eedd | [260705-h78-fix-readme-ci-regression-add-codex-clien](./quick/260705-h78-fix-readme-ci-regression-add-codex-clien/) |
 
 ## Deferred Items
 
