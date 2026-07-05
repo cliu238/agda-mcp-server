@@ -4,7 +4,10 @@ import { join, resolve } from "node:path";
 
 import { test, expect } from "vitest";
 
-import { runLoad, runLoadNoMetas } from "../../../src/agda/session-load-impl.js";
+import {
+  runLoad,
+  runLoadNoMetas,
+} from "../../../src/agda/session-load-impl.js";
 import { expectWarning } from "../../helpers/warn-guard.js";
 
 function makeTempRepo(): string {
@@ -54,7 +57,9 @@ function loadResponsesWithInvisibleGoal() {
         kind: "AllGoalsWarnings",
         visibleGoals: [],
         // IOTCM NamedMeta: { name: string, range: Range }
-        invisibleGoals: [{ constraintObj: { name: "_1", range: [] }, type: "Set" }],
+        invisibleGoals: [
+          { constraintObj: { name: "_1", range: [] }, type: "Set" },
+        ],
         errors: [],
         warnings: [],
       },
@@ -73,14 +78,20 @@ function truncatedLoadResponses() {
   ];
 }
 
-test("runLoad throws (no fabricated success) when the process ended before the goal state", async () => {
+test("runLoad reports incomplete when the response stream has no terminal event", async () => {
   // The transport waits for Agda's goal-state responses, so a response set
-  // lacking them means the process ended mid-load. runLoad must fail
-  // loudly rather than report a classification — never a fabricated
-  // ok-complete, and never an invented status string.
+  // lacking them means the process ended mid-load. runLoad must return a
+  // load-incomplete-no-terminus classification — never a fabricated
+  // ok-complete, never a thrown error (CLAUDE.md: expected domain-level
+  // load failures are returned, not thrown; finalizeEarlyReturn records
+  // the attempt on the session, it never leaves lastClassification null).
   const root = makeTempRepo();
   const file = "Truncated.agda";
-  writeFileSync(resolve(root, file), "module Truncated where\nx : Set\nx = {!!}\n", "utf8");
+  writeFileSync(
+    resolve(root, file),
+    "module Truncated where\nx : Set\nx = {!!}\n",
+    "utf8",
+  );
 
   let metasCalls = 0;
   const session = {
@@ -91,17 +102,26 @@ test("runLoad throws (no fabricated success) when the process ended before the g
     lastClassification: "ok-complete",
     lastLoadedAt: 999,
     lastInvisibleGoalCount: 2,
-    goal: { metas: async () => { metasCalls += 1; return { goals: [] }; } },
+    goal: {
+      metas: async () => {
+        metasCalls += 1;
+        return { goals: [] };
+      },
+    },
     sendCommand: async () => truncatedLoadResponses(),
     iotcmFor: (_path: string, cmd: string) => cmd,
   } as any;
 
   try {
-    await expect(runLoad(session, file)).rejects.toThrow(/ended before completing the load/i);
-    // Never ran metas — the guard fires before reconciliation.
+    const result = await runLoad(session, file);
+    expect(result.success).toBe(false);
+    expect(result.classification).toBe("load-incomplete-no-terminus");
+    expect(result.errors[0]).toMatch(/no terminal goal-state event/i);
+    // Never ran metas — the truncation guard fires before reconciliation.
     expect(metasCalls).toBe(0);
-    // Prior success state was invalidated up front and not restored.
-    expect(session.lastClassification).toBeNull();
+    // Prior success state was invalidated up front, then the attempt
+    // itself is recorded — never left null.
+    expect(session.lastClassification).toBe("load-incomplete-no-terminus");
     expect(session.goalIds).toEqual([]);
     expect(session.currentFile).toBeNull();
   } finally {
@@ -123,7 +143,9 @@ test("runLoad invalidates prior success state before a load that throws", async 
     lastLoadedAt: 100,
     lastInvisibleGoalCount: 1,
     goal: { metas: async () => ({ goals: [] }) },
-    sendCommand: async () => { throw new Error("sendCommand timed out"); },
+    sendCommand: async () => {
+      throw new Error("sendCommand timed out");
+    },
     iotcmFor: (_path: string, cmd: string) => cmd,
   } as any;
 
@@ -151,7 +173,10 @@ test("runLoad invalidates prior state and records the attempt on a missing file"
     lastLoadedAt: 100,
     lastInvisibleGoalCount: 1,
     goal: { metas: async () => ({ goals: [] }) },
-    sendCommand: async () => { sent = true; return cleanLoadResponses(); },
+    sendCommand: async () => {
+      sent = true;
+      return cleanLoadResponses();
+    },
     iotcmFor: (_path: string, cmd: string) => cmd,
   } as any;
 
@@ -187,12 +212,61 @@ test("runLoad invalidates prior state and records the attempt on invalid options
   } as any;
 
   try {
-    const result = await runLoad(session, file, { commandLineOptions: ["--interaction-json"] });
+    const result = await runLoad(session, file, {
+      commandLineOptions: ["--interaction-json"],
+    });
     expect(result.classification).toBe("invalid-command-line-options");
     expect(session.currentFile).toBeNull();
     expect(session.goalIds).toEqual([]);
     expect(session.lastClassification).toBe("invalid-command-line-options");
     expect(session.lastLoadedAt).not.toBeNull();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runLoad recovers dropped visible goal IDs via a metas re-query when source has holes", async () => {
+  const root = makeTempRepo();
+  const file = "Recover.agda";
+  writeFileSync(
+    resolve(root, file),
+    "module Recover where\nx : Set\nx = {!!}\n",
+    "utf8",
+  );
+
+  // Simulate the dropped-tail case: the load response carried a terminus
+  // (InteractionPoints) but no goal IDs, and the FIRST metas reconcile
+  // also missed them; the recovery re-query then surfaces goal 0.
+  let metasCalls = 0;
+  const session = {
+    repoRoot: root,
+    currentFile: null,
+    goalIds: [],
+    lastLoadedMtime: 0,
+    lastClassification: null,
+    lastLoadedAt: null,
+    lastInvisibleGoalCount: 0,
+    goal: {
+      metas: async () => {
+        metasCalls += 1;
+        return metasCalls >= 2
+          ? { goals: [{ goalId: 0, type: "Set", context: [] }] }
+          : { goals: [] };
+      },
+    },
+    // Terminus present (empty InteractionPoints) but zero goal IDs.
+    sendCommand: async () => cleanLoadResponses(),
+    iotcmFor: (_path: string, cmd: string) => cmd,
+  } as any;
+
+  try {
+    const result = await runLoad(session, file);
+    expect(result.success).toBe(true);
+    expect(result.classification).toBe("ok-with-holes");
+    expect(result.goals.map((g) => g.goalId)).toEqual([0]);
+    expect(result.goalCount).toBe(1);
+    expect(session.goalIds).toEqual([0]);
+    expect(metasCalls).toBe(2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -228,11 +302,11 @@ test("runLoadNoMetas accepts a clean strict load reporting an empty goal state",
   }
 });
 
-test("runLoadNoMetas throws (no false green) when the process ended before the goal state", async () => {
-  // Bug #3: a clean Cmd_load_no_metas emits no terminus, so idle
-  // completion could resolve a still-checking load as ok-complete. The
-  // strict path now runs over Cmd_load and requires the goal-state
-  // terminus — a truncated stream must fail loudly, never report success.
+test("runLoadNoMetas reports incomplete when the response stream has no terminal event", async () => {
+  // The strict path runs over Cmd_load (see the runLoadNoMetas comment
+  // above), so it shares runLoad's goal-state-terminus wait: a truncated
+  // stream must return load-incomplete-no-terminus, never a thrown error
+  // or a fabricated strict success.
   const root = makeTempRepo();
   const file = "TruncatedStrict.agda";
   writeFileSync(resolve(root, file), "module TruncatedStrict where\n", "utf8");
@@ -250,11 +324,13 @@ test("runLoadNoMetas throws (no false green) when the process ended before the g
   } as any;
 
   try {
-    await expect(runLoadNoMetas(session, file)).rejects.toThrow(
-      /ended before completing the strict load/i,
-    );
-    // Prior success state was invalidated up front and not restored.
-    expect(session.lastClassification).toBeNull();
+    const result = await runLoadNoMetas(session, file);
+    expect(result.success).toBe(false);
+    expect(result.classification).toBe("load-incomplete-no-terminus");
+    expect(result.errors[0]).toMatch(/no terminal goal-state event/i);
+    // Prior success state was invalidated up front, then the attempt
+    // itself is recorded — never left null.
+    expect(session.lastClassification).toBe("load-incomplete-no-terminus");
     expect(session.goalIds).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -264,7 +340,11 @@ test("runLoadNoMetas throws (no false green) when the process ended before the g
 test("runLoad classifies explicit hole as ok-with-holes despite empty protocol goals", async () => {
   const root = makeTempRepo();
   const file = "Hole.agda";
-  writeFileSync(resolve(root, file), "module Hole where\n\nx : Set\nx = {!!}\n", "utf8");
+  writeFileSync(
+    resolve(root, file),
+    "module Hole where\n\nx : Set\nx = {!!}\n",
+    "utf8",
+  );
 
   const session = {
     repoRoot: root,
@@ -324,9 +404,12 @@ test("runLoad records lastClassification on the process-died-during-reconciliati
         // Mimic AgdaSession.sendCommand's behavior on a timeout
         // that killed the proc: the `finally` block clears state.
         (session as { currentFile: string | null }).currentFile = null;
-        (session as { lastClassification: string | null }).lastClassification = null;
+        (session as { lastClassification: string | null }).lastClassification =
+          null;
         (session as { lastLoadedAt: number | null }).lastLoadedAt = null;
-        throw new Error("sendCommand timed out after 60000ms (received 0 responses: {})");
+        throw new Error(
+          "sendCommand timed out after 60000ms (received 0 responses: {})",
+        );
       },
     },
     sendCommand: async () => cleanLoadResponses(),
@@ -341,7 +424,9 @@ test("runLoad records lastClassification on the process-died-during-reconciliati
 
     // The contract: lastClassification MUST mirror the returned result
     // even on this early-return path. Without the fix it would be null.
-    expect(session.lastClassification).toBe("process-died-during-reconciliation");
+    expect(session.lastClassification).toBe(
+      "process-died-during-reconciliation",
+    );
     expect(session.lastLoadedAt).not.toBeNull();
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -377,7 +462,9 @@ test("runLoad reports failure when post-load metas reconciliation killed the pro
       metas: async () => {
         metasCalls += 1;
         (session as { currentFile: string | null }).currentFile = null;
-        throw new Error("sendCommand timed out after 60000ms (received 0 responses: {})");
+        throw new Error(
+          "sendCommand timed out after 60000ms (received 0 responses: {})",
+        );
       },
     },
     sendCommand: async () => cleanLoadResponses(),
@@ -400,7 +487,11 @@ test("runLoad reports failure when post-load metas reconciliation killed the pro
 test("runLoadNoMetas fails with type-error when explicit holes exist", async () => {
   const root = makeTempRepo();
   const file = "StrictHole.agda";
-  writeFileSync(resolve(root, file), "module StrictHole where\n\nx : Set\nx = {!!}\n", "utf8");
+  writeFileSync(
+    resolve(root, file),
+    "module StrictHole where\n\nx : Set\nx = {!!}\n",
+    "utf8",
+  );
 
   const session = {
     repoRoot: root,
@@ -431,7 +522,11 @@ test("runLoadNoMetas fails with type-error when explicit holes exist", async () 
 test("runLoadNoMetas fails when protocol reports visible goals (unresolved metas)", async () => {
   const root = makeTempRepo();
   const file = "VisibleMeta.agda";
-  writeFileSync(resolve(root, file), "module VisibleMeta where\nx : Set\nx = Set\n", "utf8");
+  writeFileSync(
+    resolve(root, file),
+    "module VisibleMeta where\nx : Set\nx = Set\n",
+    "utf8",
+  );
 
   const session = {
     repoRoot: root,
@@ -459,7 +554,11 @@ test("runLoadNoMetas fails when protocol reports visible goals (unresolved metas
 test("runLoadNoMetas fails when protocol reports invisible goals (unresolved metas)", async () => {
   const root = makeTempRepo();
   const file = "InvisibleMeta.agda";
-  writeFileSync(resolve(root, file), "module InvisibleMeta where\nx : Set\nx = Set\n", "utf8");
+  writeFileSync(
+    resolve(root, file),
+    "module InvisibleMeta where\nx : Set\nx = Set\n",
+    "utf8",
+  );
 
   const session = {
     repoRoot: root,
@@ -487,7 +586,11 @@ test("runLoadNoMetas fails when protocol reports invisible goals (unresolved met
 test("runLoad: hole-like text inside string literal does not force hole classification", async () => {
   const root = makeTempRepo();
   const file = "NoRealHole.agda";
-  writeFileSync(resolve(root, file), 'module NoRealHole where\n\nmsg = "{!!}"\n', "utf8");
+  writeFileSync(
+    resolve(root, file),
+    'module NoRealHole where\n\nmsg = "{!!}"\n',
+    "utf8",
+  );
 
   const session = {
     repoRoot: root,
@@ -541,7 +644,9 @@ test("runLoad passes commandLineOptions into the IOTCM options list", async () =
   } as any;
 
   try {
-    const result = await runLoad(session, file, { commandLineOptions: ["--Werror", "--safe"] });
+    const result = await runLoad(session, file, {
+      commandLineOptions: ["--Werror", "--safe"],
+    });
     expect(result.success).toBe(true);
     // The command string should contain both flags in the options list
     expect(capturedCmd).toContain('"--Werror"');
@@ -565,7 +670,9 @@ test("runLoad rejects invalid commandLineOptions", async () => {
   } as any;
 
   try {
-    const result = await runLoad(session, file, { commandLineOptions: ["--interaction-json"] });
+    const result = await runLoad(session, file, {
+      commandLineOptions: ["--interaction-json"],
+    });
     expect(result.success).toBe(false);
     expect(result.classification).toBe("invalid-command-line-options");
     expect(result.errors[0]).toContain("conflicts with the MCP server");
