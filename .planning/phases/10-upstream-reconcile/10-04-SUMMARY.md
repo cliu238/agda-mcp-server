@@ -108,3 +108,8 @@ None — no external service configuration required.
 ---
 *Phase: 10-upstream-reconcile*
 *Completed: 2026-07-05*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/10-upstream-reconcile/10-04-SUMMARY.md
+- FOUND commit: e56b2fd (docs(10-04): add plan summary)
