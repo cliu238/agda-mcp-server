@@ -16,6 +16,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -93,7 +94,28 @@ test("generateRunPinnedAgdaScript produces a bash wrapper that execs the resolve
   const script = generateRunPinnedAgdaScript("/opt/agda/bin/agda");
   expect(script).toMatch(/^#!\/usr\/bin\/env bash/);
   expect(script).toContain("set -euo pipefail");
-  expect(script).toContain('exec "/opt/agda/bin/agda" "$@"');
+  expect(script).toContain(`exec '/opt/agda/bin/agda' "$@"`);
+});
+
+test("generateRunPinnedAgdaScript renders shell metacharacters inert via single quotes (WR-09)", () => {
+  // AGDA_BIN is teammate-supplied free text: $, backtick, ", \ and
+  // embedded ' must all survive as literal path bytes, never expand.
+  const script = generateRunPinnedAgdaScript(`/tmp/we"ird$PATH\`x'y\\z/agda`);
+  expect(script).toContain(`exec '/tmp/we"ird$PATH\`x'\\''y\\z/agda' "$@"`);
+});
+
+test("the generated wrapper execs a path containing $, spaces and a single quote verbatim (WR-09)", () => {
+  const hostileDir = join(makeTempDir("agda-mcp-wrapper-hostile-"), "we ird$X'q");
+  mkdirSync(hostileDir, { recursive: true });
+  const fakeAgdaPath = join(hostileDir, "agda");
+  writeFileSync(fakeAgdaPath, '#!/usr/bin/env bash\necho "fake-agda-ran $1"\n');
+  chmodSync(fakeAgdaPath, 0o755);
+
+  const repoRoot = makeTempDir("agda-mcp-wrapper-repo-");
+  const scriptPath = writeRunPinnedAgdaScript(repoRoot, fakeAgdaPath);
+
+  const stdout = execFileSync("bash", [scriptPath, "--version"], { stdio: "pipe" }).toString();
+  expect(stdout).toBe("fake-agda-ran --version\n");
 });
 
 test("writeRunPinnedAgdaScript writes an executable wrapper at tooling/scripts/run-pinned-agda.sh", () => {
@@ -102,7 +124,7 @@ test("writeRunPinnedAgdaScript writes an executable wrapper at tooling/scripts/r
   expect(scriptPath).toBe(join(repoRoot, "tooling", "scripts", "run-pinned-agda.sh"));
   expect(existsSync(scriptPath)).toBe(true);
   expect(statSync(scriptPath).mode & 0o777).toBe(0o755);
-  expect(readFileSync(scriptPath, "utf8")).toContain('exec "/opt/agda/bin/agda" "$@"');
+  expect(readFileSync(scriptPath, "utf8")).toContain(`exec '/opt/agda/bin/agda' "$@"`);
 });
 
 // ── locateAgdaBinary / getAgdaVersion via deps.execFileSync fakes ───────

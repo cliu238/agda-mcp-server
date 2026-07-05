@@ -93,14 +93,21 @@ export function versionSatisfies(detected, pinned = PINNED_AGDA_VERSION) {
 
 /**
  * The wrapper's full text content — a fixed exec-with-args template.
- * `resolvedAgdaPath` is written verbatim, but per T-08-04 it is
- * always the output of locateAgdaBinary's own which/AGDA_BIN
- * resolution, never teammate-supplied free text.
+ *
+ * WR-09: `resolvedAgdaPath` IS teammate-supplied free text —
+ * locateAgdaBinary returns `process.env.AGDA_BIN` verbatim when set —
+ * so it is embedded single-quoted with the standard `'\''` splice for
+ * embedded quotes: inside single quotes nothing is live, whereas
+ * inside the previous double quotes `$`, backtick, `\` and an embedded
+ * `"` would expand or execute at wrapper runtime (a mangled path then
+ * surfaces as a confusing far-from-cause server failure, because
+ * src/agda/binary-discovery.ts resolves this wrapper first).
  */
 export function generateRunPinnedAgdaScript(resolvedAgdaPath) {
+  const singleQuoted = `'${resolvedAgdaPath.replaceAll("'", `'\\''`)}'`;
   return `#!/usr/bin/env bash
 set -euo pipefail
-exec "${resolvedAgdaPath}" "$@"
+exec ${singleQuoted} "$@"
 `;
 }
 
