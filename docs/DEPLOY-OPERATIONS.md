@@ -444,3 +444,53 @@ real CHG shape (`.agda-lib` name `Codex-Homotopy-Group` vs on-disk
 naming the key, the expected filename, and the `oracle-policy` dir — a
 case mismatch is a LOUD hard failure on the cluster, never a silent
 no-policy abstention.
+
+### Local-mode regression re-run + the v1.1 tag (phase close)
+
+**Local mode still fully works at phase end.** After every Phase 8
+packaging change (Dockerfile, k8s manifests, CI/CD workflow,
+`scripts/team/clone-fuel-corpora.mjs`, `install-pinned-env.*`), the entire
+already-shipped local ingest/upload/cron path was re-run on Node 24
+(`v24.16.0`):
+
+```bash
+npx vitest run test/unit/tools/team-ingest-server.test.ts \
+  test/unit/tools/team-issue-key.test.ts \
+  test/unit/tools/team-archive-extract.test.ts \
+  test/unit/tools/team-cron-ingest-wrapup.test.ts \
+  test/unit/tools/dogfood-upload-run.test.ts \
+  test/integration/team/
+```
+
+Result (2026-07-05): **6 test files passed, 96/96 tests passed, exit 0** —
+DEPLOY-01's "local mode remains a working fallback" criterion holds at
+PHASE END, not just when Plan 08-03 first proved it.
+
+**The tag the installer pins.** With both acceptance gates green
+(POLICY-01 on the cluster above; local regression here), the
+phase-closing tag was cut and pushed:
+
+| Item | Value |
+|---|---|
+| Tag | `v1.1` (annotated) |
+| Tagged commit | `6c0d716d7afeb59c3c97e71d9d045b0f3e17fffd` |
+| Remote | pushed — `git ls-remote --tags origin` shows `refs/tags/v1.1` |
+| Tree check | `git show v1.1:scripts/team/install-pinned-env.sh`, `git show v1.1:Dockerfile`, `git show v1.1:k8s/deployment.yaml` all exit 0 |
+| Installer resolution | `git tag --sort=-v:refname \| head -1` → `v1.1` |
+
+Why `v1.1` and not the already-pushed `v1.0` (D-11): `v1.0` predates ALL of
+Phases 6–9 — phase planning measured the planning-time HEAD at
+`v1.0-165-gf87ab4e`, 165 commits past `v1.0`, which is the entirety of the
+POLICY-01 fix, the team feedback channel (`scripts/team/*.mjs`), and this
+phase's own distribution artifacts. A teammate pinning `v1.0` would check
+out a server with none of them. D-11 requires a real, pushed tag whose
+checked-out state actually contains TEAM-01..TEAM-05 and DEPLOY-01's
+deliverables — that tag is `v1.1`, verified above by the tree checks, and
+`docs/TEAM-ONBOARDING.md`'s documented
+`git checkout "$(git tag --sort=-v:refname | head -1)"` step now resolves
+to it.
+
+Note on ordering: this runbook section is committed AFTER the tag by
+necessity (the section records the tag's own SHA), so the `v1.1` tree
+contains everything except this final documentation block — inherent to
+the tag-then-document sequence, affecting documentation only, never code.
