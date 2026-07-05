@@ -90,13 +90,21 @@ export function resolveCloneUrl(entry, deps, token) {
  * Clone (or update, if already present) one `{key, repo, access,
  * pinnedRef}` fuel-corpus entry into `<destRoot>/<entry.key>`.
  *
- * - Already cloned (destDir exists): first re-asserts the clean
- *   (token-free) origin URL — a prior run interrupted between `git
- *   clone` and the T-08-02 scrub leaves a token-bearing origin in
- *   .git/config forever otherwise — then fetches `pinnedRef` from an
- *   EXPLICIT URL (credentialed for private corpora when a token is
- *   available; fetching by URL never touches .git/config). Idempotent
- *   re-run — never re-clones from scratch.
+ * - Already cloned (destDir exists): first scrubs origin back to the
+ *   clean https URL — but ONLY when the current origin embeds userinfo
+ *   (`https://x-access-token:...@`), the form a prior run interrupted
+ *   between `git clone` and the T-08-02 scrub leaves in .git/config.
+ *   An SSH origin (`git@github.com:...`, what `gh auth login`'s SSH
+ *   protocol produces via `gh repo clone`) or an already-clean origin
+ *   is the teammate's own remote configuration and survives re-runs
+ *   untouched (WR-12). Then fetches `pinnedRef` — via an EXPLICIT
+ *   credentialed URL when a token is available (fetching by URL never
+ *   touches .git/config), else via the existing `origin` remote so
+ *   SSH-auth setups fetch over their own working transport. A failed
+ *   fetch is tolerated when `pinnedRef` (a full SHA in the SSOT)
+ *   already resolves to a local commit: the corpus IS provisioned, so
+ *   offline/credential-less re-runs stay idempotent — only a genuine
+ *   pinnedRef bump needs the network. Never re-clones from scratch.
  * - Public, fresh: `git clone https://github.com/<repo>.git destDir`.
  * - Private, fresh, credentialed (GH_TOKEN/GITHUB_TOKEN/deps.ghToken):
  *   clone via an embedded x-access-token URL, then IMMEDIATELY scrub
@@ -143,27 +151,63 @@ export function cloneFuelCorpus(entry, destRoot, deps = {}) {
 
   try {
     if (existsSync(destDir)) {
-      // Re-scrub defensively before anything else: a prior run
-      // interrupted between `git clone <token-url>` and the T-08-02
-      // set-url scrub persists the token in destDir/.git/config, and
-      // this exists-branch is the only path a re-run ever takes — an
-      // idempotent one-subprocess re-assert closes that crash hole.
-      execFile(
-        "git",
-        ["-C", destDir, "remote", "set-url", "origin", resolveCloneUrl(entry, deps, null)],
-        gitOpts,
-      );
-      // Fetch via an EXPLICIT URL — credentialed for private corpora
-      // when a token is available. `git fetch origin` against the
-      // scrubbed clean URL has no credential mechanism at all (git
-      // never reads GH_TOKEN), so a private-corpus re-run or pinnedRef
-      // bump could otherwise never fetch. Fetching by URL leaves
-      // .git/config untouched, so the token still never persists.
-      execFile(
-        "git",
-        ["-C", destDir, "fetch", resolveCloneUrl(entry, deps, token), entry.pinnedRef],
-        gitOpts,
-      );
+      // WR-01 re-scrub, scoped by WR-12: a prior run interrupted
+      // between `git clone <token-url>` and the T-08-02 set-url scrub
+      // persists the credential in destDir/.git/config — but only the
+      // https userinfo form can carry it. Read the current origin and
+      // rewrite it to the clean URL ONLY when it embeds userinfo; an
+      // SSH origin (`git@github.com:...`, what `gh auth login`'s SSH
+      // protocol produces via `gh repo clone`) or an already-clean
+      // origin is the teammate's own remote configuration and must
+      // survive re-runs untouched.
+      let originUrl = "";
+      try {
+        originUrl = execFile("git", ["-C", destDir, "remote", "get-url", "origin"], gitOpts)
+          .toString()
+          .trim();
+      } catch {
+        // No readable origin remote: nothing to scrub — the fetch and
+        // checkout below surface any real breakage.
+      }
+      if (/^https?:\/\/[^/]*@/.test(originUrl)) {
+        execFile(
+          "git",
+          ["-C", destDir, "remote", "set-url", "origin", resolveCloneUrl(entry, deps, null)],
+          gitOpts,
+        );
+      }
+      // Fetch the pin. With a token: via an EXPLICIT credentialed URL —
+      // `git fetch origin` has no credential mechanism at all (git
+      // never reads GH_TOKEN), and fetching by URL leaves .git/config
+      // untouched, so the token still never persists. Without a token:
+      // via the existing `origin` remote, so gh-over-SSH setups fetch
+      // over their own working transport (WR-12) instead of a
+      // credential-less forced-https URL.
+      try {
+        execFile(
+          "git",
+          [
+            "-C",
+            destDir,
+            "fetch",
+            token ? resolveCloneUrl(entry, deps, token) : "origin",
+            entry.pinnedRef,
+          ],
+          gitOpts,
+        );
+      } catch (fetchError) {
+        // WR-12: a failed update-fetch must not report clone-failed for
+        // a corpus whose pinnedRef (a full SHA in the SSOT) is already
+        // resolvable locally — the corpus IS provisioned; only a
+        // genuine pinnedRef bump needs the network. Absent locally:
+        // rethrow the fetch failure (redacted + stored by the outer
+        // catch, as before).
+        try {
+          execFile("git", ["-C", destDir, "cat-file", "-e", `${entry.pinnedRef}^{commit}`], gitOpts);
+        } catch {
+          throw fetchError;
+        }
+      }
     } else if (entry.access === "public") {
       const url = resolveCloneUrl(entry, deps, null);
       execFile("git", ["clone", url, destDir], gitOpts);

@@ -273,7 +273,7 @@ test("a credentialed private clone scrubs the embedded token from origin immedia
   expect(config.includes("https://github.com/example/private-corpus.git")).toBe(true);
 });
 
-// ── re-run token hygiene: WR-01 re-scrub, WR-03 credentialed fetch ───────
+// ── re-run hygiene: WR-01 re-scrub, WR-03 credentialed fetch, WR-12 origin preservation ──
 
 test("a re-run against an existing clone re-scrubs a token-bearing origin left by an interrupted prior run (WR-01)", () => {
   const { bareRepoPath, pinnedRef } = createBareFixtureRepo();
@@ -307,7 +307,7 @@ test("a re-run against an existing clone re-scrubs a token-bearing origin left b
   expect(config.includes("leaked-token")).toBe(false);
 });
 
-test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_TERMINAL_PROMPT=0, origin stays clean (WR-03)", () => {
+test("a private-corpus re-run scrubs a token-bearing origin, then fetches via an explicit credentialed URL with GIT_TERMINAL_PROMPT=0 (WR-03/WR-12)", () => {
   const destRoot = makeTempDir("agda-mcp-fuel-dest-");
   const destDir = join(destRoot, "private-corpus");
   mkdirSync(destDir, { recursive: true });
@@ -327,6 +327,12 @@ test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_
   ) => {
     calls.push([cmd, ...args]);
     optsSeen.push(opts);
+    // The interrupted-prior-run state: origin still carries a token
+    // (WR-12 made the scrub conditional — it must SEE a credentialed
+    // origin to fire at all).
+    if (cmd === "git" && args[2] === "remote" && args[3] === "get-url") {
+      return Buffer.from("https://x-access-token:stale@github.com/example/private-corpus.git\n");
+    }
     return Buffer.from("");
   };
 
@@ -335,8 +341,10 @@ test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_
   const result = cloneFuelCorpus(entry, destRoot, { ghToken: "tok", execFileSync: fakeExecFileSync });
 
   expect(result.ok).toBe(true);
-  // Re-scrub first (WR-01) with the clean URL...
-  expect(calls[0]).toEqual([
+  // Origin is inspected first (WR-12: the scrub is conditional)...
+  expect(calls[0]).toEqual(["git", "-C", destDir, "remote", "get-url", "origin"]);
+  // ...the token-bearing origin triggers the WR-01 re-scrub with the clean URL...
+  expect(calls[1]).toEqual([
     "git",
     "-C",
     destDir,
@@ -347,7 +355,7 @@ test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_
   ]);
   // ...then fetch via the explicit token URL — never `fetch origin`,
   // which would have no credential path at all (git never reads GH_TOKEN).
-  expect(calls[1]).toEqual([
+  expect(calls[2]).toEqual([
     "git",
     "-C",
     destDir,
@@ -360,6 +368,83 @@ test("a private-corpus re-run fetches via an explicit credentialed URL with GIT_
   for (const opts of optsSeen) {
     expect(opts.env?.GIT_TERMINAL_PROMPT).toBe("0");
   }
+});
+
+test("a re-run with an SSH origin and a failing fetch still succeeds when the pinned SHA is local — origin untouched (WR-12)", () => {
+  const { bareRepoPath, pinnedRef } = createBareFixtureRepo();
+  const destRoot = makeTempDir("agda-mcp-fuel-dest-");
+  const destDir = join(destRoot, "private-corpus");
+  const entry = { key: "private-corpus", repo: "example/private-corpus", access: "private", pinnedRef };
+  const sshOrigin = "git@github.com:example/private-corpus.git";
+
+  // What a prior successful `gh repo clone` over the SSH protocol left
+  // behind: a full clone at the pinned SHA with an SSH origin.
+  execFileSync("git", ["clone", bareRepoPath, destDir], GIT_OPTS);
+  execFileSync("git", ["-C", destDir, "remote", "set-url", "origin", sshOrigin], GIT_OPTS);
+
+  // Credential-less re-run whose update-fetch FAILS (no ssh agent /
+  // offline — the fast failure GIT_TERMINAL_PROMPT=0 forces). Every
+  // call except the fetch runs against real git.
+  const calls: string[][] = [];
+  const spy = (cmd: string, args: string[], opts: unknown) => {
+    calls.push([cmd, ...args]);
+    if (cmd === "git" && args[2] === "fetch") {
+      throw new Error("ssh: connect to host github.com port 22: Network is unreachable");
+    }
+    return execFileSync(cmd, args, opts as never);
+  };
+
+  withEnv("GH_TOKEN", undefined, () => {
+    withEnv("GITHUB_TOKEN", undefined, () => {
+      const result = cloneFuelCorpus(entry, destRoot, { execFileSync: spy });
+      expect(result).toMatchObject({ ok: true, key: "private-corpus" });
+    });
+  });
+
+  // The no-token fetch went via the EXISTING origin remote (the SSH
+  // transport), never a forced-https URL...
+  const fetchCall = calls.find((call) => call[3] === "fetch");
+  expect(fetchCall).toEqual(["git", "-C", destDir, "fetch", "origin", pinnedRef]);
+  // ...the SSH origin survived the re-run (no unconditional rewrite)...
+  expect(calls.some((call) => call.includes("set-url"))).toBe(false);
+  const origin = execFileSync("git", ["-C", destDir, "remote", "get-url", "origin"], GIT_OPTS)
+    .toString()
+    .trim();
+  expect(origin).toBe(sshOrigin);
+  // ...and the corpus is checked out at its pinned SHA regardless.
+  const headSha = execFileSync("git", ["-C", destDir, "rev-parse", "HEAD"], GIT_OPTS)
+    .toString()
+    .trim();
+  expect(headSha).toBe(pinnedRef);
+});
+
+test("a re-run with an already-clean https origin never rewrites it — no set-url call (WR-12)", () => {
+  const { bareRepoPath, pinnedRef } = createBareFixtureRepo();
+  const destRoot = makeTempDir("agda-mcp-fuel-dest-");
+  const destDir = join(destRoot, "fixture-corpus");
+  const entry = { key: "fixture-corpus", repo: "example/fixture-corpus", access: "public", pinnedRef };
+  const cleanOrigin = "https://github.com/example/fixture-corpus.git";
+
+  execFileSync("git", ["clone", bareRepoPath, destDir], GIT_OPTS);
+  execFileSync("git", ["-C", destDir, "remote", "set-url", "origin", cleanOrigin], GIT_OPTS);
+
+  const calls: string[][] = [];
+  const spy = (cmd: string, args: string[], opts: unknown) => {
+    calls.push([cmd, ...args]);
+    if (cmd === "git" && args[2] === "fetch") {
+      return Buffer.from(""); // never hit the network in a unit test
+    }
+    return execFileSync(cmd, args, opts as never);
+  };
+
+  const result = cloneFuelCorpus(entry, destRoot, { execFileSync: spy });
+
+  expect(result).toMatchObject({ ok: true });
+  expect(calls.some((call) => call.includes("set-url"))).toBe(false);
+  const origin = execFileSync("git", ["-C", destDir, "remote", "get-url", "origin"], GIT_OPTS)
+    .toString()
+    .trim();
+  expect(origin).toBe(cleanOrigin);
 });
 
 // ── clone-failed error strings: token never retained (WR-02) ────────────
