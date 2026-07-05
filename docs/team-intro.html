@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How This Fork's Self-Improvement Loop Works</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --bg-alt: #f6f7f9;
+    --text: #1b1f24;
+    --muted: #55606b;
+    --border: #d9dee3;
+    --accent: #1a5fb4;
+    --accent-bg: #e7f0fb;
+    --code-bg: #eef1f4;
+    --callout-bg: #fff8e6;
+    --callout-border: #caa233;
+    --triad-bg: #eef4ff;
+    --triad-border: #3568b8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181d;
+      --bg-alt: #1b2027;
+      --text: #e7ebf0;
+      --muted: #a3adb8;
+      --border: #333c46;
+      --accent: #7fb2ff;
+      --accent-bg: #1d2a3d;
+      --code-bg: #20262e;
+      --callout-bg: #2a2410;
+      --callout-border: #c9a227;
+      --triad-bg: #17222f;
+      --triad-border: #4d7fc4;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  h1, h2, h3 {
+    line-height: 1.25;
+    color: var(--text);
+  }
+
+  h1 {
+    font-size: 1.9rem;
+    margin-bottom: 0.25rem;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.75rem;
+    color: var(--accent);
+  }
+
+  p {
+    color: var(--text);
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1.05rem;
+    margin-top: 0;
+  }
+
+  code {
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+
+  a {
+    color: var(--accent);
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 1rem 0;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    font-size: 0.95rem;
+  }
+
+  thead th {
+    background: var(--bg-alt);
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .callout {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--callout-border);
+    padding: 0.9rem 1.1rem;
+    border-radius: 4px;
+    margin: 1.25rem 0;
+  }
+
+  .callout p:first-child {
+    margin-top: 0;
+  }
+
+  .callout p:last-child {
+    margin-bottom: 0;
+  }
+
+  .triad-box {
+    background: var(--triad-bg);
+    border-left: 4px solid var(--triad-border);
+    padding: 0.9rem 1.1rem;
+    border-radius: 4px;
+    margin: 1.25rem 0;
+  }
+
+  .triad-box p:first-child {
+    margin-top: 0;
+  }
+
+  .triad-box ul {
+    margin: 0.5rem 0 0.75rem;
+    padding-left: 1.25rem;
+  }
+
+  .triad-box li {
+    margin-bottom: 0.5rem;
+  }
+
+  .loop-diagram {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.4rem;
+    margin: 1.5rem 0 0.5rem;
+  }
+
+  .loop-box {
+    flex: 1 1 100px;
+    min-width: 92px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.6rem 0.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .loop-box .stage-num {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-bottom: 0.15rem;
+  }
+
+  .loop-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--muted);
+    padding: 0 0.15rem;
+    flex: 0 0 auto;
+  }
+
+  .loop-back {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .loop-back .loop-arrow-back {
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  footer a {
+    margin-right: 1rem;
+  }
+
+  .core-value {
+    font-style: italic;
+    border-left: 3px solid var(--accent);
+    padding-left: 0.9rem;
+    color: var(--text);
+  }
+
+  @media (max-width: 600px) {
+    .page {
+      padding: 1.25rem 0.9rem 3rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2rem;
+    }
+
+    th, td {
+      padding: 0.45rem 0.55rem;
+      font-size: 0.85rem;
+    }
+
+    .loop-box {
+      font-size: 0.78rem;
+      padding: 0.5rem 0.4rem;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>How This Fork's Self-Improvement Loop Works</h1>
+    <p class="subtitle">This page explains the self-improvement loop, the team feedback channel that feeds it, and how to tell whether you need the plain-user path or the team-member path for this fork.</p>
+  </header>
+
+  <h2>The loop at a glance</h2>
+
+  <div class="loop-diagram">
+    <div class="loop-box"><span class="stage-num">1</span>USE</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">2</span>SURFACE</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">3</span>CAPTURE</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">4</span>JUDGE</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">5</span>FILE</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">6</span>FIX+LOCK</div>
+    <div class="loop-arrow">&#8594;</div>
+    <div class="loop-box"><span class="stage-num">7</span>RE-USE</div>
+  </div>
+  <p class="loop-back"><span class="loop-arrow-back">&#8635;</span> RE-USE loops back into USE: the hardened server is what the next proof session runs against, so the cycle compounds instead of resetting.</p>
+
+  <p>JUDGE is not a single check. It runs the <strong>oracle triad</strong> — three separate predicates, not one cold re-run — and a warm-replay anti-phantom gate sits between JUDGE and FILE so a flaky, non-deterministic result never gets mistaken for a real, reproducible defect. See "The loop, stage by stage" below for the full detail.</p>
+
+  <h2>The loop, stage by stage</h2>
+
+  <p class="core-value">Core value: "every real proof session reliably converts into a stronger server."</p>
+
+  <h3>1. USE</h3>
+  <p>An AI agent — Codex or Claude Code — does real Agda proof work through the MCP server. The session runs via the dogfood proxy (<code>scripts/dogfood/dogfood-run.mjs</code>), which records the session as it happens rather than requiring anyone to reconstruct it after the fact.</p>
+
+  <h3>2. SURFACE</h3>
+  <p>Somewhere in that real session, a defect or gap shows up: a crash, a wrong result returned by a tool, or — the trickiest case — a suspicious "green," where the server reports success but something about the outcome doesn't actually add up. Loop 2 treats all three as first-class signals worth capturing, not just hard crashes.</p>
+
+  <h3>3. CAPTURE</h3>
+  <p>Once something surfaces, capture is near-one-click: the <code>agda_capture_session</code> tool builds a self-replaying capture artifact plus a replay manifest. Every capture carries stable fingerprints so the same underlying defect, seen twice, gets deduplicated instead of filed as two separate issues.</p>
+
+  <h3>4. JUDGE</h3>
+  <p>This is where Loop 2 differs sharply from a naive "just re-run it" approach. A single cold re-run is <strong>not</strong> enough, because different false-green failure families require different detection strategies — a defect that a cold re-run would catch is not the same shape of defect as an agent quietly narrowing scope to make a proof "pass." Each false-green family needs its own predicate, so JUDGE runs three of them together as the oracle triad:</p>
+  <div class="triad-box">
+    <p><strong>The oracle triad — three predicates, not one:</strong></p>
+    <ul>
+      <li><strong>ORCL-01 (cold-rerun differential):</strong> a fresh compile in a clean environment, so environment-dependent flukes (stale caches, leftover state) can't masquerade as a real pass.</li>
+      <li><strong>ORCL-02 (soundness scan):</strong> detects agent cheats specifically — sneaky postulates slipped in to fake a proof, flag-planting, or scope narrowing that quietly changes what's actually being proved.</li>
+      <li><strong>ORCL-03 (conformance proxy):</strong> checks whether the proved statement actually matches what was asked in the first place, using the <code>expectedSignature</code> captured up front at session start — so a technically-valid proof of the wrong statement doesn't count as a win.</li>
+    </ul>
+    <p>None of these three predicates is redundant with the others: a cold re-run alone would miss a sneaky postulate that still typechecks cleanly on a second run, and a soundness scan alone wouldn't catch a proof of the wrong theorem. All three run together before a "success" is trusted.</p>
+  </div>
+  <p>On top of the triad, an N-times warm-replay anti-phantom gate runs before anything reaches the fix queue: if a result is flaky under repeated replay rather than deterministically reproducible, it is routed to a side channel instead of being filed as a defect, so timing flakes never pollute the fix queue as if they were real, fixable bugs.</p>
+  <p>The design of this whole JUDGE stage is grounded in observed real agent behavior, not hypothetical failure modes: during the team's autoformalization campaigns on two pinned fuel corpora — <code>codex-homotopy-group</code> and <code>autoformalizing-hopf</code> — agents were observed narrowing scope, taking shortcuts, and planting flags specifically to look done. The oracle triad exists because those behaviors were seen for real, not imagined in the abstract.</p>
+  <p>(One north-star, deliberately deferred idea sometimes mentioned alongside this loop is "Loop 1" — turn-based proof guidance from the server itself, e.g. "you have 3 goals, suggested next: case-split on n." It is out of scope here; it's only worth recognizing the name if you see it elsewhere.)</p>
+
+  <h3>5. FILE</h3>
+  <p>Judged, non-flaky defects land in a zod-validated flat-file fix queue, with priority ordering and fingerprint-based deduplication so the same underlying bug is never filed twice under different names. The current state of the queue is visible at <a href="FIX-QUEUE-DASHBOARD.md">docs/FIX-QUEUE-DASHBOARD.md</a>. As of the v1.1 close, the queue held 18 entries: 10 locked, 6 triaged, and 1 rejected.</p>
+
+  <h3>6. FIX+LOCK</h3>
+  <p>Each fix in the queue lands with a from-RED regression test: the test is written first, against the bug, and proven red (failing) before any fix code is written — only then does the fix turn it green. This ordering is deliberate: the loop never golden-masters a false-green, meaning it never writes a test that just encodes the buggy behavior as if it were correct. A regression test always represents the intended, correct behavior, not whatever the server happened to do before the fix.</p>
+
+  <h3>7. RE-USE</h3>
+  <p>The hardened server — with the new regression test locked in — goes back into the next real proof session. That closes the loop: RE-USE is USE again, but against a strictly stronger server than before. Each cycle compounds, so the server that today's session runs against is never weaker than the one from any prior session.</p>
+
+  <p>This loop is not a hypothetical design exercise — it has a real, end-to-end track record. v1.1 shipped 4 phases, 24 plans, and 17 out of 17 requirements. A live Codex session on the pinned corpus surfaced a real defect, fingerprint <code>0bc76d15c2fec8df</code>, which went capture &#8594; judge &#8594; file &#8594; fix &#8594; lock end-to-end with zero fixture shortcuts. That single run — known internally as E2E-01 — is the strongest evidence that this loop works for real sessions, not just curated demo cases.</p>
+
+  <h2>The team feedback channel</h2>
+
+  <p>The team feedback channel exists so that teammates' real proof sessions become loop fuel without the maintainer needing to be in the room for every session. It is the mechanism that lets Loop 2 scale beyond the maintainer's own dogfooding.</p>
+
+  <h3>Local side: from key to upload</h3>
+  <p>The pipeline starts with the maintainer issuing a revocable Bearer key out of band, using <code>scripts/team/issue-key.mjs</code>. The server's registry stores only key <strong>hashes</strong>, never the raw key value, and a consent statement is shared alongside the key so the teammate knows exactly what an upload will contain before they start.</p>
+  <p>From there, the teammate does their proof work through the dogfood proxy exactly as in the core loop, which records the session as it happens. When the session wraps up, <code>dogfood-wrapup.mjs</code> runs the same oracle-triad judging described above, but locally, on the teammate's own machine — judging is not deferred entirely to the cluster. Finally, <code>upload-run.mjs</code> uploads the resulting run archive. This upload step is deliberately fail-open with a bounded local retry queue: if the ingest endpoint is unreachable, the upload never blocks or corrupts the teammate's proof work — it just queues locally and retries later.</p>
+
+  <h3>Cluster side: ingest, judge, and feed the fix queue</h3>
+  <p>The ingest endpoint, <code>https://dev.sites.idies.jhu.edu/agda-mcp/ingest</code>, runs on the JHU IDIES k8s cluster. It receives each upload streamed with a 512 MiB cap, and archives it by person and date onto durable Ceph PVC storage. A health check is available at <code>https://dev.sites.idies.jhu.edu/agda-mcp/healthz</code>.</p>
+  <p>A daily sandboxed cron job on the cluster, <code>cron-ingest-wrapup.mjs</code>, re-judges each day's uploads and files any findings into the same fix queue described in the core loop above. Fixes discovered this way get locked with regression tests exactly like any other fix, and teammates pick up the hardened server simply by checking out the next <code>v*</code> tag. Notably, the cluster runs the exact same scripts as local — the only differences are configuration, not logic — and <code>main</code> auto-deploys to the cluster on every push, so the deployed judge is never stale relative to the repo.</p>
+
+  <div class="callout">
+    <p><strong>Privacy and consent, in plain terms:</strong></p>
+    <p>Upload keys are revocable and stored only as hashes, never as raw values. The consent statement shared with each key tells the teammate exactly what an upload contains before they opt in. Uploads are archived per-person, not pooled anonymously. No credential of any kind lives in this repository — keys are issued and revoked entirely out of band by the maintainer.</p>
+  </div>
+
+  <h2>Two ways to be here</h2>
+
+  <p>Not everyone using this server needs to join the team feedback channel. The table below lays out the two paths side by side.</p>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Plain user (README only)</th>
+          <th>Team member (TEAM-ONBOARDING)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Goal</td>
+          <td>Use the MCP server on your own Agda project</td>
+          <td>Feed the improvement loop with your proof sessions</td>
+        </tr>
+        <tr>
+          <td>Install</td>
+          <td>clone &#8594; checkout latest v* tag &#8594; <code>npm ci</code> &#8594; <code>npm run build</code></td>
+          <td>same clone, then <code>bash scripts/team/install-pinned-env.sh</code></td>
+        </tr>
+        <tr>
+          <td>Agda version</td>
+          <td>any supported 2.6.4.3&ndash;2.9.0</td>
+          <td>exactly 2.8.0 (matches the pinned fuel corpora)</td>
+        </tr>
+        <tr>
+          <td>Fuel corpora</td>
+          <td>none needed</td>
+          <td>4 pinned corpora cloned locally (<code>~/agda-mcp-fuel</code>); 2 are private <code>emilyriehl/*</code> repos needing granted GitHub access</td>
+        </tr>
+        <tr>
+          <td>First build</td>
+          <td>none (your own project's <code>_build</code>)</td>
+          <td>one-off overnight full typecheck per corpus</td>
+        </tr>
+        <tr>
+          <td>Credentials</td>
+          <td>none</td>
+          <td>GitHub access to 2 private repos plus a Bearer upload key from the maintainer</td>
+        </tr>
+        <tr>
+          <td>Session runs through</td>
+          <td>plain server (<code>node dist/index.js</code>)</td>
+          <td>the dogfood proxy (records + judges + uploads)</td>
+        </tr>
+        <tr>
+          <td>What you contribute</td>
+          <td>nothing (that's fine)</td>
+          <td>every session becomes capture/judge/fix-queue fuel</td>
+        </tr>
+        <tr>
+          <td>What you get</td>
+          <td>a solid interactive Agda MCP server</td>
+          <td>the same server, plus your own bugs get fixed and regression-locked in the next tag</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The key framing to hold onto: the plain path is a strict subset of the team path. Team membership adds reproducibility pinning plus the upload channel on top of the plain path; it does not change how the server itself works underneath you.</p>
+
+  <p><strong>Which one am I?</strong> If you are just using the server on your own Agda project, you are a plain user and <a href="../README.md">README.md</a> is all you need. If you want your proof sessions to harden the server for everyone — and are willing to install the pinned environment and get an upload key from the maintainer — follow <a href="TEAM-ONBOARDING.md">docs/TEAM-ONBOARDING.md</a> instead.</p>
+
+  <footer>
+    <a href="../README.md">README.md</a>
+    <a href="TEAM-ONBOARDING.md">docs/TEAM-ONBOARDING.md</a>
+    <a href="FIX-QUEUE-DASHBOARD.md">docs/FIX-QUEUE-DASHBOARD.md</a>
+    <a href="DEPLOY-OPERATIONS.md">docs/DEPLOY-OPERATIONS.md</a>
+    <p>Generated 2026-07-05</p>
+  </footer>
+
+</div>
+</body>
+</html>
