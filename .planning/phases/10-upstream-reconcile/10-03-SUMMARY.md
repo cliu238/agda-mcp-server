@@ -126,3 +126,14 @@ None — no external service configuration required.
 ---
 *Phase: 10-upstream-reconcile*
 *Completed: 2026-07-05*
+
+## Self-Check: PASSED
+
+- FOUND: src/session/tool-recommendation.ts
+- FOUND: src/tools/data/tool-family-examples.json
+- FOUND: README.md
+- FOUND: docs/assistant-workflows.md
+- FOUND: .planning/phases/10-upstream-reconcile/deferred-items.md
+- FOUND commit: e44dd0d (feat: recommend agda_goal_candidates)
+- FOUND commit: e349f38 (docs: discoverability polish)
+- FOUND commit: c21a01e (this summary)
