@@ -21,9 +21,15 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - **Fix queue:** 18 entries — 10 locked, 6 triaged (incl. 2 explicitly deferred-with-reason large-redesign items), 1 rejected, 1 new-ish; zero `needsReverify`. CI: verify job green incl. `typecheck:test` gate; integration lane carries the pre-existing 5-file Linux quarantine (`fb57abbe7df6dfe8`).
 - **Known debt:** enumerated in `milestones/v1.1-MILESTONE-AUDIT.md` frontmatter (14 Info-grade review findings open by policy, cluster cron filing leg not yet exercised with a capture-bearing archive, image runtime's comment-enforced dependency on `test/`+devDeps, Nyquist VALIDATION.md missing ×4).
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Upstream Reconcile
 
-Not yet defined — run `/gsd:new-milestone`. **Lead candidate theme (user-selected 2026-07-05, seed with measured data + settled decisions at `.planning/research/UPSTREAM-SYNC.md`): upstream reconcile + auto-sync** — Phase A: first merge of upstream v0.6.8 (488/5 divergence, 6-file conflict, load-terminus semantic adjudication with from-RED locks as referee, adopt upstream #70's agda_goal_candidates/term-search features); Phase B: productionize recurring sync (launchd headless carrier executing the shipped `.agents/skills/upstream-sync` skill, GSD-native bookkeeping; cloud-routine carrier blocked by claude.ai org GitHub-sync gate, re-arm path recorded). Other standing candidates: CACHE-04 oracle prewarm (trigger: TEAM-04 INCONCLUSIVE/timeout rate becomes the bottleneck), Loop ① exploration (turn-based proof guidance), npm publishing (PUB-01), external-user issue template (FEED-01), the 2 deferred large-redesign fix-queue rows (RT6 five-state conflation, RT7 timeout diagnostics), and the v1.1 audit's tech-debt ledger.
+**Goal:** Merge upstream v0.6.8 for real (load-terminus semantics adjudicated per sub-behavior with our from-RED regression locks as referee), adopt upstream's new features, then productionize the unattended every-3-days auto-sync — so upstream divergence stops accumulating.
+
+**Target features:**
+- **One-time upstream reconcile:** `git merge upstream/main` (merge, never rebase) resolving the 6 conflict files (re-measured 2026-07-05: 502 ahead / 5 behind, upstream head `d4497a2`, conflict set unchanged from `.planning/research/UPSTREAM-SYNC.md`); reconcile upstream's new fail-suite-on-unexpected-`logger.warn` test strictness with our ~1600-test suite; load-terminus semantic adjudication ours/theirs/hybrid per sub-behavior (from-RED locks green → adopt upstream, red → keep ours + graft their fatal-stderr/inactivity-timeout hardening); adopt upstream #70 (`agda_goal_candidates` type-directed term search, Mimer auto fix) wired into manifest/tool-recommendation/docs; full verify (real-Agda full suite, `typecheck:test`, build) + one dogfood session as acceptance; final push = one accepted D-06 deploy cycle, watched green.
+- **Auto-sync productionization:** launchd every-3-days local headless carrier (catches up missed runs on wake) executing the shipped `.agents/skills/upstream-sync` skill (real-Agda full gates — strictly stronger than cloud); sync bookkeeping upgraded to GSD-native artifacts (each sync produces a real `.planning/quick/` PLAN+SUMMARY + STATE.md row, committed with the merge; `docs/UPSTREAM-SYNC-LOG.md` fallback when gsd-sdk absent); optional scheduled GitHub Action merge-tree dry-run digest as a zero-risk signal between syncs; cloud-routine carrier stays parked behind the recorded org GitHub-sync re-arm path.
+
+**Standing candidates deliberately NOT in v1.2** (scope decision 2026-07-05): RT6 (five-state load conflation) and RT7 (timeout diagnostics) are re-evaluated only after the merge lands — upstream #68/#69 reshape the same seam; CACHE-04 oracle prewarm (unchanged trigger), Loop ① exploration, npm publishing (PUB-01), external-user issue template (FEED-01), and the v1.1 audit tech-debt ledger stay standing. Independent small items run ad hoc via `/gsd-quick`.
 
 ## Requirements
 
@@ -58,9 +64,14 @@ Not yet defined — run `/gsd:new-milestone`. **Lead candidate theme (user-selec
 
 ### Active
 
-<!-- Next milestone: define via /gsd:new-milestone. -->
+<!-- v1.2 Upstream Reconcile. Detailed REQ-IDs in REQUIREMENTS.md. -->
 
-(None — v1.1 shipped; next milestone not yet defined)
+- [ ] Upstream v0.6.8 merged (merge, never rebase) with all 6 conflict files resolved and both repos' regression suites green
+- [ ] Load-terminus semantics adjudicated per sub-behavior, from-RED locks as referee
+- [ ] Upstream #70 features (`agda_goal_candidates`, term search, Mimer auto fix) adopted and wired into manifest/tool-recommendation/docs
+- [ ] Post-merge acceptance: full verify + one real dogfood session; final push's auto-deploy watched green
+- [ ] Recurring auto-sync live: launchd headless carrier executes the `upstream-sync` skill every 3 days
+- [ ] GSD-native sync bookkeeping: each sync commits a `.planning/quick/` artifact + STATE.md row
 
 ### Out of Scope
 
@@ -142,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-05 after v1.1 milestone (Feed the Loop shipped: backlog digested to zero stalled entries, team channel live locally + on the JHU cluster, pinned-env onboarding, v1.0 debt swept; tags v1.0 + v1.1 pushed).*
+*Last updated: 2026-07-05 after starting milestone v1.2 Upstream Reconcile (scope: upstream merge + adjudication + auto-sync only; divergence re-measured same day).*

@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Feed the Loop
-status: Awaiting next milestone
-stopped_at: v1.1 milestone completed + archived (audit tech_debt, 17/17 reqs); endgame remaining — deploy-run watch on fixed Dockerfile, v1.1.1 remedy tag, final push, cleanup
-last_updated: "2026-07-05T05:08:30.425Z"
-last_activity: 2026-07-05 — Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: Upstream Reconcile
+status: planning
+last_updated: "2026-07-05T16:52:12.571Z"
+last_activity: 2026-07-05
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 24
-  completed_plans: 24
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-05 - Completed quick task 260705-h78: README CI fix + Codex config + user/team install split + TEAM-ONBOARDING simplification
+Status: Defining requirements
+Last activity: 2026-07-05 — Milestone v1.2 started
 
 ## Performance Metrics
 
