@@ -24,7 +24,7 @@ the plain upstream server without this workflow, use the upstream repo directly.
 
 - Node.js `>= 24`
 - `git`
-- Agda `2.8.0` on `PATH` (matches the pinned fuel corpora)
+- Agda `2.6.4.3`–`2.9.0` on `PATH`
 
 ### Install
 
@@ -36,12 +36,14 @@ git clone https://github.com/cliu238/agda-mcp-server.git
 cd agda-mcp-server
 git fetch --tags
 git checkout "$(git tag --list 'v*' | sort -V | tail -1)"
-bash scripts/team/install-pinned-env.sh
+npm ci
+npm run build
 ```
 
-The installer verifies your Agda version and runs `npm ci`. For the full walkthrough
-(multi-teammate setup, fuel corpora, upload keys), see
-[docs/TEAM-ONBOARDING.md](docs/TEAM-ONBOARDING.md).
+Teammates joining the feedback loop (dogfooding + uploads) run
+`bash scripts/team/install-pinned-env.sh` instead and follow
+[docs/TEAM-ONBOARDING.md](docs/TEAM-ONBOARDING.md) (that path pins Agda 2.8.0 and needs
+access to two private fuel corpora).
 
 ### Run it
 
@@ -68,6 +70,14 @@ For example, a Claude Code `mcpServers` entry:
     }
   }
 }
+```
+
+Or for Codex:
+
+```bash
+codex mcp add agda \
+  --env AGDA_MCP_ROOT=/path/to/your/agda/project \
+  -- node /absolute/path/to/agda-mcp-server/dist/index.js
 ```
 
 Any stdio-capable MCP client works the same way: command `node`, args pointing at
@@ -97,7 +107,8 @@ for the layering/module map and [AGENTS.md](AGENTS.md) for repo conventions for 
 agents (`CLAUDE.md` mirrors the same constraints for Claude Code specifically). Constraints
 worth knowing up front: Node >= 24, TypeScript strict/ESM, a 500-line-per-file ceiling in
 `src/`, tests via `vitest`. Extension authors should see
-[docs/extensions.md](docs/extensions.md).
+[docs/extensions.md](docs/extensions.md) and the
+[examples/extensions/README.md](examples/extensions/README.md) sample catalog.
 
 ## License
 
