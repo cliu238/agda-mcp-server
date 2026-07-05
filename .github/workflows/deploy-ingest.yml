@@ -180,8 +180,23 @@ jobs:
           # ~1.8 GB compressed, so a cold node pull + 150s startup-probe
           # window doesn't fit 5m reliably.
           MANIFESTS_B64=$(tar -czf - k8s/deployment.yaml k8s/ingress.yaml k8s/cronjob.yaml | base64 | tr -d '\n')
-          ssh -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 cliu238@dslogin01.pha.jhu.edu \
-            "ssh -A -p 14132 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 k8slgn.idies.jhu.edu bash -s" <<EOF
+          # WR-08, two least-privilege/host-authenticity fixes that leave
+          # the pipeline's behavior untouched:
+          # - StrictHostKeyChecking=accept-new (TOFU) instead of =no on
+          #   both hops: first contact still succeeds with no key
+          #   provisioning, but a CHANGED host key now fails loudly
+          #   instead of being silently accepted. On the inner hop this
+          #   is real pinning (dslogin01's known_hosts persists across
+          #   runs); on the ephemeral runner it is per-run TOFU — still
+          #   never worse than =no. Matches the interactive pattern in
+          #   .claude/skills/agda-mcp-k8s-deploy/SKILL.md.
+          # - No -A on the INNER hop: the outer -A is required (dslogin01
+          #   authenticates to k8slgn with the runner's forwarded agent),
+          #   but the remote script on k8slgn runs only kubectl, never
+          #   ssh — forwarding the deploy-key agent socket onto a shared
+          #   login node would only hand root there a live signing oracle.
+          ssh -A -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=10 cliu238@dslogin01.pha.jhu.edu \
+            "ssh -p 14132 -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=10 k8slgn.idies.jhu.edu bash -s" <<EOF
           set -euo pipefail
           export KUBECONFIG=/var/k8s/users/cliu238/k8s-dev-llm-gateway-admins.conf
           WORK=\$(mktemp -d)
