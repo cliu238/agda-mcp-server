@@ -387,3 +387,60 @@ kubectl delete job agda-mcp-cron-judge-manual-verify agda-mcp-cron-judge-manual-
   -n llm-gateway --ignore-not-found
 kubectl get pods -n llm-gateway   # back to litellm + ingest only
 ```
+
+## Phase-end acceptance (Plan 08-06)
+
+The final DEPLOY-01 acceptance sweep, run 2026-07-05 against the live
+deployment.
+
+### POLICY-01 case-sensitivity re-verify on the cluster pod
+
+This is the SAME 6-test suite (`describe("policy resolution is case-exact
+and loud (POLICY-01)")`, Tests A–F in
+`test/unit/tools/oracle-orcl-02.test.ts`) that Phase 6 already proved on
+`ubuntu-latest` CI's case-sensitive ext4. This run's value is NOT new test
+coverage — it is confirming the suite ALSO passes on the deployed pod's own
+filesystem, closing the loop the phase planning called for (the maintainer
+Mac is case-insensitive APFS; a case-mismatch bug would hide there).
+
+Filesystem distinction that makes this run meaningful (verified in the same
+session): the policy files under test live in the **image layer** at
+`/app/scripts/data/oracle-policy/` (overlay filesystem — `agda-stdlib.json`,
+`agda-unimath.json`, `autoformalizing-hopf.json`,
+`codex-homotopy-group.json`), **not** on the CephFS PVC. The PVC
+(`…:6789:/LittleLLM`, mounted at `/data/team-uploads`) plays no part in this
+test — CephFS case semantics are irrelevant here; what is exercised is the
+image's own Linux overlay fs, which is case-sensitive like CI's ext4 but a
+genuinely different filesystem on the genuinely deployed artifact.
+
+Exact command (via the one-shot SSH pattern; the pod has two containers, so
+`-c agda-mcp-ingest` is required — `pvc-dirs` is the init container; working
+dir is `/app`, the image `WORKDIR`, and the image carries full
+devDependencies because 08-02's `npm ci` deliberately omitted `--omit=dev`):
+
+```bash
+kubectl exec deployment/agda-mcp-ingest -c agda-mcp-ingest -n llm-gateway -- \
+  npx vitest run test/unit/tools/oracle-orcl-02.test.ts -t "policy resolution is case-exact and loud"
+```
+
+Literal output from the 2026-07-05 run (pod
+`agda-mcp-ingest-6845d86cbc-zrpjt`), exit code 0:
+
+```text
+ RUN  v4.1.2 /app
+
+ ✓ test/unit/tools/oracle-orcl-02.test.ts (35 tests | 29 skipped) 14ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed | 29 skipped (35)
+   Start at  03:39:25
+   Duration  1.12s (transform 509ms, setup 0ms, import 725ms, tests 14ms, environment 0ms)
+```
+
+All 6 tests in the POLICY-01 describe block passed (the 29 skips are the
+rest of the file, excluded by the `-t` filter). That includes Test A — the
+real CHG shape (`.agda-lib` name `Codex-Homotopy-Group` vs on-disk
+`codex-homotopy-group.json`) asserting a thrown `PolicyResolutionError`
+naming the key, the expected filename, and the `oracle-policy` dir — a
+case mismatch is a LOUD hard failure on the cluster, never a silent
+no-policy abstention.
