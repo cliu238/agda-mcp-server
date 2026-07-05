@@ -148,6 +148,15 @@ function repoRootFromThisFile() {
  * `process.exitCode = 1` — `tooling/scripts/run-pinned-agda.sh` is
  * NOT written, `npm ci` is NOT run, and no fuel corpus is cloned.
  *
+ * `--public-only` (argv flag): clones only the fuel-corpora entries
+ * with `access === "public"`. Contributors bring their own project as
+ * fuel — the two private research corpora are design-time reference
+ * material relevant only to people working on the research those
+ * corpora exist for, never a requirement for contributing sessions —
+ * so this mode needs no GitHub credentials at all, and its own `N/N`
+ * summary denominator reflects only the filtered (public) set, meaning
+ * a complete `2/2` here is a full install, not a partial one.
+ *
  * After the clone batch, prints the same `N/M fuel corpora ready`
  * summary contract as clone-fuel-corpora.mjs's own scriptMain — AFTER
  * `npm ci`, so it is the last thing on screen, never buried under
@@ -162,6 +171,7 @@ function repoRootFromThisFile() {
  */
 export function scriptMain(argv = process.argv.slice(2), deps = {}) {
   const repoRoot = deps.repoRoot ?? repoRootFromThisFile();
+  const publicOnly = argv.includes("--public-only");
 
   const nodeCheck = checkNodeVersion(deps);
   if (!nodeCheck.ok) {
@@ -192,7 +202,7 @@ export function scriptMain(argv = process.argv.slice(2), deps = {}) {
   writeRunPinnedAgdaScript(repoRoot, agdaPath, deps);
 
   const fuelRoot = resolveFuelRoot();
-  const cloneResults = cloneAllFuelCorpora(fuelRoot, deps);
+  const cloneResults = cloneAllFuelCorpora(fuelRoot, { ...deps, publicOnly });
 
   runNpmCi(repoRoot, deps);
 
@@ -203,8 +213,9 @@ export function scriptMain(argv = process.argv.slice(2), deps = {}) {
   // without GitHub credentials (both private corpora skip) must never
   // read "done." + exit 0 on a partial install.
   const okCount = cloneResults.filter((result) => result.ok).length;
+  const modeSuffix = publicOnly ? " (public-only mode)" : "";
   process.stdout.write(
-    `install-pinned-env: ${okCount}/${cloneResults.length} fuel corpora ready under ${fuelRoot}\n`,
+    `install-pinned-env: ${okCount}/${cloneResults.length} fuel corpora ready under ${fuelRoot}${modeSuffix}\n`,
   );
   if (okCount < cloneResults.length) {
     for (const result of cloneResults) {
@@ -221,6 +232,12 @@ export function scriptMain(argv = process.argv.slice(2), deps = {}) {
         "idempotent; already-cloned corpora are just updated). See\n" +
         "docs/TEAM-ONBOARDING.md Step 2 for the private-corpus prerequisite.\n",
     );
+    if (!publicOnly) {
+      process.stderr.write(
+        "install-pinned-env: don't need the private research corpora? Re-run with\n" +
+          "--public-only to skip them entirely (no GitHub credentials required).\n",
+      );
+    }
     process.exitCode = 1; // loud partial — never a false-green "done." (CR-01)
     return;
   }

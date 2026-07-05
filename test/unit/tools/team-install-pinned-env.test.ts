@@ -228,7 +228,10 @@ test("scriptMain's missing-Agda early-exit path never calls npm ci or clones any
 // ── scriptMain: fuel-corpus summary + partial-install exit (CR-01) ──────
 
 /** Runs scriptMain with stdout/stderr captured (restored on exit). */
-function runScriptMainCapturing(deps: Record<string, unknown>): { stdout: string; stderr: string } {
+function runScriptMainCapturing(
+  deps: Record<string, unknown>,
+  argv: string[] = [],
+): { stdout: string; stderr: string } {
   let stdout = "";
   let stderr = "";
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -242,7 +245,7 @@ function runScriptMainCapturing(deps: Record<string, unknown>): { stdout: string
     return true;
   }) as typeof process.stderr.write;
   try {
-    scriptMain([], deps);
+    scriptMain(argv, deps);
   } finally {
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
@@ -336,6 +339,98 @@ test("scriptMain exits 1, names the failed corpus, and never prints 'done.' on a
   } finally {
     // Reset — this test intentionally sets process.exitCode; do not let
     // it leak into the overall test-run's own exit code.
+    process.exitCode = 0;
+  }
+});
+
+// ── scriptMain: --public-only filters to public-access corpora only ────
+
+test("scriptMain('--public-only') clones only public-access corpora and labels the summary (public-only mode)", () => {
+  const repoRoot = makeTempDir("agda-mcp-install-repo-");
+  const fuelRoot = join(makeTempDir("agda-mcp-install-fuel-"), "fuel");
+  const fuelCorporaJsonPath = join(makeTempDir("agda-mcp-install-data-"), "fuel-corpora.json");
+  writeFileSync(
+    fuelCorporaJsonPath,
+    JSON.stringify([
+      { key: "pub-a", repo: "example/pub-a", access: "public", pinnedRef: "a".repeat(40) },
+      { key: "pub-b", repo: "example/pub-b", access: "public", pinnedRef: "b".repeat(40) },
+      { key: "priv-a", repo: "example/priv-a", access: "private", pinnedRef: "c".repeat(40) },
+    ]),
+  );
+
+  const calls: string[] = [];
+  const fakeExecFileSync = (cmd: string, args: readonly string[]) => {
+    calls.push(`${cmd} ${args.join(" ")}`);
+    if (cmd === "/fake/agda" && args[0] === "--version") {
+      return Buffer.from("Agda version 2.8.0\n");
+    }
+    return Buffer.from("");
+  };
+
+  let output: { stdout: string; stderr: string } | undefined;
+  withEnv("AGDA_BIN", "/fake/agda", () => {
+    withEnv("AGDA_MCP_FUEL_ROOT", fuelRoot, () => {
+      output = runScriptMainCapturing(
+        { execFileSync: fakeExecFileSync, repoRoot, fuelCorporaJsonPath },
+        ["--public-only"],
+      );
+    });
+  });
+
+  expect(output?.stdout).toContain(
+    `install-pinned-env: 2/2 fuel corpora ready under ${fuelRoot} (public-only mode)`,
+  );
+  expect(output?.stdout).toContain("install-pinned-env: done.");
+  expect(process.exitCode ?? 0).toBe(0);
+  // The private entry was never touched by any git/gh invocation.
+  expect(calls.some((call) => call.includes("priv-a") || call.includes("example/priv-a"))).toBe(false);
+});
+
+test("scriptMain('--public-only') exits 1 when a public corpus fails to clone, and never falls back to the private ones", () => {
+  const repoRoot = makeTempDir("agda-mcp-install-repo-");
+  const fuelRoot = join(makeTempDir("agda-mcp-install-fuel-"), "fuel");
+  const fuelCorporaJsonPath = join(makeTempDir("agda-mcp-install-data-"), "fuel-corpora.json");
+  writeFileSync(
+    fuelCorporaJsonPath,
+    JSON.stringify([
+      { key: "pub-a", repo: "example/pub-a", access: "public", pinnedRef: "a".repeat(40) },
+      { key: "priv-a", repo: "example/priv-a", access: "private", pinnedRef: "c".repeat(40) },
+    ]),
+  );
+
+  const calls: string[] = [];
+  const fakeExecFileSync = (cmd: string, args: readonly string[]) => {
+    calls.push(`${cmd} ${args.join(" ")}`);
+    if (cmd === "/fake/agda" && args[0] === "--version") {
+      return Buffer.from("Agda version 2.8.0\n");
+    }
+    if (cmd === "git" && args[0] === "clone") {
+      throw new Error("network unreachable");
+    }
+    return Buffer.from("");
+  };
+
+  let output: { stdout: string; stderr: string } | undefined;
+  try {
+    withEnv("AGDA_BIN", "/fake/agda", () => {
+      withEnv("AGDA_MCP_FUEL_ROOT", fuelRoot, () => {
+        output = runScriptMainCapturing(
+          { execFileSync: fakeExecFileSync, repoRoot, fuelCorporaJsonPath },
+          ["--public-only"],
+        );
+      });
+    });
+
+    expect(output?.stdout).toContain(
+      `install-pinned-env: 0/1 fuel corpora ready under ${fuelRoot} (public-only mode)`,
+    );
+    expect(output?.stdout).not.toContain("install-pinned-env: done.");
+    expect(output?.stderr).toContain("corpus NOT ready: pub-a");
+    // The --public-only re-run hint only makes sense in default mode.
+    expect(output?.stderr).not.toContain("--public-only to skip them");
+    expect(process.exitCode).toBe(1);
+    expect(calls.some((call) => call.includes("priv-a") || call.includes("example/priv-a"))).toBe(false);
+  } finally {
     process.exitCode = 0;
   }
 });
