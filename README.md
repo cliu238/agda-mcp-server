@@ -42,8 +42,9 @@ npm run build
 
 Teammates joining the feedback loop (dogfooding + uploads) run
 `bash scripts/team/install-pinned-env.sh` instead and follow
-[docs/TEAM-ONBOARDING.md](docs/TEAM-ONBOARDING.md) (that path pins Agda 2.8.0 and needs
-access to two private fuel corpora).
+[docs/TEAM-ONBOARDING.md](docs/TEAM-ONBOARDING.md) (that path pins Agda 2.8.0; the two
+private research corpora are only needed if you personally work on that research —
+add `--public-only` to skip them).
 
 ### Run it
 

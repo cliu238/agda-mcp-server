@@ -8,6 +8,7 @@ cd agda-mcp-server
 git fetch --tags
 git checkout "$(git tag --list 'v*' | sort -V | tail -1)"
 bash scripts/team/install-pinned-env.sh
+# contributors without private-repo access: add --public-only
 ```
 
 ```bash
@@ -27,7 +28,7 @@ Details and failure modes below.
 
 - **Node >= 24**, **git**.
 - **Agda exactly 2.8.0** on `PATH` — verify-and-instruct, never force-installed (D-03): the installer (Step 2) checks your `agda` binary and tells you how to fix it if wrong. Install via nix or ghcup, your choice.
-- **GitHub credentials for 2 private fuel corpora** — `codex-homotopy-group` and `autoformalizing-hopf` (both `emilyriehl/*`, private) need your GitHub account granted read access (ask the maintainer) plus a usable local credential (`gh auth login` or `GH_TOKEN`). Without this, Step 2 reports `2/4 fuel corpora ready` and exits 1. The 2 public corpora (`agda-stdlib`, `agda-unimath`) need no credentials.
+- **GitHub credentials for 2 private fuel corpora** — needed only if you personally work on the research those two corpora exist for. `codex-homotopy-group` and `autoformalizing-hopf` (both `emilyriehl/*`, private) need your GitHub account granted read access (ask the maintainer) plus a usable local credential (`gh auth login` or `GH_TOKEN`). If you don't need those two, run Step 2 with `--public-only` instead — it needs no GitHub credentials at all and reports `2/2 fuel corpora ready`. The 2 public corpora (`agda-stdlib`, `agda-unimath`) always need no credentials.
 
 ### Windows
 
@@ -54,10 +55,12 @@ bash scripts/team/install-pinned-env.sh
 
 Checks Node/git, verifies your `agda` is exactly `2.8.0`, generates a pinned `tooling/scripts/run-pinned-agda.sh` wrapper, clones the 4 fuel corpora under `~/agda-mcp-fuel/<corpus-key>` (or `$AGDA_MCP_FUEL_ROOT`, D-04/D-05), runs `npm ci`, and prints an `N/4 fuel corpora ready` summary — exiting 1 on anything less than 4/4.
 
+**Not working on the private research corpora?** Run `bash scripts/team/install-pinned-env.sh --public-only` instead: it clones only the 2 public corpora (`agda-stdlib`, `agda-unimath`), needs no GitHub credentials at all, and a `2/2 fuel corpora ready (public-only mode)` summary is a complete install for this path.
+
 **If it exits 1:**
 
 - **Wrong/missing Agda** — follow the printed nix/ghcup instructions, then re-run. Nothing else runs until Agda verifies correctly.
-- **Partial corpus clone** (e.g. `2/4 fuel corpora ready`) — everything else installed; fix the GitHub credential prerequisite above, then re-run (idempotent, only re-fetches missing corpora). Don't proceed to Step 3 with a partial clone — `codex-homotopy-group` is the first dogfood target and later steps fail confusingly without it.
+- **Partial corpus clone in full (default) mode** (e.g. `2/4 fuel corpora ready`) — everything else installed; fix the GitHub credential prerequisite above, then re-run (idempotent, only re-fetches missing corpora). Don't proceed to Step 3 with a partial full-mode clone — `codex-homotopy-group` is the first dogfood target and later steps fail confusingly without it. This warning does not apply to `--public-only`'s own `2/2` result, which is already a complete install.
 
 ## 4. Step 3: First corpus build (overnight, once)
 
