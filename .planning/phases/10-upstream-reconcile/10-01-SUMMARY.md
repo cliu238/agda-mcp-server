@@ -179,3 +179,16 @@ None — no external service configuration required.
 ---
 *Phase: 10-upstream-reconcile*
 *Completed: 2026-07-05*
+
+## Self-Check: PASSED
+
+- FOUND: src/agda/refactor-helpers.ts
+- FOUND: src/tools/goal-write-tools.ts
+- FOUND: src/session/agda-transport.ts
+- FOUND: src/agda/session-load-impl.ts
+- CONFIRMED DELETED: src/session/load-terminus-tracker.ts
+- CONFIRMED DELETED: test/unit/session/load-terminus-tracker.test.ts
+- FOUND: .planning/phases/10-upstream-reconcile/10-01-SUMMARY.md
+- FOUND commit: 1f91f33 (merge)
+- FOUND commit: 7ab6ffb (pre-merge STATE.md housekeeping)
+- FOUND commit: 770d11c (this summary)

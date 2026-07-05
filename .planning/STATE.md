@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Upstream Reconcile
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-07-05T18:43:27.788Z"
-last_activity: 2026-07-05 -- Phase 10 execution started
+stopped_at: Phase 10 Plan 01 complete (merge landed, 1f91f33)
+last_updated: "2026-07-05T19:03:35.057Z"
+last_activity: 2026-07-05
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 10 (upstream-reconcile) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 10
-Last activity: 2026-07-05 -- Phase 10 execution started
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-07-05
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -62,11 +62,13 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 08 P05 | 19 min | 2 tasks | 1 files |
 | Phase 08 P06 | 7 min | 2 tasks | 1 files |
+| Phase 10 P1 | 20min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- Phase 12 added (2026-07-05): Simplification overhaul — project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity
 - v1.2 roadmap created 2026-07-05 and revised the same day to 2 phases per user feedback (4-phase draft was too much ceremony; final shape matches UPSTREAM-SYNC.md's Phase A/B sketch): Phases 10–11 (continuing numbering from v1.1's Phase 9), covering all 11 v1.2 requirements — Upstream Reconcile (10, MERGE-01/02/03 + ADOPT-01/02 + ACCEPT-01/02/03, internally ~3 plans) → Auto-Sync Productionization (11, SYNC-01/02/03). Hard ordering constraint honored: Phase 10 (one-time reconcile) must complete before Phase 11 (recurring sync) is armed.
 - v1.1 roadmap created 2026-07-03 and reworked the same day after the CACHE theme was deleted by consumer audit: Phases 6–9 (continuing numbering from v1.0's Phase 5 + 03.1), covering all 17 v1.1 requirements — Backlog Digestion (6) → Team Feedback Channel Local Wiring incl. the live-CHG full-loop E2E-01 acceptance (7) → Pinned-Env + Thin k8s Deploy (8, gated ~2026-07-07) → Residual Debt Sweep (9, independent, can fill the server-wait gap).
 - Phase 03.1 inserted after Phase 3 (v1.0): Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (sequenced by 03-CONTEXT D-09) (URGENT)
@@ -88,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-05: D-09 write-back-disabled proven live via three layers — /app ships no .git (dockerignore), queue-path-outside-repo short-circuit, --no-push — plus sha256 byte-identity of the baked-in fix-queue.json
 - [Phase 08]: 08-06: v1.1 tagged on 6c0d716d and pushed (with the batched main push, first of the session, triggering D-06 auto-deploy as accepted) — the installer's latest-tag resolution now lands on v1.1, superseding stale v1.0 (D-11)
 - [Phase 08]: 08-06: POLICY-01 proven on the deployed pod's own filesystem (6/6, exit 0) — policy files live in the image layer /app/scripts/data/oracle-policy, not the PVC; CephFS semantics play no part in the test
+- [Phase 10]: 10-01: adopted upstream's whole-file candidate for the 3 architectural files (agda-transport.ts, command-completion.ts, session-load-impl.ts) per D-04, with 2 forced corrections (return-based loadIncompleteNoTerminus, ported goal-ID recovery block) applied regardless of Plan 10-02's eventual referee verdict
+- [Phase 10]: 10-01: extended the plan's single documented test-fix to 5 additional broken tests/mocks the plan's dry-run missed (3 sibling T-06-12 unit tests, 2 tool-level fakeSession mocks, plus session.ts/session-command-dispatch.ts's stale LoadTerminusOptions import, warn-guard.ts's vitest-version type mismatch, and 2 dead agda-transport.test.ts tests) to make npm run build / typecheck:test literally exit 0
 
 ### Pending Todos
 
@@ -122,9 +126,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05T17:31:08.347Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-auto-sync-productionization/11-CONTEXT.md
+Last session: 2026-07-05T19:03:35.048Z
+Stopped at: Phase 10 Plan 01 complete (merge landed, 1f91f33)
+Resume file: .planning/phases/10-upstream-reconcile/10-02-PLAN.md
 
 ## Operator Next Steps
 
