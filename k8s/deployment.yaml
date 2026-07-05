@@ -28,6 +28,48 @@ spec:
         # (verified 403), and overwriting it with our PAT would break
         # litellm's own pulls (our PAT gets 403 on ghcr.io/jh-dsai/litellm).
         - name: agda-mcp-ghcr
+      # PVC-ownership postmortem (2026-07-05, 08-05 Task 1 EACCES): when a
+      # subPath directory does not exist, the KUBELET creates it as
+      # root:root, and on this ACL-enabled CephFS mount the fsGroup
+      # group-write bits are defeated by the ACL mask — uid-2231 processes
+      # get EACCES (litellm lesson 16: the directory OWNER uid must match
+      # runAsUser; group bits are not enough here). PodSecurity
+      # "restricted" forbids any root pod/initContainer that could chown.
+      # Fix: this initContainer runs as 2231 BEFORE the main container's
+      # subPath mounts are resolved, mounts the PVC ROOT, and pre-creates
+      # the data tree — dirs created by 2231 are OWNED by 2231. The
+      # original kubelet-created root-owned `agda-mcp/` tree is orphaned
+      # junk only an IDIES admin can remove; the live tree is
+      # `agda-mcp-data/`.
+      initContainers:
+        - name: pvc-dirs
+          image: ghcr.io/cliu238/agda-mcp-server:latest
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /pvc/agda-mcp-data/team-storage /pvc/agda-mcp-data/cluster-fix-queue &&
+              ls -lan /pvc/agda-mcp-data
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          # llm-gateway-compute quota rejects any container (init
+          # included) without explicit requests+limits. Effective pod
+          # resources are max(init, sum(main)), so these numbers — all at
+          # or below the main container's own — add zero quota footprint.
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: team-storage
+              mountPath: /pvc
       containers:
         - name: agda-mcp-ingest
           image: ghcr.io/cliu238/agda-mcp-server:latest
@@ -64,7 +106,9 @@ spec:
           volumeMounts:
             - name: team-storage
               mountPath: /data/team-uploads
-              subPath: agda-mcp/team-storage
+              # agda-mcp-data (NOT agda-mcp): see the initContainer note —
+              # this tree is pre-created uid-2231 by pvc-dirs.
+              subPath: agda-mcp-data/team-storage
             - name: team-keys
               mountPath: /etc/agda-mcp-team
               readOnly: true
