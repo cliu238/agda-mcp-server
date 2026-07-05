@@ -52,6 +52,14 @@ RUN apt-get update && \
 COPY --from=agda-builder /agda-bin/agda /usr/local/bin/agda
 COPY --from=agda-builder /agda-bin/agda-mode /usr/local/bin/agda-mode
 
+# WR-05: fail the BUILD if the binary cannot exec in THIS base image
+# (its shared-library needs — libgmp/libffi/libtinfo — are today only
+# satisfied transitively via the git/bash installs above, none on
+# purpose) or is not the pinned version. Without this assert, the first
+# real `agda` execution in this image would be an unattended nightly
+# cron run, with activeDeadlineSeconds as the only backstop.
+RUN agda --version && agda --version | grep -qF "Agda version 2.8.0"
+
 # Fixed UID/GID 2231 — dictated by the target cluster's existing Ceph
 # directory ownership (see .claude/skills/agda-mcp-k8s-deploy/SKILL.md),
 # not a convention this Dockerfile invents.
