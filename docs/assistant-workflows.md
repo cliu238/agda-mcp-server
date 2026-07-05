@@ -77,6 +77,14 @@ agda_goal_catalog {}
 4. For goals with known terms: agda_auto or agda_solve_all
 ```
 
+Want concrete fillable terms instead of just types/contexts? Call
+`agda_goal_candidates` right after `agda_goal_catalog` — it type-directed-searches
+every open goal's local context for terms that already match (`exact`) or partially
+apply (`result`) to the goal type, in the same single-call-covers-everything shape.
+It complements `agda_goal_catalog` (which tells you *what* each goal needs) by
+telling you *what you already have in scope* to fill it, before reaching for
+`agda_auto`'s full proof search.
+
 ---
 
 ## 4. Recommendation-driven proof search

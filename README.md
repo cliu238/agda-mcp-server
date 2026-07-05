@@ -88,7 +88,8 @@ Any stdio-capable MCP client works the same way: command `node`, args pointing a
 
 The server exposes tools across load/typecheck, goal inspection (`agda_goal_type`,
 `agda_metas`, `agda_goal_catalog`), proof actions (`agda_case_split`, `agda_give`,
-`agda_refine`, `agda_auto`), expression queries (`agda_compute`, `agda_infer`),
+`agda_refine`, `agda_auto`, `agda_goal_candidates` for type-directed term search /
+Mimer auto-fix), expression queries (`agda_compute`, `agda_infer`),
 navigation/search, and session capture for bug reports. For the full current tool list,
 call the `agda_tools_catalog` MCP tool itself — it is manifest-derived and always in sync
 with the running server, unlike a hand-maintained doc.

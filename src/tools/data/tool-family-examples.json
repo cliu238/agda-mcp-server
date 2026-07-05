@@ -31,6 +31,12 @@
         "tool": "agda_auto",
         "summary": "Ask Agda to find a term for the goal automatically.",
         "args": { "goalId": 0 }
+      },
+      {
+        "tool": "agda_goal_candidates",
+        "summary": "Type-directed local-term-candidate search across every open goal in one call.",
+        "args": { "limitPerGoal": 20 },
+        "note": "Read-only, takes no goalId — covers every open goal at once. Lists terms already in scope that would fill each goal, before reaching for agda_auto or agda_case_split."
       }
     ],
     "navigation": [
