@@ -385,17 +385,17 @@
         <tr>
           <td>Fuel corpora</td>
           <td>none needed</td>
-          <td>4 pinned corpora cloned locally (<code>~/agda-mcp-fuel</code>); 2 are private <code>emilyriehl/*</code> repos needing granted GitHub access</td>
+          <td>2 public pinned corpora (<code>agda-stdlib</code>, <code>agda-unimath</code>) cloned locally via <code>--public-only</code>; the 2 private <code>emilyriehl/*</code> corpora (<code>codex-homotopy-group</code>, <code>autoformalizing-hopf</code>) additionally, only if you personally work on that research</td>
         </tr>
         <tr>
           <td>First build</td>
           <td>none (your own project's <code>_build</code>)</td>
-          <td>one-off overnight full typecheck per corpus</td>
+          <td>one-off overnight full typecheck per cloned corpus</td>
         </tr>
         <tr>
           <td>Credentials</td>
           <td>none</td>
-          <td>GitHub access to 2 private repos plus a Bearer upload key from the maintainer</td>
+          <td>a Bearer upload key from the maintainer; GitHub access to the 2 private repos only if you work on the research corpora above</td>
         </tr>
         <tr>
           <td>Session runs through</td>
@@ -417,6 +417,8 @@
   </div>
 
   <p>The key framing to hold onto: the plain path is a strict subset of the team path. Team membership adds reproducibility pinning plus the upload channel on top of the plain path; it does not change how the server itself works underneath you.</p>
+
+  <p>Your own project's proof sessions are first-class fuel for this loop, not a fallback: <code>agda_capture_session</code> inlines your project's own first-party source files into the capture, so the judge can replay the session on another machine without your original checkout (design decision D-07) — as long as your project's library dependencies are among the pinned public libraries (<code>agda-stdlib</code>, <code>agda-unimath</code>). The pinned corpora exist as shared library dependencies and as the research team's own work sites, not as the only proving ground the loop accepts sessions from.</p>
 
   <p><strong>Which one am I?</strong> If you are just using the server on your own Agda project, you are a plain user and <a href="../README.md">README.md</a> is all you need. If you want your proof sessions to harden the server for everyone — and are willing to install the pinned environment and get an upload key from the maintainer — follow <a href="TEAM-ONBOARDING.md">docs/TEAM-ONBOARDING.md</a> instead.</p>
 

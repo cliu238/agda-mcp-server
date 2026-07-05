@@ -261,14 +261,25 @@ export function cloneFuelCorpus(entry, destRoot, deps = {}) {
  * silent, matching TEAM-04's own abstention discipline applied here
  * to corpus provisioning — and always returns the full results array
  * regardless of individual failures.
+ *
+ * `deps.publicOnly` (when truthy) filters to `entry.access === "public"`
+ * entries only, before cloning — the seam install-pinned-env.mjs's
+ * `--public-only` flag threads through so a contributor without
+ * private-repo access can provision the corpora that ARE requirements
+ * (the pinned public libraries) without ever attempting the two
+ * private research corpora, which are relevant only to people working
+ * on the research those corpora exist for.
  */
 export function cloneAllFuelCorpora(destRoot, deps = {}) {
   const entries = deps.fuelCorporaJsonPath
     ? readFuelCorpora(deps.fuelCorporaJsonPath)
     : readFuelCorpora();
+  const filteredEntries = deps.publicOnly
+    ? entries.filter((entry) => entry.access === "public")
+    : entries;
 
   const results = [];
-  for (const entry of entries) {
+  for (const entry of filteredEntries) {
     const result = cloneFuelCorpus(entry, destRoot, deps);
     if (!result.ok) {
       process.stderr.write(`clone-fuel-corpora: skipping ${result.key}: ${result.reason}\n`);
