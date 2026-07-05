@@ -53,7 +53,14 @@ Full phase details: `milestones/v1.1-ROADMAP.md` · Audit: `milestones/v1.1-MILE
   3. Load-terminus semantics are adjudicated per sub-behavior (completion-signal detection, fatal-stderr handling, inactivity timeout) as ours/theirs/hybrid — our from-RED locks (#64/#61 flagship, RT8) stay green AND upstream's own #68/#69 regression tests pass under the adjudicated implementation, with the decisions and rationale recorded durably. (MERGE-03)
   4. `agda_goal_candidates` (type-directed term search + Mimer auto fix) is adopted end-to-end: registered in the tool manifest (SSOT), surfaced by tool-recommendation, and documented in the README / tool catalog well enough that a driving agent (Codex/Claude Code) can discover and use it without reading source. (ADOPT-01, ADOPT-02)
   5. Acceptance holds: full verify green (real-Agda integration suite, `typecheck:test`, build), a real dogfood session runs to completion against the merged server (the loop verifying its own upstream merge), and the final push's auto-deploy (D-06) is watched to green with cluster `/healthz` returning `ok`. (ACCEPT-01, ACCEPT-02, ACCEPT-03)
-**Plans**: TBD (~3 per the seed doc's Phase A sketch)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Merge upstream v0.6.8 (real merge commit), resolve all 6 conflict files, build+typecheck green
+- [ ] 10-02-PLAN.md — Run the load-terminus referee, adjudicate ours/theirs/hybrid, record the decision in docs/LOAD-TERMINUS-ADJUDICATION.md
+- [ ] 10-03-PLAN.md — Wire agda_goal_candidates through the manifest, tool-recommendation, and docs
+- [ ] 10-04-PLAN.md — Reconcile the full suite under upstream's fail-on-unexpected-warn harness
+- [ ] 10-05-PLAN.md — Full acceptance: combined verify, real dogfood session, single push watched to green deploy
 
 ### Phase 11: Auto-Sync Productionization
 **Goal**: The `upstream-sync` skill runs unattended on a recurring 3-day cadence via a local headless carrier, with each run's outcome captured as a GSD-native bookkeeping artifact — so upstream divergence stops re-accumulating after the one-time reconcile.
