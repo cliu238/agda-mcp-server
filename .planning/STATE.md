@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Upstream Reconcile
 status: executing
-stopped_at: Phase 10 Plan 01 complete (merge landed, 1f91f33)
-last_updated: "2026-07-05T19:03:35.057Z"
+stopped_at: Phase 10 Plan 02 complete (MERGE-03 GREEN, upstream architecture adopted, c94990f)
+last_updated: "2026-07-05T19:14:53.984Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 10 (upstream-reconcile) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-05
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 08 P05 | 19 min | 2 tasks | 1 files |
 | Phase 08 P06 | 7 min | 2 tasks | 1 files |
 | Phase 10 P1 | 20min | 3 tasks | 13 files |
+| Phase 10 P02 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,7 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-06: POLICY-01 proven on the deployed pod's own filesystem (6/6, exit 0) — policy files live in the image layer /app/scripts/data/oracle-policy, not the PVC; CephFS semantics play no part in the test
 - [Phase 10]: 10-01: adopted upstream's whole-file candidate for the 3 architectural files (agda-transport.ts, command-completion.ts, session-load-impl.ts) per D-04, with 2 forced corrections (return-based loadIncompleteNoTerminus, ported goal-ID recovery block) applied regardless of Plan 10-02's eventual referee verdict
 - [Phase 10]: 10-01: extended the plan's single documented test-fix to 5 additional broken tests/mocks the plan's dry-run missed (3 sibling T-06-12 unit tests, 2 tool-level fakeSession mocks, plus session.ts/session-command-dispatch.ts's stale LoadTerminusOptions import, warn-guard.ts's vitest-version type mismatch, and 2 dead agda-transport.test.ts tests) to make npm run build / typecheck:test literally exit 0
+- [Phase 10]: 10-02: MERGE-03 verdict GREEN on all 3 referee tests — upstream's whole-file load-terminus architecture (agda-transport.ts, command-completion.ts, session-load-impl.ts) adopted as-is for all 3 sub-behaviors (completion-signal detection, fatal-stderr handling, inactivity timeout); no RED-branch revert/graft needed, decision recorded durably in docs/LOAD-TERMINUS-ADJUDICATION.md
 
 ### Pending Todos
 
@@ -126,9 +128,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05T19:03:35.048Z
-Stopped at: Phase 10 Plan 01 complete (merge landed, 1f91f33)
-Resume file: .planning/phases/10-upstream-reconcile/10-02-PLAN.md
+Last session: 2026-07-05T19:14:53.974Z
+Stopped at: Phase 10 Plan 02 complete (MERGE-03 GREEN, upstream architecture adopted, c94990f)
+Resume file: None
 
 ## Operator Next Steps
 
