@@ -19,8 +19,8 @@ recurring sync; 3-day sync cadence; each auto-merge push costs one accepted ~30 
 
 ### Feature Adoption
 
-- [ ] **ADOPT-01**: Upstream #70's `agda_goal_candidates` (type-directed term search) + Mimer auto fix work through our tool manifest (SSOT) and tool-recommendation
-- [ ] **ADOPT-02**: The adopted tools are documented (README / tool catalog) and discoverable by driving agents
+- [x] **ADOPT-01**: Upstream #70's `agda_goal_candidates` (type-directed term search) + Mimer auto fix work through our tool manifest (SSOT) and tool-recommendation
+- [x] **ADOPT-02**: The adopted tools are documented (README / tool catalog) and discoverable by driving agents
 
 ### Acceptance
 
@@ -69,8 +69,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MERGE-01 | Phase 10 | Complete |
 | MERGE-02 | Phase 10 | Pending |
 | MERGE-03 | Phase 10 | Complete |
-| ADOPT-01 | Phase 10 | Pending |
-| ADOPT-02 | Phase 10 | Pending |
+| ADOPT-01 | Phase 10 | Complete |
+| ADOPT-02 | Phase 10 | Complete |
 | ACCEPT-01 | Phase 10 | Pending |
 | ACCEPT-02 | Phase 10 | Pending |
 | ACCEPT-03 | Phase 10 | Pending |
