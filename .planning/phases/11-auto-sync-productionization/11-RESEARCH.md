@@ -488,22 +488,25 @@ export function lintPlist(path, deps = {}) {
 | A6 | `osascript` (not `terminal-notifier`) is the default D-05 local-notification mechanism | Standard Stack / Don't Hand-Roll | If `osascript`'s notifications are ever found to be less visible/attributable than desired once actually observed on-screen (this research verified the COMMAND executes without hanging, but did not visually confirm the banner's on-screen appearance/attribution — see Open Questions), `terminal-notifier` is a drop-in alternative already installed on this machine |
 | A7 | Docs runbook lands at a new `docs/UPSTREAM-SYNC-CARRIER.md` (not appended into `docs/DEPLOY-OPERATIONS.md`) | Recommended Project Structure | Purely organizational; CONTEXT.md's own code_context note left this as "likely a sibling or extension" — either placement satisfies the requirement |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the `osascript`/`terminal-notifier` notification banner actually become visually visible on screen from a launchd context, or could macOS Notification permissions silently suppress it?**
    - What we know: [VERIFIED live] both commands execute successfully (exit 0) without hanging or blocking on a permission dialog when run from a real launchd LaunchAgent process.
    - What's unclear: This research has no way to visually inspect the live desktop to confirm a banner actually rendered — exit 0 alone doesn't rule out a silently-suppressed notification if System Settings → Notifications permissions for the relevant requesting-app identity are set to deny.
    - Recommendation: Treat this as a one-time manual install-verification step in the runbook ("after installing, run `launchctl kickstart -k ...` once and confirm you actually SEE a banner; if not, check System Settings → Notifications"). Since `gh issue create` is the FIRST channel in D-05's dual-channel design and is fully verifiable programmatically (an issue either exists on GitHub or it doesn't), the local notification is correctly positioned as the secondary/best-effort channel, not the sole point of failure detection.
+   - **RESOLVED:** Plan 11-04 Task 3's runbook (`docs/UPSTREAM-SYNC-CARRIER.md`) one-time notification-banner visual-confirmation step, plus Plan 11-05 Task 2's `checkpoint:human-verify` step 5 (visually confirms the banner, only if a carrier-level failure was captured).
 
 2. **Exact `--max-budget-usd` ceiling value for the `claude -p` invocation.**
    - What we know: The flag exists and is designed for exactly this use case (print-mode cost ceiling) [CITED: code.claude.com/docs/en/cli-reference].
    - What's unclear: No historical cost data exists yet for a full real `upstream-sync` LOCAL-gate run (build + full guarded suite + potential merge + deploy watch) driven through `claude -p` specifically, since this run mode hasn't been exercised end-to-end yet — Phase 10's own full-suite runs were driven by a different (interactive orchestrator) session, not this headless carrier.
    - Recommendation: Pick a generous placeholder (e.g. $20–50) for the first real run, and tune down after observing the first real `total_cost_usd` figure (which the JSON output directly reports, per this research's own captured example).
+   - **RESOLVED:** Plan 11-03 Task 1's `DEFAULT_MAX_BUDGET_USD` constant (defaults to `25`, read from `process.env.UPSTREAM_SYNC_MAX_BUDGET_USD`) — within the recommended $20-50 range, tunable without a code change.
 
 3. **Should the wrapper's own hard-timeout figure (~2h) be configurable via an env var/CLI flag, or hardcoded?**
    - What we know: CONTEXT.md frames 2h as a suggestion, not a hard number.
    - What's unclear: Whether the planner wants this trivially tunable without a code change (e.g. `UPSTREAM_SYNC_TIMEOUT_MS` env var read by the plist's `EnvironmentVariables` or the wrapper itself) or a fixed constant.
    - Recommendation: A simple exported constant with an env var override (mirrors this codebase's existing `AGDA_MCP_DOGFOOD_RERUN_N`-style override pattern in `scripts/team/cron-ingest-wrapup.mjs`) is low-cost and consistent with house style.
+   - **RESOLVED:** Plan 11-03 Task 1's `DEFAULT_HARD_TIMEOUT_MS` constant (defaults to `7_200_000` ms / 2h, read from `process.env.UPSTREAM_SYNC_TIMEOUT_MS`) — exported constant with an env var override, exactly as recommended.
 
 ## Environment Availability
 
