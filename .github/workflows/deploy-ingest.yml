@@ -76,7 +76,7 @@ jobs:
       - name: Build WITHOUT fuel_corpora_token (proves D-10 public buildability)
         run: |
           set +e
-          docker buildx build --platform linux/amd64 -f Dockerfile . > build.log 2>&1
+          docker buildx build --progress=plain --platform linux/amd64 -f Dockerfile . > build.log 2>&1
           BUILD_EXIT=$?
           set -e
           cat build.log
@@ -155,18 +155,23 @@ jobs:
         env:
           SSH_AUTH_SOCK: ${{ env.SSH_AUTH_SOCK }}
         run: |
+          set -euo pipefail
+          # Ship the manifests THROUGH the SSH pipe (litellm reference
+          # pattern) instead of depending on a mutable remote clone —
+          # first deploy failed exactly there: the remote checkout
+          # predated k8s/ and, with no set -e, three dead kubectl calls
+          # still exited 0 (false-green). base64 survives the two-hop
+          # shell quoting; the remote script is fail-fast so any kubectl
+          # error now fails this step.
+          MANIFESTS_B64=$(tar -czf - k8s/deployment.yaml k8s/ingress.yaml k8s/cronjob.yaml | base64 | tr -d '\n')
           ssh -A -o StrictHostKeyChecking=no cliu238@dslogin01.pha.jhu.edu \
-            'ssh -A -p 14132 -o StrictHostKeyChecking=no k8slgn.idies.jhu.edu bash -s' << 'EOF'
+            "ssh -A -p 14132 -o StrictHostKeyChecking=no k8slgn.idies.jhu.edu bash -s" <<EOF
+          set -euo pipefail
           export KUBECONFIG=/var/k8s/users/cliu238/k8s-dev-llm-gateway-admins.conf
-
-          cd ~
-          if [ -d agda-mcp-server ]; then
-            cd agda-mcp-server && git pull
-          else
-            git clone https://github.com/cliu238/agda-mcp-server.git && cd agda-mcp-server
-          fi
-
-          kubectl apply -f k8s/
+          WORK=\$(mktemp -d)
+          trap 'rm -rf "\$WORK"' EXIT
+          echo "${MANIFESTS_B64}" | base64 -d | tar -xzf - -C "\$WORK"
+          kubectl apply -f "\$WORK/k8s/"
           kubectl rollout restart deployment/agda-mcp-ingest -n llm-gateway
           kubectl rollout status deployment/agda-mcp-ingest -n llm-gateway --timeout=5m
           kubectl get pods,ingress -n llm-gateway
