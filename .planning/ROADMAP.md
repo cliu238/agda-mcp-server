@@ -87,7 +87,25 @@ Plans:
   2. A completed sync run produces a real `.planning/quick/<id>-upstream-sync-<date>/` PLAN+SUMMARY pair and a corresponding STATE.md Quick-Tasks row (or a `docs/UPSTREAM-SYNC-LOG.md` entry when `gsd-sdk` is unavailable), committed alongside any merge it performs.
   3. At least one real end-to-end headless carrier run has executed the skill through its real-Agda verification gates (a no-op or behind-schedule outcome is an acceptable result) and produced the bookkeeping artifact described in criterion 2.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — Foundational carrier modules: interval-guard (SYNC-01 cadence), preflight-assertions (D-03's 6 guaranteed-real-Agda-gate checks), carrier-notify (D-05 dual-channel failure notifier)
+- [ ] 11-02-PLAN.md — SKILL.md Section 7 GSD-native bookkeeping upgrade (SYNC-02) + synthetic "upstream 1 commit ahead" fixture
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-03-PLAN.md — run-upstream-sync.mjs controller: guard/preflight/spawn+timeout-kill/outcome-classification, plus a real process-group-kill integration test
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-04-PLAN.md — install-launchd-carrier.mjs + uninstall-launchd-carrier.mjs + docs/UPSTREAM-SYNC-CARRIER.md runbook
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 11-05-PLAN.md — SYNC-03 proof: real `launchctl kickstart` of the installed job, evidence captured and human-confirmed (autonomous: false)
 
 ## Progress
 
@@ -104,7 +122,7 @@ Plans:
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 6/6 | Complete | 2026-07-05 |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete | 2026-07-04 |
 | 10. Upstream Reconcile | v1.2 | 5/5 | Complete    | 2026-07-05 |
-| 11. Auto-Sync Productionization | v1.2 | 0/TBD | Not started | - |
+| 11. Auto-Sync Productionization | v1.2 | 0/5 | Not started | - |
 
 ### Phase 12: Simplification overhaul: project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity
 
