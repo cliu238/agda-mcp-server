@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
-stopped_at: context exhaustion at 75% (2026-07-05)
-last_updated: "2026-07-05T01:07:17.461Z"
-last_activity: 2026-07-04 -- Phase 8 execution started
+stopped_at: 08-04 complete -- first live deploy green (healthz ok); 08-05 next
+last_updated: "2026-07-05T03:05:00Z"
+last_activity: 2026-07-05 -- 08-04 complete (4-attempt first deploy, service live)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 24
-  completed_plans: 21
-  percent: 75
+  completed_plans: 22
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 8 (Pinned-Environment Distribution + Thin k8s Deployment) — EXECUTING
-Plan: 1 of 6
+Plan: 5 of 6 (08-01..08-04 complete; 08-05 cluster acceptance next)
 Status: Executing Phase 8
-Last activity: 2026-07-04 -- Phase 8 execution started
+Last activity: 2026-07-05 -- 08-04 complete: first live deploy green (run 28726436348), ingest live at dev.sites.idies.jhu.edu/agda-mcp
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 92% (22 of 24 plans)
 
 ## Performance Metrics
 
@@ -72,6 +72,9 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- Deploy (08-04): dedicated `agda-mcp-ghcr` GHCR pull secret — litellm SHARES `ghcr-credentials` and the two credentials 403 on each other's packages (verified); never overwrite the shared secret. Rotation recipe in docs/DEPLOY-OPERATIONS.md.
+- Deploy (08-04): every k8s workload on this image MUST override `command:` — the image CMD is the MCP stdio server and silently CrashLoops in a pod (ingest runs `npx tsx scripts/team/ingest-server.mjs`).
+- Deploy (08-04): FUEL_CORPORA_READ_TOKEN is a classic repo-scope PAT — fine-grained PATs cannot see cross-owner private repos, making the plan/threat-model spec (T-08-15) platform-impossible; residual risk documented in 08-04-SUMMARY Threat Flags.
 - Scope (v1.1): the entire CACHE theme (build script, image cache prebake, cluster build job, any distribution channel) was deleted from v1.1 by consumer audit — the oracle is forbidden from caches by design, the server needs source clones only, teammates already hold warm local `_build`s. v2 anchored on CACHE-04 (oracle prewarm); trigger = TEAM-04's INCONCLUSIVE/timeout rate becoming the bottleneck. The deploy image is consequently small (Node + Agda + corpus source clones) and needs no special build machine.
 - Roadmap (v1.1): TEAM-05 (pinned-env git-install distribution) grouped into Phase 8 with deployment, not Phase 7 — it packages Phase 7's already-proven upload URL/key mechanism, so it belongs after that mechanism is real.
 - Roadmap: Loop wraps the server — only two surgical `src/` additions (pure `session-capture` model + emit-only capture tool); all orchestration in `scripts/` + repo data dirs.
@@ -105,8 +108,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05 (resumed)
-Stopped at: resumed mid-08-04 — dedicated agda-mcp-ghcr pull secret created on cluster; deploy workflow fixes (keepalives + D-10 asserts) pushed; watching deploy run
+Last session: 2026-07-05 (active)
+Stopped at: Completed 08-04-PLAN.md — first live deploy green (4 attempts, 4 real defects fixed); next: 08-05 cluster functional acceptance
 Resume file: .planning/phases/08-pinned-environment-distribution-thin-k8s-deployment/.continue-here.md
 
 ## Operator Next Steps

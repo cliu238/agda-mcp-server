@@ -125,7 +125,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 08-03-PLAN.md — TEAM-05 acceptance: docs/TEAM-ONBOARDING.md + fresh-teammate walkthrough test (installer -> real local upload, zero real Agda dependency)
-- [ ] 08-04-PLAN.md — DEPLOY-01 CI/CD: deploy-ingest.yml (D-06 auto-deploy-on-push, no path filter) + cluster secrets bootstrap + first live deploy (checkpoint: GH Actions secrets)
+- [x] 08-04-PLAN.md — DEPLOY-01 CI/CD: deploy-ingest.yml (D-06 auto-deploy-on-push, no path filter) + cluster secrets bootstrap + first live deploy (checkpoint: GH Actions secrets) (completed 2026-07-05: green run 28726436348 after 4 attempts; healthz ok)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -182,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 3/6 | In Progress|  |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 4/6 | In Progress|  |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |
