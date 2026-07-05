@@ -316,14 +316,14 @@ registerGoalCandidates(server, session, projectRoot);
 
 **None of these are compliance/retention/security-standard claims** — all are ordinary engineering-tradeoff assumptions, verifiable by running the referenced tests during plan execution.
 
-## Open Questions
+## Open Questions (DEFERRED TO EXECUTION — operationalized in the Phase 10 plans, not dropped)
 
-1. **Does upstream's `Cmd_load`+client-side-check strict-load implementation actually pass both capture-regression-matrix referee entries?**
+1. **Does upstream's `Cmd_load`+client-side-check strict-load implementation actually pass both capture-regression-matrix referee entries?** *(DEFERRED TO EXECUTION — see 10-02-PLAN.md Task 1, which runs exactly this referee.)*
    - What we know: The architecture is fundamentally different from ours (real IOTCM verb vs. simulated strictness); upstream's approach has a robust positive-error-terminus signal for the broken-dependency case (a real `DisplayInfo Error` from the underlying `Cmd_load`), which should in principle satisfy `issue-64-61-transitive-staleness`.
    - What's unclear: Whether `needsExplicitHoleScan`/`countExplicitSourceHoles`'s client-side fallback (used when Agda reports zero visible+invisible goals but source still has `{!!}`/`?` markers) covers every edge case our real `Cmd_load_no_metas` verb's native strictness covers — e.g. certain `abstract`-block or postulate interactions.
    - Recommendation: This is exactly what the referee tests are for — the plan should treat "run the two matrix entries against upstream's swapped-in implementation" as a first-class Task, not a foregone conclusion.
 
-2. **Exact allow-list mechanism shape for MERGE-02 (per-test `expectWarning` vs. a central registry)?**
+2. **Exact allow-list mechanism shape for MERGE-02 (per-test `expectWarning` vs. a central registry)?** *(DEFERRED TO EXECUTION — see 10-04-PLAN.md Task 2, which defaults to per-test `expectWarning` per this recommendation.)*
    - What we know: D-07 leaves this to researcher/planner discretion; upstream's shipped mechanism is purely per-test (`expectWarning`/`ackWarnings`), no central registry exists.
    - What's unclear: Whether the ~1600-test scale makes a central allow-list (e.g. a JSON list of `{file, expectedSubstring}`) more maintainable than scattering `expectWarning()` calls, given the project's existing JSON-SSOT convention for other lookup tables.
    - Recommendation: Given upstream ships the per-test mechanism ready-to-use and it requires zero new infrastructure, default to it; only reach for a central registry if the full-suite triage run (Pitfall 6) reveals an unmanageably large or repetitive set of sites.
