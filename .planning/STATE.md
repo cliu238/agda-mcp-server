@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
 status: Awaiting next milestone
-stopped_at: Completed 08-06-PLAN.md — phase 8 execution complete (6/6); milestone v1.1 plans 24/24; v1.1 tag pushed; awaiting review chain + verifier + milestone lifecycle
+stopped_at: v1.1 milestone completed + archived (audit tech_debt, 17/17 reqs); endgame remaining — deploy-run watch on fixed Dockerfile, v1.1.1 remedy tag, final push, cleanup
 last_updated: "2026-07-05T05:08:30.425Z"
 last_activity: 2026-07-05 — Milestone v1.1 completed and archived
 progress:
