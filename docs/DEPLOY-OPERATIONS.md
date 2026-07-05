@@ -270,3 +270,120 @@ path — no SSH needed until the final landing check).
    every directory level owned `2231:2231` (`ls -lanR /data/team-uploads`).
 
 6. **Hygiene**: shred/delete the scratch key file and driver once done.
+
+### Manual cron-judge trigger + write-back-disabled proof (D-08, D-09)
+
+Two sequential one-off Jobs — NEVER in parallel: the namespace pod quota is
+a hard 5 (litellm + ingest + 1 job = 3). Delete each job after capturing
+evidence; lingering `Completed` pods still count against the quota.
+
+**Job 1 — the UNMODIFIED CronJob template.** D-08: the judge shares the
+ingest Deployment's image + PVC, so `create job --from=cronjob` exercises
+exactly what the nightly schedule will run (including its `pvc-dirs`
+initContainer). Via the one-shot SSH pattern:
+
+```bash
+kubectl delete job agda-mcp-cron-judge-manual-verify -n llm-gateway --ignore-not-found
+kubectl create job --from=cronjob/agda-mcp-cron-judge agda-mcp-cron-judge-manual-verify -n llm-gateway
+kubectl wait --for=condition=complete --timeout=1800s job/agda-mcp-cron-judge-manual-verify -n llm-gateway
+kubectl logs job/agda-mcp-cron-judge-manual-verify -n llm-gateway -c agda-mcp-cron-judge
+kubectl logs job/agda-mcp-cron-judge-manual-verify -n llm-gateway -c pvc-dirs
+```
+
+Literal main-container log from the 2026-07-05 acceptance run (judging
+Task 1's zero-capture archive — completes in seconds; a real
+`stagedCaptures`-bearing archive can legitimately take hours, bounded by
+`activeDeadlineSeconds: 21600`):
+
+```text
+[cron-ingest-wrapup] processed 1 archive(s), 0 capture(s) — 0 filed, 0 abstained (0.0%), 0 terminal-conflict(s), 0 error(s).
+```
+
+Durable-PVC-accumulation check (the cron pod is gone; read its write back
+through the INGEST pod — pod-lifetime independence is the point):
+
+```bash
+kubectl exec deployment/agda-mcp-ingest -n llm-gateway -c agda-mcp-ingest -- \
+  find /data/team-uploads -name '*.processed.json'
+# → /data/team-uploads/eric/2026-07-05/08-05-accept-20260705T031840Z.tar.gz.processed.json
+#   content: { "processedAt": "...", "ok": true, "runId": "...", "results": [] }
+```
+
+**Job 2 — the write-back-disabled proof (D-09).** `kubectl exec` into a
+`Completed` pod is impossible, so the proof commands are baked INTO the job
+via a wrapped command; the evidence lands in the job's own logs. Build a
+Job manifest that copies `k8s/cronjob.yaml`'s `jobTemplate` verbatim
+(explicit `resources` on ALL containers incl. the initContainer — the
+quota rejects any container without them), name it
+`agda-mcp-cron-judge-manual-verify-2`, and replace only the main
+container's `command` with:
+
+```yaml
+command:
+  - sh
+  - -c
+  - |
+    npx tsx scripts/team/cron-ingest-wrapup.mjs --queue-path /data/cluster-queue/fix-queue.json --no-push
+    ec=$?
+    echo "=== write-back-disabled proof ==="
+    git -C /app status --short
+    echo "=== proof end (wrapup rc=$ec) ==="
+    ls -la /app/.git 2>/dev/null || echo "(no /app/.git — image excludes it by design)"
+    echo "=== baked-in fix-queue sha256 ==="
+    sha256sum /app/test/fixtures/fix-queue.json
+    echo "=== fix-queue.json on PVC ==="
+    cat /data/cluster-queue/fix-queue.json 2>/dev/null || echo "(absent)"
+    echo "=== fix-queue end ==="
+    ls -lan /data/cluster-queue
+    exit $ec
+```
+
+Apply it, `kubectl wait --for=condition=complete --timeout=540s`, then
+`kubectl logs job/agda-mcp-cron-judge-manual-verify-2 -n llm-gateway -c
+agda-mcp-cron-judge`. Literal output from 2026-07-05:
+
+```text
+[cron-ingest-wrapup] processed 0 archive(s), 0 capture(s) — 0 filed, 0 abstained (0.0%), 0 terminal-conflict(s), 0 error(s).
+=== write-back-disabled proof ===
+fatal: not a git repository (or any of the parent directories): .git
+=== proof end (wrapup rc=0) ===
+(no /app/.git — image excludes it by design)
+=== baked-in fix-queue sha256 ===
+8787091029a5c6e88e96395f3ccacd98d89f9be5b1bd1f82ab59483513d1de62  /app/test/fixtures/fix-queue.json
+=== fix-queue.json on PVC ===
+(absent)
+=== fix-queue end ===
+total 0
+drwxrwsr-x+ 2 2231 2231  0 Jul  5 03:11 .
+```
+
+How to read this — three independent write-back-disable layers held:
+
+1. **No repo to write to**: `/app` is not a git repository at all
+   (`.dockerignore` excludes `.git` from the image), so
+   `writeBackQueue`'s `git add/commit/push` can never operate — stronger
+   than the "empty `git status` output" originally expected.
+2. **Structural disable**: `--queue-path /data/cluster-queue/fix-queue.json`
+   is outside `SERVER_REPO_ROOT`, so `writeBackQueue` short-circuits with
+   `queue-path-outside-repo` BEFORE any git subprocess call.
+3. **Explicit flag**: `--no-push` (redundant by design with layer 2).
+
+The baked-in checkout is also byte-identical to the committed repo: the
+in-pod `sha256sum test/fixtures/fix-queue.json` matches
+`git show HEAD:test/fixtures/fix-queue.json | shasum -a 256` locally —
+the cron judge never touched the default (in-repo) queue path.
+
+`fix-queue.json` **absent on the PVC is the honest empty-queue state**, not
+a failure: `readQueueFile` (scripts/queue/intake.mjs) treats an absent file
+as `[]`, and the file is only created by the first `upsertQueueEntry` when
+a capture actually files a candidate. A zero-capture archive files nothing.
+`processed 0 archive(s)` in Job 2 is Job 1's `.processed.json` marker doing
+its idempotency job — the same archive is never judged twice.
+
+Cleanup (always):
+
+```bash
+kubectl delete job agda-mcp-cron-judge-manual-verify agda-mcp-cron-judge-manual-verify-2 \
+  -n llm-gateway --ignore-not-found
+kubectl get pods -n llm-gateway   # back to litellm + ingest only
+```
