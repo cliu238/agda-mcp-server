@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
-status: verifying
-stopped_at: Completed 08-06-PLAN.md — phase 8 execution complete (6/6); milestone v1.1 plans 24/24; v1.1 tag pushed; awaiting review chain + verifier + milestone lifecycle
-last_updated: "2026-07-05T03:45:17.245Z"
+status: ready_to_plan
+stopped_at: Phase 8 complete (6/6) — ready to discuss Phase 09
+last_updated: 2026-07-05T04:51:01.195Z
 last_activity: 2026-07-05
 progress:
   total_phases: 4
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Every real proof session reliably converts into a stronger server — the closed loop (use it → surface a defect → capture it → fix and lock it with a regression test → use it again) must work reproducibly by hand.
-**Current focus:** Phase 8 — Pinned-Environment Distribution + Thin k8s Deployment
+**Current focus:** Phase 09 — residual v1 0 debt sweep
 
 ## Current Position
 
-Phase: 8 (Pinned-Environment Distribution + Thin k8s Deployment) — EXECUTION COMPLETE (6/6)
-Plan: 6 of 6 complete — milestone v1.1 plans 24/24 (100%); v1.1 tag cut on 6c0d716d and pushed
-Status: Phase 8 execution complete — awaiting review chain + verifier + milestone lifecycle
+Phase: 09
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-07-05
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 37
+- Total plans completed: 43
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 | 6 | 6 | - | - |
 | 7 | 6 | - | - |
 | 9 | 6 | - | - |
+| 8 | 6 | - | - |
 
 **Recent Trend:**
 
