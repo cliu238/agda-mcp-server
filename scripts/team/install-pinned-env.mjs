@@ -141,6 +141,14 @@ function repoRootFromThisFile() {
  * `process.exitCode = 1` — `tooling/scripts/run-pinned-agda.sh` is
  * NOT written, `npm ci` is NOT run, and no fuel corpus is cloned.
  *
+ * After the clone batch, prints the same `N/M fuel corpora ready`
+ * summary contract as clone-fuel-corpora.mjs's own scriptMain — AFTER
+ * `npm ci`, so it is the last thing on screen, never buried under
+ * minutes of inherited npm output — and sets `process.exitCode = 1`
+ * on any partial result (private-repo-no-credential included). A
+ * partial install is loud, never a silent "done." (CR-01: the
+ * false-green this project's own charter exists to kill).
+ *
  * `deps.repoRoot` overrides the default (this file's own `../..`) —
  * used by this module's own tests to avoid writing into the real
  * repo tree.
@@ -175,8 +183,40 @@ export function scriptMain(argv = process.argv.slice(2), deps = {}) {
   }
 
   writeRunPinnedAgdaScript(repoRoot, agdaPath, deps);
-  cloneAllFuelCorpora(resolveFuelRoot(), deps);
+
+  const fuelRoot = resolveFuelRoot();
+  const cloneResults = cloneAllFuelCorpora(fuelRoot, deps);
+
   runNpmCi(repoRoot, deps);
+
+  // CR-01: consume the clone results — mirror clone-fuel-corpora.mjs
+  // scriptMain's own summary + exit-code contract. Printed AFTER
+  // `npm ci` deliberately: the per-corpus skip lines emitted at clone
+  // time drown under npm's inherited output, and a fresh teammate
+  // without GitHub credentials (both private corpora skip) must never
+  // read "done." + exit 0 on a partial install.
+  const okCount = cloneResults.filter((result) => result.ok).length;
+  process.stdout.write(
+    `install-pinned-env: ${okCount}/${cloneResults.length} fuel corpora ready under ${fuelRoot}\n`,
+  );
+  if (okCount < cloneResults.length) {
+    for (const result of cloneResults) {
+      if (!result.ok) {
+        process.stderr.write(
+          `install-pinned-env: corpus NOT ready: ${result.key} (${result.reason})\n`,
+        );
+      }
+    }
+    process.stderr.write(
+      "install-pinned-env: PARTIAL install — the corpora listed above did not clone.\n" +
+        "Private corpora need GitHub credentials with read access to their repos: run\n" +
+        "`gh auth login`, or set GH_TOKEN, then re-run this script (re-runs are\n" +
+        "idempotent; already-cloned corpora are just updated). See\n" +
+        "docs/TEAM-ONBOARDING.md Step 2 for the private-corpus prerequisite.\n",
+    );
+    process.exitCode = 1; // loud partial — never a false-green "done." (CR-01)
+    return;
+  }
 
   process.stdout.write(
     "\ninstall-pinned-env: done.\n" +

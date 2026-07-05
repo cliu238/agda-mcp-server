@@ -20,6 +20,20 @@ You need:
   you how to fix it if not. Install it yourself, your choice of tool:
   - nix: https://nixos.org/download.html
   - ghcup: https://www.haskell.org/ghcup/
+- **GitHub credentials for the 2 private fuel corpora.** Two of the four
+  corpora the installer clones — `codex-homotopy-group` and
+  `autoformalizing-hopf` — live in private `emilyriehl/*` repositories.
+  You need both:
+  1. your GitHub account granted read access to those two repos (ask the
+     maintainer to add you), and
+  2. a local credential the installer can actually use: **either** an
+     authenticated GitHub CLI session (`gh auth login`) **or** a `GH_TOKEN`
+     environment variable whose token can read those repos.
+
+  Without this, Step 2 still installs everything else but reports
+  `2/4 fuel corpora ready` and **exits 1** — see the "If it exits 1"
+  notes in Step 2. The 2 public corpora (`agda-stdlib`, `agda-unimath`)
+  need no credentials.
 
 ### Windows
 
@@ -76,14 +90,36 @@ This does, in order:
      work inside these clones with your editor and agent; **D-05**: the
      env-var override is mandatory, not optional, since the maintainer's own
      clones live at a different path than the container image's clones).
+     The 2 private corpora clone only if the GitHub credential prerequisite
+     from Step "Prerequisites" is in place (`gh auth login` or `GH_TOKEN`,
+     plus repo access) — otherwise they are skipped loudly and the installer
+     exits 1 after finishing everything else.
    - Runs `npm ci` in the repo.
+   - Prints a final `N/4 fuel corpora ready` summary line — deliberately
+     after `npm ci`, so it is the last thing on your screen, and exits 1
+     on anything less than 4/4.
 
-**If it exits 1:** it means Agda is missing or does not match `2.8.0`. The
-script prints the exact nix/ghcup instructions again — follow them, then
-re-run `bash scripts/team/install-pinned-env.sh`. Nothing is partially
-applied on this failure path: `tooling/scripts/run-pinned-agda.sh` is not
-written, no fuel corpus is cloned, and `npm ci` does not run until Agda
-verifies correctly.
+**If it exits 1**, read the last lines it printed — there are two distinct
+failure modes:
+
+- **Agda missing or wrong version.** The script prints the exact nix/ghcup
+  instructions again — follow them, then re-run
+  `bash scripts/team/install-pinned-env.sh`. Nothing is partially applied
+  on this failure path: `tooling/scripts/run-pinned-agda.sh` is not
+  written, no fuel corpus is cloned, and `npm ci` does not run until Agda
+  verifies correctly.
+- **Partial fuel-corpus clone** — the summary line reads e.g.
+  `install-pinned-env: 2/4 fuel corpora ready`. Everything else IS
+  installed (the wrapper is written, `npm ci` ran); what failed is one or
+  more corpus clones, listed by name just above the summary. On a fresh
+  machine, `2/4` almost always means the 2 private corpora were skipped
+  with `private-repo-no-credential`: fix the GitHub credential
+  prerequisite from "Prerequisites" (`gh auth login` or `GH_TOKEN`, plus
+  read access to the two `emilyriehl/*` repos), then re-run the installer
+  — re-runs are idempotent and only fetch/update corpora that already
+  cloned. Do **not** proceed to Step 3 with a partial clone:
+  `codex-homotopy-group` is the first official dogfood-run target, and
+  Steps 3/5 would fail confusingly far from this cause if it is missing.
 
 ## 4. Step 3: First corpus build (overnight, once)
 

@@ -203,6 +203,121 @@ test("scriptMain's missing-Agda early-exit path never calls npm ci or clones any
   process.exitCode = 0;
 });
 
+// ── scriptMain: fuel-corpus summary + partial-install exit (CR-01) ──────
+
+/** Runs scriptMain with stdout/stderr captured (restored on exit). */
+function runScriptMainCapturing(deps: Record<string, unknown>): { stdout: string; stderr: string } {
+  let stdout = "";
+  let stderr = "";
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  process.stdout.write = ((chunk: string) => {
+    stdout += chunk;
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string) => {
+    stderr += chunk;
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    scriptMain([], deps);
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+  }
+  return { stdout, stderr };
+}
+
+test("scriptMain prints the N/M fuel-corpora summary and 'done.' when every corpus clones (CR-01)", () => {
+  const repoRoot = makeTempDir("agda-mcp-install-repo-");
+  const fuelRoot = join(makeTempDir("agda-mcp-install-fuel-"), "fuel");
+  const fuelCorporaJsonPath = join(makeTempDir("agda-mcp-install-data-"), "fuel-corpora.json");
+  writeFileSync(
+    fuelCorporaJsonPath,
+    JSON.stringify([
+      {
+        key: "pub-corpus",
+        repo: "example/pub-corpus",
+        access: "public",
+        pinnedRef: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+    ]),
+  );
+
+  // Fakes: pinned Agda via AGDA_BIN, and every git/npm invocation
+  // no-op-succeeds (clone orchestration wiring, not git mechanics).
+  const fakeExecFileSync = (cmd: string, args: readonly string[]) => {
+    if (cmd === "/fake/agda" && args[0] === "--version") {
+      return Buffer.from("Agda version 2.8.0\n");
+    }
+    return Buffer.from("");
+  };
+
+  let output: { stdout: string; stderr: string } | undefined;
+  withEnv("AGDA_BIN", "/fake/agda", () => {
+    withEnv("AGDA_MCP_FUEL_ROOT", fuelRoot, () => {
+      output = runScriptMainCapturing({ execFileSync: fakeExecFileSync, repoRoot, fuelCorporaJsonPath });
+    });
+  });
+
+  expect(output?.stdout).toContain(`install-pinned-env: 1/1 fuel corpora ready under ${fuelRoot}`);
+  expect(output?.stdout).toContain("install-pinned-env: done.");
+  expect(process.exitCode ?? 0).toBe(0);
+});
+
+test("scriptMain exits 1, names the failed corpus, and never prints 'done.' on a partial clone (CR-01)", () => {
+  const repoRoot = makeTempDir("agda-mcp-install-repo-");
+  const fuelRoot = join(makeTempDir("agda-mcp-install-fuel-"), "fuel");
+  const fuelCorporaJsonPath = join(makeTempDir("agda-mcp-install-data-"), "fuel-corpora.json");
+  writeFileSync(
+    fuelCorporaJsonPath,
+    JSON.stringify([
+      {
+        key: "priv-corpus",
+        repo: "example/priv-corpus",
+        access: "private",
+        pinnedRef: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+    ]),
+  );
+
+  // The exact fresh-teammate default path: no GH_TOKEN/GITHUB_TOKEN,
+  // no authenticated `gh` — the private corpus MUST skip, and the
+  // installer MUST be loud about it (no false-green "done." + exit 0).
+  const fakeExecFileSync = (cmd: string, args: readonly string[]) => {
+    if (cmd === "/fake/agda" && args[0] === "--version") {
+      return Buffer.from("Agda version 2.8.0\n");
+    }
+    if (cmd === "gh") {
+      throw new Error("gh: not authenticated");
+    }
+    return Buffer.from("");
+  };
+
+  let output: { stdout: string; stderr: string } | undefined;
+  try {
+    withEnv("AGDA_BIN", "/fake/agda", () => {
+      withEnv("AGDA_MCP_FUEL_ROOT", fuelRoot, () => {
+        withEnv("GH_TOKEN", undefined, () => {
+          withEnv("GITHUB_TOKEN", undefined, () => {
+            output = runScriptMainCapturing({ execFileSync: fakeExecFileSync, repoRoot, fuelCorporaJsonPath });
+          });
+        });
+      });
+    });
+
+    expect(output?.stdout).toContain(`install-pinned-env: 0/1 fuel corpora ready under ${fuelRoot}`);
+    expect(output?.stdout).not.toContain("install-pinned-env: done.");
+    expect(output?.stderr).toContain("corpus NOT ready: priv-corpus (private-repo-no-credential)");
+    expect(output?.stderr).toMatch(/gh auth login|GH_TOKEN/);
+    expect(process.exitCode).toBe(1);
+  } finally {
+    // Reset — this test intentionally sets process.exitCode; do not let
+    // it leak into the overall test-run's own exit code.
+    process.exitCode = 0;
+  }
+});
+
 // ── install-pinned-env.sh: hand-off contract (real subprocess) ──────────
 
 const REAL_SH_PATH = join(SERVER_REPO_ROOT, "scripts", "team", "install-pinned-env.sh");
