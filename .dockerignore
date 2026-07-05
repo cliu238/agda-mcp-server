@@ -12,3 +12,15 @@ test-output
 k8s
 *.tgz
 .DS_Store
+# WR-04: never let a LOCAL `docker build` bake local secrets or
+# local-only trees into a pushed image layer (CI builds from a clean
+# checkout, but D-10 explicitly blesses local builds). scripts/team/data
+# holds the gitignored team-keys.json ("Team channel secrets" per
+# .gitignore) on the maintainer's machine; nothing committed lives there.
+scripts/team/data
+.env
+.env.*
+local-only
+.local-reference
+tmp
+temp
