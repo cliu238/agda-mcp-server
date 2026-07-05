@@ -129,7 +129,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 08-05-PLAN.md — DEPLOY-01 functional acceptance: real upload through the deployed cluster + manual cron-judge trigger + PVC queue accumulation + write-back-disabled proof (D-09)
+- [x] 08-05-PLAN.md — DEPLOY-01 functional acceptance: real upload through the deployed cluster + manual cron-judge trigger + PVC queue accumulation + write-back-disabled proof (D-09)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -182,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 4/6 | In Progress|  |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 5/6 | In Progress|  |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |

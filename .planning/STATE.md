@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
 status: executing
-stopped_at: "Completed 08-04-PLAN.md — first live deploy green (4 attempts, 4 real defects fixed); next: 08-05 cluster functional acceptance"
-last_updated: "2026-07-05T02:56:32.561Z"
-last_activity: "2026-07-05 -- 08-04 complete: first live deploy green (run 28726436348), ingest live at dev.sites.idies.jhu.edu/agda-mcp"
+stopped_at: "Completed 08-05-PLAN.md — cluster functional acceptance green (real upload on PVC, cron-judge run + D-09 proof); next: 08-06"
+last_updated: "2026-07-05T03:35:19.844Z"
+last_activity: 2026-07-05
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 24
-  completed_plans: 22
-  percent: 75
+  completed_plans: 23
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 8 (Pinned-Environment Distribution + Thin k8s Deployment) — EXECUTING
-Plan: 5 of 6 (08-01..08-04 complete; 08-05 cluster acceptance next)
-Status: Executing Phase 8
-Last activity: 2026-07-05 -- 08-04 complete: first live deploy green (run 28726436348), ingest live at dev.sites.idies.jhu.edu/agda-mcp
+Plan: 6 of 6 (08-01..08-05 complete; 08-06 final packaging + POLICY-01 cluster re-verify next)
+Status: Ready to execute
+Last activity: 2026-07-05
 
-Progress: [█████████░] 92% (22 of 24 plans)
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████████░] 92% (22 of 24 plans)
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 08 P05 | 19 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Recent decisions affecting current work:
 - Roadmap: Loop wraps the server — only two surgical `src/` additions (pure `session-capture` model + emit-only capture tool); all orchestration in `scripts/` + repo data dirs.
 - Roadmap: Cold-compiler oracle (Phase 2) isolated *before* the regression emitter (Phase 3) so durable tests assert the correct result, never golden-master a false-green.
 - Roadmap: Queue (Phase 4) precedes orchestration (Phase 5) so the firehose meets backpressure (Pitfall 6).
+- [Phase 08]: 08-05: fix-queue.json absent on PVC is the honest empty-queue state (readQueueFile absent->[]); never seed an empty file to satisfy an exists-check
+- [Phase 08]: 08-05: D-09 write-back-disabled proven live via three layers — /app ships no .git (dockerignore), queue-path-outside-repo short-circuit, --no-push — plus sha256 byte-identity of the baked-in fix-queue.json
 
 ### Pending Todos
 
@@ -91,7 +94,7 @@ None yet.
 - Phase 8 (Pinned-Env + Thin k8s Deployment) flagged for `/gsd:plan-phase --research-phase` once the JHU IDIES-style server has actually arrived (~2026-07-07): the k8s namespace name, PVC provisioning mode, and the Ceph PVC's backing-store mode (RBD vs. CephFS — determines whether `fs.rename`-based atomic writes are safe) are unknowns until then. Also needs an explicit taste decision on TEAM-05's exact fixed-clone-path convention.
 - Phases 6 and 9 are standard, well-documented patterns — skip research-phase (root causes/fix locations already identified, or a closed pre-itemized checklist).
 - v1.0-era blockers (RecordedTransport cassette design, oracle triad correctness risk, CHG re-verification) are resolved by the shipped v1.0 milestone — see `milestones/v1.0-MILESTONE-AUDIT.md` and PROJECT.md's Key Decisions table for the historical record.
-- 08-05 BLOCKED (DEPLOY-01 functional acceptance): first real PVC write fails — ingest pod EACCES on mkdir /data/team-uploads/eric/2026-07-05. Root cause: kubelet auto-created the CephFS subPath dirs (agda-mcp/team-storage; agda-mcp/cluster-fix-queue will hit the same on first cron mount) owned root, and on this acl-mounted CephFS the fsGroup-applied group-rwx bits do NOT grant write (drwxrwsr-x+ root:agdamcp yet touch as uid/gid 2231 denied — ACL mask blocks owning-group). Working pattern proven by litellm on the SAME PVC: uid-2231-OWNED dir (drwxrwsr-x+ 2231:2231 /data/logs; litellm skill lesson 16: runAsUser must match Ceph directory OWNER). Fix requires a root-capable context to chown -R 2231:2231 the agda-mcp/ subtree: (a) one-off root Job mounting the PVC, (b) root initContainer in deployment+cronjob manifests (push->deploy cycle), or (c) IDIES-side chown (glemson1/Charles Glaser). Namespace PSA labels unreadable (ns get Forbidden) so root-pod feasibility unverified. Everything upstream of the storage write is PROVEN green: key issuance, registry secret sync, kubelet secret propagation (~15s, 401->400 probe), Bearer auth, public ingress POST path.
+- 08-05 PVC-ownership blocker RESOLVED (bc2f873, verified live + full acceptance green 2026-07-05): a restricted-compliant `pvc-dirs` initContainer (runs as 2231, explicit resources — the quota rejects init containers without them; PSA restricted forbids root chown pods, tested) pre-creates `agda-mcp-data/{team-storage,cluster-fix-queue}` before subPath resolution; subPaths renamed `agda-mcp/*` → `agda-mcp-data/*` (mount paths unchanged). Rule: any NEW subPath must live under a pvc-dirs-pre-created 2231-owned parent. Old root-owned `agda-mcp/` PVC tree is orphaned junk pending IDIES-side removal (cosmetic).
 
 ### Quick Tasks Completed
 
@@ -109,8 +112,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05T02:56:17.966Z
-Stopped at: Completed 08-04-PLAN.md — first live deploy green (4 attempts, 4 real defects fixed); next: 08-05 cluster functional acceptance
+Last session: 2026-07-05T03:35:19.838Z
+Stopped at: Completed 08-05-PLAN.md — cluster functional acceptance green (real upload on PVC, cron-judge run + D-09 proof); next: 08-06
 Resume file: None
 
 ## Operator Next Steps
