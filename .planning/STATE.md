@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-07-05T18:30:00.000Z"
 last_activity: 2026-07-05
 progress:
-  total_phases: 4
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Every real proof session reliably converts into a stronger server — and upstream divergence must stop accumulating so that loop keeps compounding on a reconciled base.
-**Current focus:** Phase 10 — Upstream Merge & Test-Suite Reconciliation
+**Current focus:** Phase 10 — Upstream Reconcile
 
 ## Current Position
 
-Phase: 10 of 13 (Upstream Merge & Test-Suite Reconciliation)
+Phase: 10 of 11 (Upstream Reconcile)
 Plan: — (not yet planned)
 Status: Roadmap created — ready to plan Phase 10
-Last activity: 2026-07-05 — ROADMAP.md created (Phases 10-13, 11/11 requirements mapped)
+Last activity: 2026-07-05 — ROADMAP.md revised to 2 phases per user feedback (Phases 10-11, 11/11 requirements mapped)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -66,7 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Roadmap Evolution
 
-- v1.2 roadmap created 2026-07-05: Phases 10–13 (continuing numbering from v1.1's Phase 9), covering all 11 v1.2 requirements — Upstream Merge & Test-Suite Reconciliation (10, MERGE-01/02) → Load-Terminus Semantic Adjudication (11, MERGE-03) → Feature Adoption & Post-Merge Acceptance (12, ADOPT-01/02 + ACCEPT-01/02/03) → Auto-Sync Productionization (13, SYNC-01/02/03). Hard ordering constraint honored: Phases 10–12 (one-time reconcile) must complete before Phase 13 (recurring sync) is armed.
+- v1.2 roadmap created 2026-07-05 and revised the same day to 2 phases per user feedback (4-phase draft was too much ceremony; final shape matches UPSTREAM-SYNC.md's Phase A/B sketch): Phases 10–11 (continuing numbering from v1.1's Phase 9), covering all 11 v1.2 requirements — Upstream Reconcile (10, MERGE-01/02/03 + ADOPT-01/02 + ACCEPT-01/02/03, internally ~3 plans) → Auto-Sync Productionization (11, SYNC-01/02/03). Hard ordering constraint honored: Phase 10 (one-time reconcile) must complete before Phase 11 (recurring sync) is armed.
 - v1.1 roadmap created 2026-07-03 and reworked the same day after the CACHE theme was deleted by consumer audit: Phases 6–9 (continuing numbering from v1.0's Phase 5 + 03.1), covering all 17 v1.1 requirements — Backlog Digestion (6) → Team Feedback Channel Local Wiring incl. the live-CHG full-loop E2E-01 acceptance (7) → Pinned-Env + Thin k8s Deploy (8, gated ~2026-07-07) → Residual Debt Sweep (9, independent, can fill the server-wait gap).
 - Phase 03.1 inserted after Phase 3 (v1.0): Fix the #64/#61 transitive-staleness false-green and flip the flagship lock to green (sequenced by 03-CONTEXT D-09) (URGENT)
 
@@ -121,11 +121,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-07-05 (active)
-Stopped at: v1.2 ROADMAP.md created (Phases 10-13, 11/11 requirements mapped, coverage validated) — REQUIREMENTS.md traceability updated
+Stopped at: v1.2 ROADMAP.md revised to 2 phases per user feedback (Phases 10-11, 11/11 requirements mapped, coverage validated) — REQUIREMENTS.md traceability updated
 Resume file: None
 
 ## Operator Next Steps
 
-- Approve the v1.2 roadmap, then run /gsd:plan-phase 10 (Upstream Merge & Test-Suite Reconciliation)
-- Remember the hard ordering constraint: do not plan/execute Phase 13 (auto-sync) until Phases 10-12 (the one-time reconcile) are fully complete
+- Run /gsd:plan-phase 10 (Upstream Reconcile — expected ~3 plans: mechanical merge + test-strictness reconciliation, load-terminus adjudication, feature adoption + full acceptance)
+- Remember the hard ordering constraint: do not plan/execute Phase 11 (auto-sync) until Phase 10 (the one-time reconcile) is fully complete
 - Optional unblock (unrelated to sequencing): ask the claude.ai org admin (JHU DSAI Engineering) to enable GitHub sync; then re-run the 260705-79k Task 2 probe verbatim

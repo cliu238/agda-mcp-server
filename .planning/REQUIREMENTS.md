@@ -66,23 +66,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MERGE-01 | — | Pending |
-| MERGE-02 | — | Pending |
-| MERGE-03 | — | Pending |
-| ADOPT-01 | — | Pending |
-| ADOPT-02 | — | Pending |
-| ACCEPT-01 | — | Pending |
-| ACCEPT-02 | — | Pending |
-| ACCEPT-03 | — | Pending |
-| SYNC-01 | — | Pending |
-| SYNC-02 | — | Pending |
-| SYNC-03 | — | Pending |
+| MERGE-01 | Phase 10 | Pending |
+| MERGE-02 | Phase 10 | Pending |
+| MERGE-03 | Phase 10 | Pending |
+| ADOPT-01 | Phase 10 | Pending |
+| ADOPT-02 | Phase 10 | Pending |
+| ACCEPT-01 | Phase 10 | Pending |
+| ACCEPT-02 | Phase 10 | Pending |
+| ACCEPT-03 | Phase 10 | Pending |
+| SYNC-01 | Phase 11 | Pending |
+| SYNC-02 | Phase 11 | Pending |
+| SYNC-03 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 11 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 11 ⚠️ (expected before roadmap)
+- Mapped to phases: 11/11 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-05*
-*Last updated: 2026-07-05 after initial definition*
+*Last updated: 2026-07-05 after ROADMAP.md revision (2 phases: 10-11, 100% coverage)*
