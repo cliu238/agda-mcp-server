@@ -33,26 +33,47 @@ imperatively (never `kubectl edit`'d directly, never committed to a manifest —
 see `k8s/team-keys-secret.yaml.template` for why). Re-running either sync
 command is safe (idempotent `--dry-run=client -o yaml | kubectl apply -f -`).
 
-### `ghcr-credentials` (GHCR image pull secret)
+### `agda-mcp-ghcr` (GHCR image pull secret)
 
-Rotate whenever the underlying `gh` session's token changes, or on a schedule
-if required by policy. Uses this project's own already-authenticated `gh` CLI
-session (`gh auth status` must show an account with `repo` scope).
+This project uses its OWN pull secret, `agda-mcp-ghcr` — never litellm's
+shared `ghcr-credentials`. Verified 2026-07-05: that secret's credential
+cannot pull `ghcr.io/cliu238/agda-mcp-server` (403), and a cliu238
+`read:packages` PAT cannot pull `ghcr.io/jh-dsai/litellm` (403), so the two
+apps need separate credentials and neither secret may overwrite the other.
 
-Run the one-shot script pattern from SKILL.md's "Cluster Access" section,
-embedding this remote step:
+The credential is a **classic** PAT for `cliu238` with ONLY the
+`read:packages` scope (GHCR does not accept fine-grained PATs for container
+pulls; `repo` scope does not cover package pulls). To rotate:
 
-```bash
-kubectl create secret docker-registry ghcr-credentials \
-  --namespace=llm-gateway \
-  --docker-server=ghcr.io \
-  --docker-username=<gh-username> \
-  --docker-password=<token from `gh auth token`, obtained LOCALLY> \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
+1. Mint the PAT at https://github.com/settings/tokens (classic, `read:packages`
+   only), save it to `~/.agda-mcp-ghcr-token` (`chmod 600`).
+2. Sanity-check it can pull, without echoing it (expect `200`):
+
+   ```bash
+   TOKEN=$(tr -d '\n' < ~/.agda-mcp-ghcr-token)
+   BEARER=$(curl -s -u "cliu238:${TOKEN}" "https://ghcr.io/token?service=ghcr.io&scope=repository:cliu238/agda-mcp-server:pull" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+   curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer ${BEARER}" \
+     -H "Accept: application/vnd.oci.image.index.v1+json" \
+     https://ghcr.io/v2/cliu238/agda-mcp-server/manifests/latest
+   ```
+
+3. Run the one-shot script pattern from SKILL.md's "Cluster Access" section,
+   interpolating the token value into the remote step when writing the script
+   (never echo it):
+
+   ```bash
+   kubectl create secret docker-registry agda-mcp-ghcr \
+     --namespace=llm-gateway \
+     --docker-server=ghcr.io \
+     --docker-username=cliu238 \
+     --docker-password="<token value>" \
+     --dry-run=client -o yaml | kubectl apply -f -
+   ```
+
+4. Delete `~/.agda-mcp-ghcr-token` once the rollout pulls successfully.
 
 Never echo the token value in any script output — only the resulting
-`secret/ghcr-credentials configured` confirmation line should ever be printed.
+`secret/agda-mcp-ghcr configured` confirmation line should ever be printed.
 
 ### `agda-mcp-team-keys` (team upload Bearer-key registry)
 
@@ -92,7 +113,7 @@ Adding or revoking a teammate's key is a two-step local-then-sync flow:
 Confirm both secrets landed with:
 
 ```bash
-kubectl get secret ghcr-credentials agda-mcp-team-keys -n llm-gateway
+kubectl get secret agda-mcp-ghcr agda-mcp-team-keys -n llm-gateway
 ```
 
 ## Pre-deploy quota check
