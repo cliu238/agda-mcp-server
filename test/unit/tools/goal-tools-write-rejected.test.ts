@@ -46,6 +46,10 @@ function fakeSession(
     getLastClassification: () => null,
     isFileStale: () => false,
     currentFile: "/repo/Example.agda",
+    // null resolves to the modern (Mimer) engine default — these tests
+    // only pass bare identifier hints, so engine choice doesn't affect
+    // the rejection-surfacing behavior under test.
+    getAgdaVersion: () => null,
     goal: {
       refine: overrides.refine ?? vi.fn(),
       refineExact: overrides.refineExact ?? vi.fn(),

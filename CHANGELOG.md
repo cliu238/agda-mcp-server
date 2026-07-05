@@ -7,37 +7,108 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-07-04
+
+### Added
+
+- **New `agda_goal_candidates` tool.** In one call it returns, for every open
+  goal, the local-context terms that can fill it — type-directed, reusing the
+  same matcher as `agda_term_search` (`match: exact` for a term of the goal
+  type, `match: result` with an `arity` for a function to apply). This turns
+  the per-goal "inspect the hole, then search for a term" round-trip into a
+  single whole-proof-state view. Read-only: it only queries each goal's
+  type/context. For a module/imported-wide search of one goal, use
+  `agda_term_search`.
+
+- **`agda_term_search` is now genuinely type-directed at module scope.**
+  Previously `module`/`imported` scope returned a name-relatedness search
+  (`Cmd_search_about`) with no type filtering. It now type-filters every
+  candidate: a result is kept only when its type IS the goal type
+  (`match: exact`) or its RESULT type is the goal type (`match: result`, a
+  function to apply — `arity` reports how many arguments it needs). Local
+  scope gained the same result-type matching, so a `f : A → Goal` in context
+  now surfaces. Backed by pure, tested helpers (`resultTypeOf`,
+  `matchTermsByType`) that split on top-level function arrows only.
+
+### Changed
+
+- **Verified the proposed 0.7.0 release gate is met and reconciled the stale
+  planning doc.** `agda_bulk_status` (cascade dedup), `agda_triage_error`
+  (7-class mechanical detection), and `agda_term_search` all shipped earlier;
+  added test coverage (a per-class triage table, `agda_term_search`
+  local-scope/pagination/type-filtering, and the `agda_bulk_status`
+  import-graph root-cause fallback), and `docs/release-0.7.0-triage.md` now
+  records the gate as satisfied.
+
 ### Fixed
 
-- **`agda_load` no longer drops a visible goal or mis-reports a failed
-  load as clean (issues #65, #66).** Both stemmed from the transport
-  resolving a `Cmd_load` on its idle heuristic during the compute gap a
-  large module takes between streaming its syntax-highlighting payload
-  and emitting the trailing goal-state events. Resolving early dropped
-  the `AllGoalsWarnings` / `InteractionPoints` / `Error` that follow — so
-  a hole surfaced with no goal ID (the load even noticed the source hole
-  but exposed no interaction point), and a real type error was silently
-  read as a successful load. Fixes, layered:
-  - A metas `Cmd_load` now holds completion until it has observed the
-    documented goal-state terminus — `InteractionPoints` **and**
-    `AllGoalsWarnings`, or a `DisplayInfo` `Error` — using a much longer
-    idle window (`AGDA_MCP_LOAD_TERMINUS_IDLE_MS`, default 2000ms) until
-    then. This keys on the protocol's stable goal-state contract rather
-    than response ordering (which differs across Agda versions), so the
-    compute gap before the goals — which can fall *after* the trailing
-    `Status` on a large module — can't be mistaken for completion. The
-    window is scoped to that one command: `Cmd_load_no_metas`, give,
-    case-split, and queries keep the original fast idle path, and a small
-    load whose terminus arrives promptly adds no latency.
-  - A metas load that returns no terminal goal-state event is now reported as
-    `load-incomplete-no-terminus` (a failure) instead of a possibly-false
-    clean success, so `parsed.success` is never trusted on a truncated
-    stream.
-  - Prior load-success state (classification, goal IDs) is invalidated at
-    the start of every load, so a load that throws or returns incomplete
-    can't leave stale success visible to proof-status queries.
-  - When the source has a hole but no goal IDs were captured, a settled
-    `Cmd_metas` re-query recovers the dropped interaction points.
+- **`agda_auto` no longer errors when given `depth`, `listCandidates`,
+  `hints`, or `excludeHints` on Agda ≥ 2.6.3.** Agda 2.6.3 replaced Agsy
+  with Mimer, whose proof-search command string is a bare list of hint
+  identifiers; the Agsy flag syntax (`-d`, `--list-candidates`, `-h`, `-x`)
+  is parsed as an expression and rejected (`Not in scope: -d`). The payload
+  builder is now engine-aware: on Mimer it emits only hint identifiers, and
+  `agda_auto` notes that the flag-only options were ignored. On pre-2.6.3
+  Agda the classic flags are still used. (Found driving the server against a
+  live Agda 2.9.0 codebase.)
+
+- **`agda_load` no longer resolves a `Cmd_load` before Agda finishes
+  type-checking (issues #65, #66).** The transport used an idle heuristic
+  to decide a command was done: after a short quiet window it resolved
+  with whatever had arrived. But a `Cmd_load` streams progress while Agda
+  type-checks — sometimes silently for seconds — and only then emits its
+  goal-state responses (`InteractionPoints` + `AllGoalsWarnings`, or a
+  type `Error`). Resolving in that gap dropped the goal state: a hole
+  surfaced with no goal ID (#66), a real type error was read as a clean
+  load (#65), and on a large cold module the whole load could be
+  mis-reported. The fix makes a `Cmd_load` withhold idle completion until
+  those goal-state responses are actually on the wire; completion then
+  comes from the goal state itself, a process exit, or the per-command
+  timeout. `agda_load` and `agda_load_no_metas` both wait for the goal
+  state (see the strict-load entry below); give, case-split, and queries
+  are unchanged, and a fast load whose goal state arrives promptly sees
+  no extra latency. Prior load-success state (classification, goal IDs)
+  is also invalidated at the start of every load so a failed load can't
+  leave stale success visible.
+
+- **`agda_load` no longer hangs the full command timeout when Agda
+  rejects the command itself.** A malformed IOTCM (or one Agda "cannot
+  read") is answered on the JSON channel with a `cannot read: …` notice
+  and no goal state — but the process stays alive. With the goal-state
+  wait above, the load then waited out the entire per-command timeout
+  before failing. A fatal protocol stderr (`cannot read:`, `failed to
+  parse`, `invalid …`) is now treated as a load terminus, so the load
+  fails fast with Agda's own message instead of stalling.
+
+- **The per-command timeout now measures inactivity, not total elapsed
+  time.** It was an absolute deadline from command start, so a healthy
+  cold load still streaming progress at the deadline was killed and the
+  subprocess respawned. It is now an inactivity watchdog that resets on
+  every response, firing only after a full quiet window — a genuinely
+  wedged process is still reaped, but a slow-but-progressing load is not.
+
+- **`agda_load_no_metas` no longer reports a clean load before Agda
+  finishes (strict false-green).** A clean `Cmd_load_no_metas` emits no
+  goal-state terminus at all — only a `Checking <module>` line, then
+  silence until it finishes — so its completion could only be inferred
+  from an idle gap. A module that type-checks silently for longer than
+  that gap was resolved mid-check as `ok-complete`, hiding holes or
+  errors past the pause. The strict load now runs over `Cmd_load` (which
+  always emits `InteractionPoints` + `AllGoalsWarnings`, or an `Error`)
+  and applies the same strict rejection — any hole or unsolved meta is a
+  `type-error` — at the classification layer, so the pass/fail contract
+  is unchanged but completion waits for Agda's real goal state.
+
+- **Reloading after a dependency changed no longer reports a stale clean
+  result (issues #61, #64).** Editing an imported module and reloading a
+  dependent triggers a rebuild of that dependency; while the rebuild runs
+  Agda streams `Checking <dep>` and then falls silent for as long as the
+  rebuild takes. The old idle heuristic could mistake that silence for
+  completion and re-report the previous `ok-complete`, hiding an error
+  the changed dependency now introduces. The goal-state terminus wait
+  makes the reload hold until the rebuild's real result is on the wire.
+  A gated integration test reproduces the race with a deliberately slow,
+  silent dependency rebuild.
 
 ## [0.6.7] - 2026-05-13
 

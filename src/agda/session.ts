@@ -31,7 +31,6 @@ import {
 import { AgdaTransport } from "../session/agda-transport.js";
 import { extractGoalIdsFromResponses } from "../session/goal-state.js";
 import { createSessionNamespaces } from "../session/session-namespaces.js";
-import type { LoadTerminusOptions } from "../session/load-terminus-tracker.js";
 import { type LibraryRegistration } from "./library-registration.js";
 import type {
   AgdaResponse,
@@ -222,7 +221,7 @@ export class AgdaSession {
   sendCommand(
     command: string,
     timeoutMs = configuredCommandTimeoutMs(),
-    options: LoadTerminusOptions = {},
+    options: { awaitGoalTerminus?: boolean } = {},
   ): Promise<AgdaResponse[]> {
     return dispatchSessionCommand(this, command, timeoutMs, options);
   }

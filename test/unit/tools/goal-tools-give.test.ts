@@ -39,6 +39,10 @@ function fakeSession(overrides: { autoOne?: any; give?: any } = {}) {
     getLastClassification: () => null,
     isFileStale: () => false,
     currentFile: null,
+    // Pre-2.6.3 (pre-Mimer) so agda_auto dispatches to the Agsy search
+    // syntax below — this is the flag-injection surface T-06-12 guards;
+    // Mimer's hint-only syntax doesn't parse a leading "-" as a flag.
+    getAgdaVersion: () => ({ parts: [2, 6, 0], prerelease: false }),
     goal: {
       autoOne: overrides.autoOne ?? vi.fn(),
       give: overrides.give ?? vi.fn(),

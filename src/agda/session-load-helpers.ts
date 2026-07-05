@@ -62,8 +62,10 @@ export function loadFailedAfterReconciliation(
   );
 }
 
-/** No terminal goal-state event (AllGoalsWarnings / Error /
- *  InteractionPoints) in the Cmd_load stream — it was truncated before
+/** Cmd_load's response stream ended without a terminal goal-state event
+ *  (no AllGoalsWarnings / Error / InteractionPoints) — the transport's
+ *  awaitGoalTerminus wait was satisfied by something other than a real
+ *  terminus (e.g. the underlying process exited), so whatever parsing
  *  Agda finished, so `parsed.success` is untrustworthy. Report unknown
  *  rather than a possibly-false clean load. */
 export function loadIncompleteNoTerminus(

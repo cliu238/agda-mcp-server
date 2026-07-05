@@ -19,6 +19,7 @@ export default defineConfig({
       "test/property/**/*.test.ts",
       "test/integration/**/*.test.ts",
     ],
+    setupFiles: ["test/helpers/warn-guard.ts"],
     testTimeout: 30_000,
     // The capture-regression matrix (test/fixtures/capture-regression-
     // matrix.json) is data-driven — its ONE generic runner

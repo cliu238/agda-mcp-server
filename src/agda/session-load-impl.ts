@@ -41,9 +41,9 @@ export { buildLoadOptionsList };
 //  3. Source hole markers — our fallback scan when the protocol reports
 //     zero visible and zero invisible goals but the source has {!!}/?.
 //
-// Postulates are complete, not holes. Cmd_load_no_metas is stricter:
-// any remaining interaction point, invisible goal, or source hole forces
-// a type-error.
+// Postulates are complete, not holes. The strict load (agda_load_no_metas)
+// is stricter: any remaining interaction point, invisible goal, or source
+// hole forces a type-error.
 
 /** Record an early-return classification on the session and return the
  *  result. Keeps the proc-died / incomplete exits consistent with the
@@ -77,9 +77,10 @@ export async function runLoad(
 
   // iotcmFor uses absPath directly — don't set currentFile yet, since
   // ensureProcess() (inside sendCommand) would reset it. awaitGoalTerminus
-  // tells the transport this load must not resolve until its documented
-  // goal-state terminus (InteractionPoints + AllGoalsWarnings, or Error)
-  // is on the wire — see official-cross-version-notes.json.
+  // tells the transport not to treat this load as complete until Agda has
+  // emitted its goal-state responses (InteractionPoints + AllGoalsWarnings,
+  // or an Error) — so a slow module that type-checks silently for seconds
+  // can't be resolved mid-check and mis-read as a clean load.
   const responses = await session.sendCommand(
     session.iotcmFor(absPath, command("Cmd_load", quoted(absPath), optsBuild.optsList)),
     undefined,
@@ -88,7 +89,9 @@ export async function runLoad(
   throwOnFatalProtocolStderr(responses);
   const parsed = parseLoadResponses(responses, { profilingEnabled: optsBuild.profilingEnabled });
 
-  // No terminal event → truncated stream → success is untrustworthy.
+  // The transport waits for Agda's goal-state responses, so their absence
+  // means the process ended before finishing this load. Fail loudly rather
+  // than report a fabricated success.
   if (!parsed.sawLoadTerminus) {
     return finalizeEarlyReturn(
       session,
@@ -118,8 +121,9 @@ export async function runLoad(
     }
   }
 
-  // Scan for source holes only when the protocol looks clean — avoids
-  // I/O on large modules whose holes the protocol already reported.
+  // Scan for source holes only when the protocol looks clean — the
+  // fallback for holes inside `abstract` blocks that Agda under-reports as
+  // interaction points. Avoids I/O on modules the protocol already covered.
   const needsExplicitHoleScan =
     parsed.success && goals.length === 0 && parsed.invisibleGoalCount === 0;
   const sourceHoleCount = needsExplicitHoleScan ? countExplicitSourceHoles(absPath) : 0;
@@ -190,34 +194,32 @@ export async function runLoadNoMetas(
     return finalizeEarlyReturn(session, fileNotFound(absPath));
   }
 
-  // Cmd_load_no_metas now requests the strict terminus mode below — its
-  // only awaitable positive signal is failure (the same sawLoadError
-  // signal every hole/error/type-error shape reliably emits). A clean,
-  // hole-less strict load emits no trailing confirmation event at all —
-  // highlighting, then nothing further, ever, confirmed against real
-  // Agda 2.8.0 — so success is inferred from silence after the widened
-  // idle window (AGDA_MCP_LOAD_TERMINUS_IDLE_MS, the same tunable the
-  // metas path already uses) rather than from a positive event.
-  //
-  // ASYMMETRY WITH THE METAS PATH (deliberate): runLoad additionally
-  // rejects on `!parsed.sawLoadTerminus`, but the strict path CANNOT —
-  // a clean strict load has no positive terminus to have seen, so that
-  // check would false-RED every legitimate goal-less load (the D-02
-  // trap). RESIDUAL RISK: an Error arriving LATER than
-  // AGDA_MCP_LOAD_TERMINUS_IDLE_MS (default 2000ms) after the final
-  // response would still be missed, reopening the #64/#61 class for
-  // pathologically slow machines/modules. This is inherent to a signal
-  // that has no positive terminus; the mitigation is the tunable window,
-  // and it is strictly better than the pre-fix unguarded idle path. The
-  // process-crash-during-load truncation is a separate, still-open mode
-  // (handleProcessClose resolves immediately) — out of this fix's scope.
+  // Strict load via Cmd_load, not Cmd_load_no_metas. A clean
+  // Cmd_load_no_metas emits no goal-state terminus at all — only a
+  // "Checking <module>" line, then silence until it finishes — so its
+  // completion can only be guessed from an idle gap, which a slow
+  // module's silent type-checking pause defeats (resolving mid-check as a
+  // false success). Cmd_load always emits InteractionPoints +
+  // AllGoalsWarnings (or an Error), giving the transport a real terminus;
+  // we then reject any hole or unsolved meta at the classification layer,
+  // which reproduces Cmd_load_no_metas's pass/fail exactly.
   const responses = await session.sendCommand(
-    session.iotcmFor(absPath, command("Cmd_load_no_metas", quoted(absPath))),
+    session.iotcmFor(absPath, command("Cmd_load", quoted(absPath), "[]")),
     undefined,
-    { loadTerminusMode: "strict" },
+    { awaitGoalTerminus: true },
   );
   throwOnFatalProtocolStderr(responses);
   const parsed: ParsedLoadResult = parseLoadResponses(responses, { profilingEnabled: false });
+
+  // The transport waits for Agda's goal-state responses, so their absence
+  // means the process ended before finishing. Fail loudly rather than
+  // report a fabricated strict success.
+  if (!parsed.sawLoadTerminus) {
+    return finalizeEarlyReturn(
+      session,
+      loadIncompleteNoTerminus(absPath, parsed.warnings, parsed.profiling),
+    );
+  }
 
   const needsExplicitHoleScan =
     parsed.success && parsed.goalCount === 0 && parsed.invisibleGoalCount === 0;

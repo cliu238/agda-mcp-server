@@ -12,7 +12,6 @@
 
 import type { AgdaSession } from "./session.js";
 import type { AgdaResponse } from "./types.js";
-import type { LoadTerminusOptions } from "../session/load-terminus-tracker.js";
 import { iotcmEnvelope } from "../protocol/command-builder.js";
 import {
   piggybackVersionFromResponses,
@@ -42,7 +41,7 @@ export function dispatchSessionCommand(
   session: AgdaSession,
   command: string,
   timeoutMs: number,
-  options: LoadTerminusOptions = {},
+  options: { awaitGoalTerminus?: boolean } = {},
 ): Promise<AgdaResponse[]> {
   // Capture our serial number synchronously at enqueue time. When
   // our task body runs, `dispatchSessionControlCommand` may have

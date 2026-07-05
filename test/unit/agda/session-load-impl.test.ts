@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { test, expect } from "vitest";
 
 import { runLoad, runLoadNoMetas } from "../../../src/agda/session-load-impl.js";
+import { expectWarning } from "../../helpers/warn-guard.js";
 
 function makeTempRepo(): string {
   return mkdtempSync(join(tmpdir(), "agda-load-impl-"));
@@ -72,7 +73,11 @@ function truncatedLoadResponses() {
   ];
 }
 
-test("runLoad reports incomplete when the response stream has no terminal event", async () => {
+test("runLoad throws (no fabricated success) when the process ended before the goal state", async () => {
+  // The transport waits for Agda's goal-state responses, so a response set
+  // lacking them means the process ended mid-load. runLoad must fail
+  // loudly rather than report a classification — never a fabricated
+  // ok-complete, and never an invented status string.
   const root = makeTempRepo();
   const file = "Truncated.agda";
   writeFileSync(resolve(root, file), "module Truncated where\nx : Set\nx = {!!}\n", "utf8");
@@ -92,14 +97,11 @@ test("runLoad reports incomplete when the response stream has no terminal event"
   } as any;
 
   try {
-    const result = await runLoad(session, file);
-    expect(result.success).toBe(false);
-    expect(result.classification).toBe("load-incomplete-no-terminus");
-    expect(result.errors[0]).toMatch(/no terminal goal-state event/i);
-    // Never ran metas — the truncation guard fires before reconciliation.
+    await expect(runLoad(session, file)).rejects.toThrow(/ended before completing the load/i);
+    // Never ran metas — the guard fires before reconciliation.
     expect(metasCalls).toBe(0);
     // Prior success state was invalidated up front and not restored.
-    expect(session.lastClassification).toBe("load-incomplete-no-terminus");
+    expect(session.lastClassification).toBeNull();
     expect(session.goalIds).toEqual([]);
     expect(session.currentFile).toBeNull();
   } finally {
@@ -196,54 +198,10 @@ test("runLoad invalidates prior state and records the attempt on invalid options
   }
 });
 
-test("runLoad recovers dropped visible goal IDs via a metas re-query when source has holes", async () => {
-  const root = makeTempRepo();
-  const file = "Recover.agda";
-  writeFileSync(resolve(root, file), "module Recover where\nx : Set\nx = {!!}\n", "utf8");
-
-  // Simulate the dropped-tail case: the load response carried a terminus
-  // (InteractionPoints) but no goal IDs, and the FIRST metas reconcile
-  // also missed them; the recovery re-query then surfaces goal 0.
-  let metasCalls = 0;
-  const session = {
-    repoRoot: root,
-    currentFile: null,
-    goalIds: [],
-    lastLoadedMtime: 0,
-    lastClassification: null,
-    lastLoadedAt: null,
-    lastInvisibleGoalCount: 0,
-    goal: {
-      metas: async () => {
-        metasCalls += 1;
-        return metasCalls >= 2
-          ? { goals: [{ goalId: 0, type: "Set", context: [] }] }
-          : { goals: [] };
-      },
-    },
-    // Terminus present (empty InteractionPoints) but zero goal IDs.
-    sendCommand: async () => cleanLoadResponses(),
-    iotcmFor: (_path: string, cmd: string) => cmd,
-  } as any;
-
-  try {
-    const result = await runLoad(session, file);
-    expect(result.success).toBe(true);
-    expect(result.classification).toBe("ok-with-holes");
-    expect(result.goals.map((g) => g.goalId)).toEqual([0]);
-    expect(result.goalCount).toBe(1);
-    expect(session.goalIds).toEqual([0]);
-    expect(metasCalls).toBe(2);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("runLoadNoMetas accepts a clean strict load with no goal-state terminus", async () => {
-  // Cmd_load_no_metas skips the metas display, so a clean strict load
-  // emits no InteractionPoints / AllGoalsWarnings — only highlighting +
-  // Status. That is normal completion, not truncation, so it must report
-  // ok-complete (NOT load-incomplete-no-terminus).
+test("runLoadNoMetas accepts a clean strict load reporting an empty goal state", async () => {
+  // The strict load runs over Cmd_load, so a clean file emits the goal-
+  // state terminus (empty InteractionPoints + AllGoalsWarnings with no
+  // goals). That must report ok-complete.
   const root = makeTempRepo();
   const file = "CleanStrict.agda";
   writeFileSync(resolve(root, file), "module CleanStrict where\n", "utf8");
@@ -256,12 +214,7 @@ test("runLoadNoMetas accepts a clean strict load with no goal-state terminus", a
     lastClassification: null,
     lastLoadedAt: null,
     lastInvisibleGoalCount: 0,
-    sendCommand: async () => [
-      { kind: "Status", checked: false },
-      { kind: "ClearRunningInfo" },
-      { kind: "ClearHighlighting" },
-      { kind: "HighlightingInfo", filepath: "/tmp/hl", direct: false },
-    ],
+    sendCommand: async () => cleanLoadResponses(),
     iotcmFor: (_path: string, cmd: string) => cmd,
   } as any;
 
@@ -270,6 +223,39 @@ test("runLoadNoMetas accepts a clean strict load with no goal-state terminus", a
     expect(result.success).toBe(true);
     expect(result.classification).toBe("ok-complete");
     expect(result.hasHoles).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runLoadNoMetas throws (no false green) when the process ended before the goal state", async () => {
+  // Bug #3: a clean Cmd_load_no_metas emits no terminus, so idle
+  // completion could resolve a still-checking load as ok-complete. The
+  // strict path now runs over Cmd_load and requires the goal-state
+  // terminus — a truncated stream must fail loudly, never report success.
+  const root = makeTempRepo();
+  const file = "TruncatedStrict.agda";
+  writeFileSync(resolve(root, file), "module TruncatedStrict where\n", "utf8");
+
+  const session = {
+    repoRoot: root,
+    currentFile: "/some/previous.agda",
+    goalIds: [3],
+    lastLoadedMtime: 0,
+    lastClassification: "ok-complete",
+    lastLoadedAt: null,
+    lastInvisibleGoalCount: 0,
+    sendCommand: async () => truncatedLoadResponses(),
+    iotcmFor: (_path: string, cmd: string) => cmd,
+  } as any;
+
+  try {
+    await expect(runLoadNoMetas(session, file)).rejects.toThrow(
+      /ended before completing the strict load/i,
+    );
+    // Prior success state was invalidated up front and not restored.
+    expect(session.lastClassification).toBeNull();
+    expect(session.goalIds).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -349,6 +335,7 @@ test("runLoad records lastClassification on the process-died-during-reconciliati
 
   try {
     const result = await runLoad(session, file);
+    expectWarning("post-load metas reconciliation failed");
     expect(result.success).toBe(false);
     expect(result.classification).toBe("process-died-during-reconciliation");
 
@@ -399,6 +386,7 @@ test("runLoad reports failure when post-load metas reconciliation killed the pro
 
   try {
     const result = await runLoad(session, file);
+    expectWarning("post-load metas reconciliation failed");
     expect(metasCalls).toBe(1);
     expect(result.success).toBe(false);
     expect(result.classification).toBe("process-died-during-reconciliation");

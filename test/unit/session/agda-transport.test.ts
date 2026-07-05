@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import type { ChildProcess } from "node:child_process";
 
 import { AgdaTransport } from "../../../src/session/agda-transport.js";
+import { expectWarning } from "../../helpers/warn-guard.js";
 
 function withEnv(name: string, value: string, fn: () => Promise<void>) {
   const previous = process.env[name];
@@ -49,111 +50,50 @@ test("AgdaTransport waits for terminal payloads after Status before resolving", 
   });
 });
 
-test("awaitGoalTerminus holds completion until the load goal-state terminus arrives", async () => {
-  // Reproduces the #65/#66 race: Status arrives, then after a gap longer
-  // than the short idle window Agda emits the goal state. Without the
-  // terminus wait the command would resolve on Status and drop the goals.
+test("awaitGoalTerminus holds completion through a long silent gap until the goal state arrives", async () => {
+  // A load can type-check silently for a long time (only sporadic
+  // progress) before emitting its goal state. With the terminus wait the
+  // command must NOT resolve during that gap, however long, and must
+  // capture the goals when they finally arrive. The 300ms gap here is far
+  // longer than the 5ms idle window; the only reason it isn't dropped is
+  // that idle resolution is suppressed until the terminus is seen.
   await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
-    await withEnv("AGDA_MCP_LOAD_TERMINUS_IDLE_MS", "200", async () => {
-      const transport = new AgdaTransport();
-      const proc = {
-        stdin: {
-          write() {
-            // Status then highlighting arrive promptly...
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":true}}\n')), 0);
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"HighlightingInfo","payload":[]}\n')), 2);
-            // ...then a 40ms compute gap (>> the 5ms idle window) before
-            // the goal state. The terminus wait must bridge it.
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"DisplayInfo","info":{"kind":"AllGoalsWarnings","visibleGoals":[],"invisibleGoals":[],"errors":[],"warnings":[]}}\n')), 45);
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"InteractionPoints","interactionPoints":[0]}\n')), 48);
-          },
+    const transport = new AgdaTransport();
+    const proc = {
+      stdin: {
+        write() {
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":true}}\n')), 0);
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"RunningInfo","message":"Checking"}\n')), 2);
+          // 300ms silent gap — no idle resolution may fire here.
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"DisplayInfo","info":{"kind":"AllGoalsWarnings","visibleGoals":[],"invisibleGoals":[],"errors":[],"warnings":[]}}\n')), 305);
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"InteractionPoints","interactionPoints":[0]}\n')), 308);
         },
-      };
+      },
+    };
 
-      const responses = await transport.sendCommand(
-        proc as unknown as ChildProcess,
-        'IOTCM "x" NonInteractive Direct (Cmd_load)',
-        2000,
-        { awaitGoalTerminus: true },
-      );
+    const responses = await transport.sendCommand(
+      proc as unknown as ChildProcess,
+      'IOTCM "x" NonInteractive Direct (Cmd_load)',
+      2000,
+      { awaitGoalTerminus: true },
+    );
 
-      expect(responses.some((r) => r.kind === "InteractionPoints")).toBe(true);
-      expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(true);
-    });
+    expect(responses.some((r) => r.kind === "InteractionPoints")).toBe(true);
+    expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(true);
   });
 });
 
-test("loadTerminusMode: strict widens the idle window until a DisplayInfo Error arrives", async () => {
-  // The Cmd_load_no_metas analog of the metas-mode test above. Strict
-  // mode has no positive success signal to await (D-02) — the ONLY
-  // thing that widens the window here is the as-yet-unseen sawLoadError,
-  // never InteractionPoints/AllGoalsWarnings (a clean strict load never
-  // emits those at all).
-  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
-    await withEnv("AGDA_MCP_LOAD_TERMINUS_IDLE_MS", "200", async () => {
-      const transport = new AgdaTransport();
-      const proc = {
-        stdin: {
-          write() {
-            // Status then highlighting arrive promptly...
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":false}}\n')), 0);
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"HighlightingInfo","payload":[]}\n')), 2);
-            // ...then a 45ms compute gap (>> the 5ms idle window) before
-            // the error. The widened window must bridge it.
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"DisplayInfo","info":{"kind":"Error","message":"type mismatch"}}\n')), 45);
-          },
-        },
-      };
-
-      const responses = await transport.sendCommand(
-        proc as unknown as ChildProcess,
-        'IOTCM "x" NonInteractive Direct (Cmd_load_no_metas)',
-        2000,
-        { loadTerminusMode: "strict" },
-      );
-
-      expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(true);
-    });
-  });
-});
-
-test("loadTerminusMode: strict resolves via the widened window when no further response ever arrives (D-02 guard)", async () => {
-  // A clean, hole-less strict load emits highlighting and then nothing
-  // further, ever — there is no positive terminus to await. This is the
-  // transport-level version of the D-02 false-RED guard: it proves the
-  // widened window itself treats silence as completion for the strict
-  // path (the full MCP-boundary matrix-entry guard is Plan 03.1-02's
-  // job).
-  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
-    await withEnv("AGDA_MCP_LOAD_TERMINUS_IDLE_MS", "150", async () => {
-      const transport = new AgdaTransport();
-      const proc = {
-        stdin: {
-          write() {
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"Status","status":{"checked":false}}\n')), 0);
-            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"HighlightingInfo","payload":[]}\n')), 2);
-            // ...and nothing further, ever.
-          },
-        },
-      };
-
-      const startedAt = Date.now();
-      const responses = await transport.sendCommand(
-        proc as unknown as ChildProcess,
-        'IOTCM "x" NonInteractive Direct (Cmd_load_no_metas)',
-        2000,
-        { loadTerminusMode: "strict" },
-      );
-
-      // Resolved only after the widened window elapsed (not the short
-      // 5ms window) — proof that silence alone, not a positive event,
-      // completed the strict load.
-      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
-      expect(responses.map((r) => r.kind)).toEqual(["Status", "HighlightingInfo"]);
-      expect(responses.some((r) => r.kind === "DisplayInfo")).toBe(false);
-    });
-  });
-});
+// NOTE (Phase 10 upstream reconcile, Task 2): the two `loadTerminusMode:
+// "strict"` tests formerly here covered our pre-merge idle-window-widening
+// heuristic for Cmd_load_no_metas. Upstream's adopted candidate (#68)
+// deletes that mechanism entirely: runLoadNoMetas now issues Cmd_load with
+// `awaitGoalTerminus: true` (a real positive terminus) instead of guessing
+// completion from silence after Cmd_load_no_metas, so `sendCommand` no
+// longer accepts a `loadTerminusMode` option at all — there is nothing
+// left at the transport layer for these tests to exercise. Removed rather
+// than adapted; if Plan 10-02's adjudication reverts this file to our
+// pre-merge implementation, restore these two tests from history
+// alongside it (git log this file around the Phase 10-01 merge commit).
 
 test("without awaitGoalTerminus a non-load command resolves on the short idle window", async () => {
   // Same gap, but no terminus wait → resolves on the short window after
@@ -179,6 +119,66 @@ test("without awaitGoalTerminus a non-load command resolves on the short idle wi
 
     // Resolved before the 60ms-late payload arrived.
     expect(responses.some((r) => r.kind === "InteractionPoints")).toBe(false);
+  });
+});
+
+test("inactivity watchdog keeps a steadily-progressing load alive past the timeout window", async () => {
+  // The per-command timeout measures silence, not elapsed time. Here the
+  // 40ms timeout is shorter than the ~120ms the load runs, but progress
+  // arrives every ~15ms (< 40ms), so the watchdog keeps resetting and the
+  // proc is never reaped. An absolute timeout would have killed it mid-load.
+  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
+    const transport = new AgdaTransport();
+    const killCalls: unknown[] = [];
+    const proc = {
+      exitCode: null,
+      signalCode: null,
+      kill(sig?: unknown) { killCalls.push(sig); return true; },
+      stdin: {
+        write() {
+          for (let i = 0; i < 6; i++) {
+            setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"RunningInfo","message":"Checking"}\n')), i * 15);
+          }
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"DisplayInfo","info":{"kind":"AllGoalsWarnings","visibleGoals":[],"invisibleGoals":[],"errors":[],"warnings":[]}}\n')), 95);
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> {"kind":"InteractionPoints","interactionPoints":[]}\n')), 98);
+        },
+      },
+    };
+
+    const responses = await transport.sendCommand(
+      proc as unknown as ChildProcess,
+      'IOTCM "x" NonInteractive Direct (Cmd_load)',
+      40,
+      { awaitGoalTerminus: true },
+    );
+
+    expect(killCalls).toEqual([]);
+    expect(responses.some((r) => r.kind === "InteractionPoints")).toBe(true);
+  });
+});
+
+test("a fatal protocol stderr completes a load instead of hanging until timeout", async () => {
+  // A malformed IOTCM makes Agda print `cannot read:` and keep running with
+  // no goal state. Without treating it as a terminus the load would wait the
+  // full timeout; here it must resolve on the idle window with that notice.
+  await withEnv("AGDA_MCP_IDLE_COMPLETION_MS", "5", async () => {
+    const transport = new AgdaTransport();
+    const proc = {
+      stdin: {
+        write() {
+          setTimeout(() => transport.handleStdout(Buffer.from('JSON> cannot read: IOTCM "x" None Direct bad\n')), 0);
+        },
+      },
+    };
+
+    const responses = await transport.sendCommand(
+      proc as unknown as ChildProcess,
+      'IOTCM "x" NonInteractive Direct (Cmd_load)',
+      2000,
+      { awaitGoalTerminus: true },
+    );
+
+    expect(responses.some((r) => r.kind === "StderrOutput")).toBe(true);
   });
 });
 
@@ -397,6 +397,8 @@ test("sendFireAndForgetCommand terminates a wedged proc that never acknowledges 
 
   // SIGTERM should have been delivered to the wedged proc.
   expect(killSignals).toContain("SIGTERM");
+  // The escalation path warns that the control command went unacknowledged.
+  expectWarning("Control command not acknowledged");
 });
 
 test("sendFireAndForgetCommand does NOT arm the escalation when armEscalation is false (idle-abort default)", async () => {
@@ -703,6 +705,7 @@ test("sendCommand timeout kills the subprocess AND rejects the Promise", async (
     ),
   ).rejects.toThrow(/sendCommand timed out after 25ms/);
   expect(killCalls).toEqual(["SIGTERM"]);
+  expectWarning("sendCommand timed out");
 });
 
 test("AgdaTransport captures prompt notices as stderr output while collecting", async () => {
