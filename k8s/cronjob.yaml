@@ -31,7 +31,10 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           imagePullSecrets:
-            - name: ghcr-credentials
+            # Same dedicated secret as the ingest Deployment — see the
+            # comment in k8s/deployment.yaml; litellm's shared
+            # ghcr-credentials cannot pull this package (403).
+            - name: agda-mcp-ghcr
           containers:
             - name: agda-mcp-cron-judge
               image: ghcr.io/cliu238/agda-mcp-server:latest

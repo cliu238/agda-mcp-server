@@ -32,6 +32,17 @@ spec:
         - name: agda-mcp-ingest
           image: ghcr.io/cliu238/agda-mcp-server:latest
           imagePullPolicy: Always
+          # The image CMD is `node dist/index.js` — the MCP STDIO server,
+          # which exits immediately in a pod (stdin is closed), producing
+          # a log-less CrashLoopBackOff (first-deploy postmortem,
+          # 2026-07-05). Every k8s workload on this image must therefore
+          # override `command:` explicitly with the script it means to
+          # run, exactly as k8s/cronjob.yaml already does. tsx (not plain
+          # node) for the same .js->.ts specifier reason as the cronjob.
+          command:
+            - npx
+            - tsx
+            - scripts/team/ingest-server.mjs
           ports:
             - containerPort: 4000
           env:
