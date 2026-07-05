@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Feed the Loop
-status: executing
-stopped_at: "Completed 08-05-PLAN.md — cluster functional acceptance green (real upload on PVC, cron-judge run + D-09 proof); next: 08-06"
-last_updated: "2026-07-05T03:35:19.844Z"
+status: verifying
+stopped_at: Completed 08-06-PLAN.md — phase 8 execution complete (6/6); milestone v1.1 plans 24/24; v1.1 tag pushed; awaiting review chain + verifier + milestone lifecycle
+last_updated: "2026-07-05T03:45:17.245Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 24
-  completed_plans: 23
-  percent: 96
+  completed_plans: 24
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 8 (Pinned-Environment Distribution + Thin k8s Deployment) — EXECUTING
-Plan: 6 of 6 (08-01..08-05 complete; 08-06 final packaging + POLICY-01 cluster re-verify next)
-Status: Ready to execute
+Phase: 8 (Pinned-Environment Distribution + Thin k8s Deployment) — EXECUTION COMPLETE (6/6)
+Plan: 6 of 6 complete — milestone v1.1 plans 24/24 (100%); v1.1 tag cut on 6c0d716d and pushed
+Status: Phase 8 execution complete — awaiting review chain + verifier + milestone lifecycle
 Last activity: 2026-07-05
 
-Progress: [██████████] 96%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████████] 96%
 
 *Updated after each plan completion*
 | Phase 08 P05 | 19 min | 2 tasks | 1 files |
+| Phase 08 P06 | 7 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - Roadmap: Queue (Phase 4) precedes orchestration (Phase 5) so the firehose meets backpressure (Pitfall 6).
 - [Phase 08]: 08-05: fix-queue.json absent on PVC is the honest empty-queue state (readQueueFile absent->[]); never seed an empty file to satisfy an exists-check
 - [Phase 08]: 08-05: D-09 write-back-disabled proven live via three layers — /app ships no .git (dockerignore), queue-path-outside-repo short-circuit, --no-push — plus sha256 byte-identity of the baked-in fix-queue.json
+- [Phase 08]: 08-06: v1.1 tagged on 6c0d716d and pushed (with the batched main push, first of the session, triggering D-06 auto-deploy as accepted) — the installer's latest-tag resolution now lands on v1.1, superseding stale v1.0 (D-11)
+- [Phase 08]: 08-06: POLICY-01 proven on the deployed pod's own filesystem (6/6, exit 0) — policy files live in the image layer /app/scripts/data/oracle-policy, not the PVC; CephFS semantics play no part in the test
 
 ### Pending Todos
 
@@ -112,8 +115,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-05T03:35:19.838Z
-Stopped at: Completed 08-05-PLAN.md — cluster functional acceptance green (real upload on PVC, cron-judge run + D-09 proof); next: 08-06
+Last session: 2026-07-05T03:45:17.237Z
+Stopped at: Completed 08-06-PLAN.md — phase 8 execution complete (6/6); milestone v1.1 plans 24/24; v1.1 tag pushed; awaiting review chain + verifier + milestone lifecycle
 Resume file: None
 
 ## Operator Next Steps

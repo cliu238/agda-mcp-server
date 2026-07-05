@@ -21,7 +21,7 @@ Locked context (not re-litigated): internal colleagues only; one-time consent = 
 - [x] **TEAM-02**: Teammate's wrap-up can upload their session: `upload-run.mjs` packs `.agda-mcp/captures/` + `.agda-mcp/runs/` + the Claude Code project-log dir + this project's Codex session files (selected by project slug/mtime) into tar.gz (macOS AppleDouble metadata excluded), POSTs with the Bearer key, and is **fail-open**: no failure ever blocks or errors the teammate's work; failed uploads land in a bounded local retry queue (default: 20 archives / 2 GiB, drop-oldest with loud warning; env-tunable) retried on next invocation; optionally chained at `dogfood-wrapup.mjs` end.
 - [x] **TEAM-03**: A ~100-line `node:http` ingest endpoint (same code local and k8s; TLS terminates at nginx-ingress) authenticates the Bearer key, enforces a size cap (default 512 MiB compressed, env-tunable; oversize rejected with a clear error), and stores archives untouched by person/date/run-id under an env-configured storage root (local dir now, Ceph PVC after deploy). Logs are stored as archives and read on demand only — extraction happens at judge time, never at ingest.
 - [x] **TEAM-04**: Unattended cron judging digests uploads: safely extract (materialize-pattern path-sandboxing — never bare tar trust) → oracle triad → N-rerun flake gate → intake → fix queue as `new`, reusing the shipped wrap-up machinery with parameterized corpus-clone paths and policy keys so bundles from another machine don't silently abstain (closes the `agdaDirContents.libraries` absolute-path probe gap). Per-run INCONCLUSIVE/abstention rate is surfaced in the run summary — no human is watching otherwise.
-- [ ] **TEAM-05**: A teammate can go zero → uploading with pinned-environment distribution via **git install**: an install script (or devcontainer) pins the exact server version (git tag) and exact Agda (`tooling/scripts/run-pinned-agda.sh`), with documented steps. No npm account anywhere in the flow.
+- [x] **TEAM-05**: A teammate can go zero → uploading with pinned-environment distribution via **git install**: an install script (or devcontainer) pins the exact server version (git tag) and exact Agda (`tooling/scripts/run-pinned-agda.sh`), with documented steps. No npm account anywhere in the flow.
 
 ### End-to-End Validation (E2E)
 
@@ -31,7 +31,7 @@ Locked context (not re-litigated): internal colleagues only; one-time consent = 
 
 Note: the former CACHE theme (build script, image cache prebake, cluster build job) was **deleted from v1.1 on 2026-07-03** after a consumer audit found zero v1.1 users — see v2 Requirements and Out of Scope. The image below is consequently small (Node + pinned Agda + pinned corpus *source* clones for judging replays — no corpus caches) and buildable on standard hosted runners or locally; no self-hosted runner exists anywhere.
 
-- [ ] **DEPLOY-01**: The ingest endpoint + cron judge run on the JHU IDIES-style k8s server, containerized per the litellm-k8s-deploy pattern (GHCR image built `linux/amd64`, nginx-ingress path app with `proxy-body-size` raised to match the TEAM-03 cap, PVC storage root, Ceph-UID-correct securityContext). Local mode remains a working fallback; POLICY-01's case-sensitivity fix is re-verified on the cluster.
+- [x] **DEPLOY-01**: The ingest endpoint + cron judge run on the JHU IDIES-style k8s server, containerized per the litellm-k8s-deploy pattern (GHCR image built `linux/amd64`, nginx-ingress path app with `proxy-body-size` raised to match the TEAM-03 cap, PVC storage root, Ceph-UID-correct securityContext). Local mode remains a working fallback; POLICY-01's case-sensitivity fix is re-verified on the cluster.
 
 ### Residual Debt Sweep (DEBT) — from `milestones/v1.0-MILESTONE-AUDIT.md`
 
@@ -90,8 +90,8 @@ The entire theme was removed from v1.1 after a consumer audit found zero v1.1 us
 | TEAM-03 | Phase 7 | Complete |
 | TEAM-04 | Phase 7 | Complete |
 | E2E-01 | Phase 7 | Complete |
-| TEAM-05 | Phase 8 | Pending |
-| DEPLOY-01 | Phase 8 | Pending |
+| TEAM-05 | Phase 8 | Complete |
+| DEPLOY-01 | Phase 8 | Complete |
 | DEBT-01 | Phase 9 | Complete |
 | DEBT-02 | Phase 9 | Complete |
 | DEBT-03 | Phase 9 | Complete |

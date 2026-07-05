@@ -27,7 +27,7 @@ Full phase details: `milestones/v1.0-ROADMAP.md` · Audit: `milestones/v1.0-MILE
 
 - [x] **Phase 6: Backlog Digestion (Policy Fix + Reverify)** - The ORCL-02 policy-key bug is fixed and case-sensitive-filesystem-verified; all 8 backlog defects reach a definitive verdict and confirmed defects reach `locked` (completed 2026-07-04)
 - [x] **Phase 7: Team Feedback Channel — Local Wiring** - A teammate's session flows end-to-end through consent, fail-open upload, local ingest, and unattended judging into the fix queue, proven entirely on localhost — with a live session on the pinned CHG corpus as the acceptance payload (E2E-01, zero fixture shortcuts) (completed 2026-07-04)
-- [ ] **Phase 8: Pinned-Environment Distribution + Thin k8s Deployment** - Zero-to-uploading teammate onboarding via git install, plus the ingest endpoint and cron judge running for real on the arrived k8s server
+- [x] **Phase 8: Pinned-Environment Distribution + Thin k8s Deployment** - Zero-to-uploading teammate onboarding via git install, plus the ingest endpoint and cron judge running for real on the arrived k8s server (completed 2026-07-05)
 - [x] **Phase 9: Residual v1.0 Debt Sweep** - Every P2 item from the v1.0 audit is resolved — deleted, fixed, or explicitly decided-and-recorded (completed 2026-07-04)
 
 ## Phase Details
@@ -133,7 +133,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 08-06-PLAN.md — Phase closeout: POLICY-01 cluster re-verify + local-mode regression re-run + cut and push the v1.1 git tag (D-11)
+- [x] 08-06-PLAN.md — Phase closeout: POLICY-01 cluster re-verify + local-mode regression re-run + cut and push the v1.1 git tag (D-11)
 
 **Research**: Completed via live cluster verification (`.claude/skills/agda-mcp-k8s-deploy/SKILL.md`, 2026-07-04) — the k8s namespace (`llm-gateway`, reused), PVC (`sciserver-datavolumes-01-rw`, CephFS, `fs.rename`-safe), UID (2231), quota headroom (~3 CPU / 7Gi), and URL convention (`dev.sites.idies.jhu.edu/agda-mcp`) are all live-verified facts, not desk research. TEAM-05's fixed-clone-path convention was resolved in `08-CONTEXT.md` (D-04/D-05).
 
@@ -182,5 +182,5 @@ Plans:
 | 5. Dogfooding Orchestration + Fuel | v1.0 | 4/4 | Complete | 2026-07-03 |
 | 6. Backlog Digestion (Policy Fix + Reverify) | v1.1 | 6/6 | Complete    | 2026-07-04 |
 | 7. Team Feedback Channel — Local Wiring | v1.1 | 6/6 | Complete    | 2026-07-04 |
-| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 5/6 | In Progress|  |
+| 8. Pinned-Env + Thin k8s Deployment | v1.1 | 6/6 | Complete   | 2026-07-05 |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete    | 2026-07-04 |
