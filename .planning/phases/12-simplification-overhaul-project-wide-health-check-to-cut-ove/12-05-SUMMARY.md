@@ -90,6 +90,15 @@ None - no external service configuration required.
 - Plan 12-06 (consolidated health report) can transcribe both verdicts verbatim into `test/fixtures/fix-queue.json`'s `notes` fields per this plan's own key_links — no further re-derivation needed.
 - No blockers. This plan is read-only with respect to `test/`, `src/`, and `test/fixtures/fix-queue.json` — confirmed via `git diff --stat` against the pre-plan commit showing zero changes to any of those paths.
 
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-AUDIT-LOCKS-RT6RT7.md`
+- FOUND: `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-05-SUMMARY.md`
+- FOUND commit `8abf1f4` (Task 1: exclusion list)
+- FOUND commit `a226ed5` (Task 2: RT6/RT7 verdicts)
+- FOUND commit `5e43a24` (this SUMMARY)
+- Working tree clean; zero changes to any file under `test/`, `src/`, or `test/fixtures/fix-queue.json` across the whole plan (`git diff --stat` against the pre-plan commit confirms empty output for those paths)
+
 ---
 *Phase: 12-simplification-overhaul-project-wide-health-check-to-cut-ove*
 *Completed: 2026-07-06*
