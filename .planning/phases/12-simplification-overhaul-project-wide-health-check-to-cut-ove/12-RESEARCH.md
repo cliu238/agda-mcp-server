@@ -394,22 +394,24 @@ RUN_AGDA_INTEGRATION=1 npx vitest run
 
 **If this table is empty:** N/A — see rows above.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three are resolved via their Recommendation fields below; each maps to a specific plan that implements it (Q1 → 12-03 Task 1's weak-input treatment; Q2 → 12-02's informational-note handling; Q3 → 12-02/audit front-half categorization). None blocks planning.
 
 1. **Can the audit access team-channel-uploaded session archives for a larger usage-evidence sample?**
    - What we know: `.agda-mcp/team/storage/<person>/<date>/*.tar.gz` exists on the live JHU cluster PVC (per `.planning/milestones/v1.1-MILESTONE-AUDIT.md`'s live evidence); 21 local runs exist on this machine.
    - What's unclear: whether pulling those archives (e.g. via `kubectl cp` or the existing `cron-ingest-wrapup.mjs --no-push` path) is in scope for this phase, or whether the local sample is accepted as "good enough, weakly weighted" input.
-   - Recommendation: default to the local sample as one input among several (see Pitfall 3/A5); only reach for the cluster archives if the audit's per-tool-usage question becomes load-bearing for an actual deletion decision, not just informational.
+   - RESOLVED: default to the local sample as one input among several (see Pitfall 3/A5); only reach for the cluster archives if the audit's per-tool-usage question becomes load-bearing for an actual deletion decision, not just informational. (Implemented by Plan 12-03: usage evidence is one weak input, never a sole deletion criterion.)
 
 2. **Should `.claude/skills/agda-mcp-k8s-deploy` be promoted into the tracked `.agents/skills/` directory, or left as local/personal scratch?**
    - What we know: unlike `agda-dogfooding` and `upstream-sync` (both tracked under `.agents/skills/`, symlinked into the gitignored `.claude/skills/`), `agda-mcp-k8s-deploy` (208 lines) exists ONLY under the gitignored `.claude/skills/` — it is not part of the git-tracked repository at all, and neither are its adjacent workspace artifacts (`.claude/skills/agda-mcp-k8s-deploy-workspace/{viewer.log,iteration-1,contaminated-baselines}`).
    - What's unclear: whether this is intentional (a personal, still-being-iterated skill) or an oversight (a skill that should have been promoted like the other two).
-   - Recommendation: out of this phase's cut-list scope either way (git can't "cut" what it never tracked) — flag it as a one-line note in the health report, not a cut-list item, and let the user decide promotion vs. leave-as-is separately.
+   - RESOLVED: out of this phase's cut-list scope either way (git can't "cut" what it never tracked) — flag it as a one-line note in the health report, not a cut-list item, and let the user decide promotion vs. leave-as-is separately. (Handled by Plan 12-02 as an informational note.)
 
 3. **Do the "Nyquist VALIDATION.md missing" gaps (Phases 6–9, both milestone audits) belong on this phase's cut list?**
    - What we know: both audits list `VALIDATION.md missing` as tracked tech debt for 4+ phases each; `.planning/` itself is explicitly in D-01's cutting scope ("planning residue").
    - What's unclear: whether "missing planning artifact" is a simplification target (drop the workflow's expectation) or a completeness gap (backfill it) — these are opposite directions, and C-05 says the audit, not this research, decides which.
-   - Recommendation: flag for the audit's own front-half categorization; do not pre-judge the direction here.
+   - RESOLVED: flag for the audit's own front-half categorization; do not pre-judge the direction here. (Routed to Plan 12-02's audit categorization per C-05.)
 
 ## Environment Availability
 
