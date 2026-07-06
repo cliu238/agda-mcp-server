@@ -39,7 +39,7 @@ Full phase details: `milestones/v1.1-ROADMAP.md` · Audit: `milestones/v1.1-MILE
 **Milestone Goal:** Merge upstream v0.6.8 for real (`git merge`, never rebase), adjudicate load-terminus semantics per sub-behavior with our from-RED regression locks as referee, adopt upstream's new term-search/Mimer feature, and run full post-merge acceptance — then, and only then, productionize the unattended every-3-days auto-sync so upstream divergence stops accumulating. Phase numbering continues from v1.1 (which ended at Phase 9); v1.2 starts at Phase 10. **Hard ordering constraint (settled, do not deviate):** Phase 10 (the one-time reconcile) must fully complete before Phase 11 (auto-sync) is armed — arming recurring sync before reconciling guarantees an escalation every 3 days.
 
 - [x] **Phase 10: Upstream Reconcile** - The entire one-time reconcile: upstream v0.6.8 merged (real merge, never rebase), load-terminus semantics adjudicated with from-RED locks as referee, upstream #70 features adopted, and full acceptance (real-Agda suite + dogfood session + deploy watched green) (completed 2026-07-05)
-- [ ] **Phase 11: Auto-Sync Productionization** - The `upstream-sync` skill runs unattended every 3 days via a local headless carrier with GSD-native bookkeeping, so upstream divergence stops re-accumulating
+- [~] **Phase 11: Auto-Sync Productionization** *(DEFERRED to Future, 2026-07-05 — upstream nearly idle, manual sync suffices; see Phase 11 note)* - The `upstream-sync` skill runs unattended every 3 days via a local headless carrier with GSD-native bookkeeping, so upstream divergence stops re-accumulating
 
 ## Phase Details
 
@@ -77,6 +77,8 @@ Plans:
 - [x] 10-05-PLAN.md — Full acceptance: combined verify, real dogfood session, single push watched to green deploy
 
 ### Phase 11: Auto-Sync Productionization
+
+> **⏸ DEFERRED to Future (2026-07-05).** Deliberately deferred, not blocked. **Rationale:** measured upstream velocity collapsed from ~99 commits/mo (Apr) to ~5–9/mo, with **0 new commits since Phase 10's reconcile point** — the re-divergence threat this phase automates against is currently near-zero, and Phase 10 already reconciled the architecture so future merges are small/incremental. **Interim approach:** run the existing `upstream-sync` skill **manually** when upstream is actually ahead. All artifacts (11-01..05-PLAN, RESEARCH, VALIDATION, PATTERNS) are kept intact for zero-rework revival. **Un-defer trigger:** upstream sustains a high commit rate again, or manual checking becomes a burden — then reconsider the carrier (or the lighter deferred SYNC-04 merge-tree digest first).
 
 **Goal**: The `upstream-sync` skill runs unattended on a recurring 3-day cadence via a local headless carrier, with each run's outcome captured as a GSD-native bookkeeping artifact — so upstream divergence stops re-accumulating after the one-time reconcile.
 **Depends on**: Phase 10 (hard ordering constraint, settled decision: arming recurring sync before the one-time reconcile completes guarantees an escalation every 3 days)
@@ -122,13 +124,13 @@ Plans:
 | 8. Pinned-Env + Thin k8s Deployment | v1.1 | 6/6 | Complete | 2026-07-05 |
 | 9. Residual v1.0 Debt Sweep | v1.1 | 6/6 | Complete | 2026-07-04 |
 | 10. Upstream Reconcile | v1.2 | 5/5 | Complete    | 2026-07-05 |
-| 11. Auto-Sync Productionization | v1.2 | 0/5 | Not started | - |
+| 11. Auto-Sync Productionization | v1.2 | 0/5 | Deferred | - |
 
 ### Phase 12: Simplification overhaul: project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity
 
 **Goal:** [To be planned]
 **Requirements**: TBD
-**Depends on:** Phase 11
+**Depends on:** Phase 10 (Phase 11 deferred — Phase 12 no longer gated on it)
 **Plans:** 0 plans
 
 Plans:

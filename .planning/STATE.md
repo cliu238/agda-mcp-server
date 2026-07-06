@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Upstream Reconcile
-status: executing
-stopped_at: "Phase 10 Plan 04 complete (MERGE-02: full guarded suite green with zero failures, no fixes needed, b24779e)"
-last_updated: "2026-07-05T23:44:43.985Z"
-last_activity: 2026-07-05 -- Phase 11 planning complete
+status: paused
+stopped_at: "Phase 11 planned then DEFERRED to Future 2026-07-05 (upstream velocity collapsed, 0 new since reconcile — manual sync interim); v1.2 core done at Phase 10"
+last_updated: "2026-07-06T00:08:35.322Z"
+last_activity: 2026-07-05 -- Phase 11 deferred (upstream idle; keeping current manually)
 progress:
   total_phases: 3
   completed_phases: 1
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Every real proof session reliably converts into a stronger server — and upstream divergence must stop accumulating so that loop keeps compounding on a reconciled base.
-**Current focus:** Phase 11 — auto sync productionization
+**Current focus:** Milestone v1.2 core complete (Phase 10 reconcile). Phase 11 (auto-sync) DEFERRED to Future — upstream nearly idle; keeping current via manual `upstream-sync`. Next candidate: Phase 12 (simplification overhaul).
 
 ## Current Position
 
-Phase: 11
+Phase: 11 (DEFERRED — see ROADMAP note)
 Plan: Not started
-Status: Ready to execute
+Status: Deferred — v1.2 core (Phase 10) complete; upstream synced manually as needed
 Last activity: 2026-07-05 -- Phase 11 planning complete
 
 Progress: [████████░░] 80%
