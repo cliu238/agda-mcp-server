@@ -28,11 +28,13 @@ recurring sync; 3-day sync cadence; each auto-merge push costs one accepted ~30 
 - [x] **ACCEPT-02**: One real dogfood session runs against the merged server as acceptance — the loop verifying its own upstream merge
 - [x] **ACCEPT-03**: The final push's auto-deploy (D-06) watched to green — cluster healthz `ok`
 
-### Auto-Sync Productionization
+### Auto-Sync Productionization — DEFERRED TO FUTURE (moved out of v1.2 with Phase 11, 2026-07-06)
 
-- [ ] **SYNC-01**: launchd runs the `upstream-sync` skill headlessly every 3 days (`StartCalendarInterval`, missed runs caught up on wake), invoking `claude -p` with the real-Agda full verification gates
-- [ ] **SYNC-02**: Sync bookkeeping is GSD-native: each sync produces a real `.planning/quick/<id>-upstream-sync-<date>/` PLAN+SUMMARY plus a STATE.md Quick-Tasks row, committed with the merge; falls back to `docs/UPSTREAM-SYNC-LOG.md` when gsd-sdk is absent
-- [ ] **SYNC-03**: One real end-to-end headless carrier run proven: the scheduled invocation executes the skill through its gates (no-op or behind state both acceptable) and produces the bookkeeping artifact
+These three shipped with Phase 11, which was deliberately deferred to Future (upstream velocity collapsed to ~0 new commits since Phase 10's reconcile point; manual `upstream-sync` suffices). Formally moved out of v1.2 scope at milestone close; all Phase 11 artifacts are kept intact for zero-rework revival when the un-defer trigger fires.
+
+- [→] **SYNC-01** *(→ Future)*: launchd runs the `upstream-sync` skill headlessly every 3 days (`StartCalendarInterval`, missed runs caught up on wake), invoking `claude -p` with the real-Agda full verification gates
+- [→] **SYNC-02** *(→ Future)*: Sync bookkeeping is GSD-native: each sync produces a real `.planning/quick/<id>-upstream-sync-<date>/` PLAN+SUMMARY plus a STATE.md Quick-Tasks row, committed with the merge; falls back to `docs/UPSTREAM-SYNC-LOG.md` when gsd-sdk is absent
+- [→] **SYNC-03** *(→ Future)*: One real end-to-end headless carrier run proven: the scheduled invocation executes the skill through its gates (no-op or behind state both acceptable) and produces the bookkeeping artifact
 
 ## Future Requirements
 
@@ -74,15 +76,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACCEPT-01 | Phase 10 | Complete |
 | ACCEPT-02 | Phase 10 | Complete |
 | ACCEPT-03 | Phase 10 | Complete |
-| SYNC-01 | Phase 11 | Pending |
-| SYNC-02 | Phase 11 | Pending |
-| SYNC-03 | Phase 11 | Pending |
+| SYNC-01 | Phase 11 (deferred) | Moved to Future |
+| SYNC-02 | Phase 11 (deferred) | Moved to Future |
+| SYNC-03 | Phase 11 (deferred) | Moved to Future |
 
-**Coverage:**
-- v1.2 requirements: 11 total
-- Mapped to phases: 11/11 ✓
-- Unmapped: 0 ✓
+**Coverage (v1.2 final, milestone close 2026-07-06):**
+- Shipped & complete: **8/8** — MERGE-01–03, ADOPT-01–02, ACCEPT-01–03 (Phase 10, fully accepted: real-Agda suite + dogfood + green cluster deploy)
+- Moved to Future at close: SYNC-01/02/03 (with the deferred Phase 11) + SYNC-04/05 (already deferred)
+- Phase 12 (simplification overhaul): no mapped REQ-IDs — governed by 12-CONTEXT.md constraints C-01–C-05 / decisions D-01–D-04, verified in 12-VERIFICATION.md (8/8)
 
 ---
 *Requirements defined: 2026-07-05*
-*Last updated: 2026-07-05 after ROADMAP.md revision (2 phases: 10-11, 100% coverage)*
+*Last updated: 2026-07-06 at v1.2 milestone close — 8/8 shipped requirements complete; SYNC-01/02/03 formally moved to Future with the deferred Phase 11.*
