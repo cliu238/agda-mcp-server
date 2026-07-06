@@ -10,9 +10,10 @@ v1.0 established Loop ② — the reproducible improvement loop (use → capture
 
 Turn the act of improving this server into a reproducible, compounding loop: **every real proof session reliably converts into a stronger server.** If everything else is deferred, this closed loop — use it → surface a defect → capture it → fix and lock it with a regression test → use it again — must work.
 
-## Current State (post-v1.1, 2026-07-05)
+## Current State (post-v1.2, 2026-07-06)
 
-**Shipped:** v1.1 Feed the Loop — 4 phases (6–9), 24 plans, 17/17 requirements; tags `v1.0`, `v1.1` pushed.
+**Shipped:** v1.2 Upstream Reconcile — Phase 10 (upstream v0.6.8 merged via real merge, load-terminus adjudicated with from-RED locks as referee, `agda_goal_candidates`/#70 adopted, accepted + deployed green) + Phase 12 (simplification overhaul: 6 fork-only cuts executed of 20 audited candidates, 14 upstream-touching deferred per the fork policy). Phase 11 (auto-sync) deferred to Future. Tags `v1.0`, `v1.1`, `v1.2` pushed.
+**Prior:** v1.1 Feed the Loop — 4 phases (6–9), 24 plans, 17/17 requirements.
 
 - **Loop ② proven at its strongest form:** a live Codex session on the pinned CHG corpus surfaced defect `0bc76d15c2fec8df`, which was captured → judged → filed → fixed → locked with a from-RED regression test (E2E-01, zero fixture shortcuts).
 - **Team channel live:** `issue-key.mjs` (hash-only registry, revocable Bearer keys) → fail-open `upload-run.mjs` → `ingest-server.mjs` (512 MiB streamed cap) → sandboxed `cron-ingest-wrapup.mjs` judging into the fix queue. Runs identically local and on-cluster (config-only differences).
@@ -21,7 +22,7 @@ Turn the act of improving this server into a reproducible, compounding loop: **e
 - **Fix queue:** 18 entries — 10 locked, 6 triaged (incl. 2 explicitly deferred-with-reason large-redesign items), 1 rejected, 1 new-ish; zero `needsReverify`. CI: verify job green incl. `typecheck:test` gate; integration lane carries the pre-existing 5-file Linux quarantine (`fb57abbe7df6dfe8`).
 - **Known debt:** enumerated in `milestones/v1.1-MILESTONE-AUDIT.md` frontmatter (14 Info-grade review findings open by policy, cluster cron filing leg not yet exercised with a capture-bearing archive, image runtime's comment-enforced dependency on `test/`+devDeps, Nyquist VALIDATION.md missing ×4).
 
-## Current Milestone: v1.2 Upstream Reconcile
+## Shipped Milestone: v1.2 Upstream Reconcile ✅ (2026-07-06 — Phases 10 + 12; Phase 11 deferred to Future)
 
 **Goal:** Merge upstream v0.6.8 for real (load-terminus semantics adjudicated per sub-behavior with our from-RED regression locks as referee), adopt upstream's new features, then productionize the unattended every-3-days auto-sync — so upstream divergence stops accumulating.
 
@@ -155,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-06 after completing Phase 12 (simplification overhaul). Health-check loop ran end-to-end: 5 audits → consolidated 20-candidate cut list → D-03 sign-off → execute. Per the fork policy above ("do not modify upstream-origin files"), 6 fork-only cuts were approved and executed (dedup `assertSafeRunId`; delete stale one-off script + 6 superseded research docs; repoint 2 citations; drop 1 stale guarded-file line), and all 14 upstream-touching cuts were deferred (genuinely-valuable ones — dead code, a misleading doc — are candidate upstream PRs). Zero `src/` change; tool count unchanged at 74; full real-Agda gate green (2045 tests). Phase 12 was the final executed phase of v1.2 (Phase 11 auto-sync remains deferred to Future); run /gsd-complete-milestone to archive v1.2.*
+*Last updated: 2026-07-06 after completing Phase 12 (simplification overhaul). Health-check loop ran end-to-end: 5 audits → consolidated 20-candidate cut list → D-03 sign-off → execute. Per the fork policy above ("do not modify upstream-origin files"), 6 fork-only cuts were approved and executed (dedup `assertSafeRunId`; delete stale one-off script + 6 superseded research docs; repoint 2 citations; drop 1 stale guarded-file line), and all 14 upstream-touching cuts were deferred (genuinely-valuable ones — dead code, a misleading doc — are candidate upstream PRs). Zero `src/` change; tool count unchanged at 74; full real-Agda gate green (2045 tests). This closed **v1.2 "Upstream Reconcile"** (Phase 10 + Phase 12; Phase 11 auto-sync formally moved to Future; milestone audit `tech_debt`, 8/8 shipped requirements). Tag `v1.2` cut. Next milestone: TBD via `/gsd:new-milestone`.*

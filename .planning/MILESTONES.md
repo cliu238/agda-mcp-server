@@ -1,5 +1,28 @@
 # Milestones
 
+## v1.2 Upstream Reconcile (Shipped: 2026-07-06)
+
+**Phases shipped:** 2 — Phase 10 (Upstream Reconcile) + Phase 12 (Simplification Overhaul), 17 plans. Phase 11 (Auto-Sync Productionization) deliberately deferred to Future; artifacts kept for zero-rework revival.
+**Stats:** 137 commits, 2026-07-03 → 2026-07-06
+**Audit:** tech_debt — 8/8 shipped requirements complete, zero blockers; cross-phase integration intact (Phase 12 made zero `src/` change); SYNC-01/02/03 formally moved to Future with the deferred Phase 11 (`milestones/v1.2-MILESTONE-AUDIT.md`)
+
+**Key accomplishments:**
+
+- Real `git merge --no-ff upstream/main` (5 commits through d4497a2) landed on local main with all 6 conflict files resolved — mechanical files (refactor-helpers.ts, agent-ux.test.ts, goal-tools.ts/goal-write-tools.ts) definitively fixed with version-gated mimer/agsy proof-search dispatch; the 3 architectural files (agda-transport.ts, command-completion.ts, session-load-impl.ts) carry upstream's whole-file candidate as Plan 10-02's referee subject, with build and typecheck:test both green.
+- Ran the actual empirical referee (both capture-regression-matrix `agda_load_no_metas` entries + upstream's own `agda-stale-dependency.test.ts`) against Plan 10-01's merge candidate against real Agda — GREEN on all 3, so per D-04 upstream's whole-file load-terminus architecture is adopted as the final decision, documented durably in `docs/LOAD-TERMINUS-ADJUDICATION.md`, with `test/unit/agda/session-load-impl.test.ts` corrected to the return-based semantics the referee's own architecture requires.
+- Discovered agda_goal_candidates was already manifest-registered by upstream's own merged commit (via reporting-tools.ts, not a gap Plan 10-03 needed to close); wired the remaining two real gaps — tool-recommendation.ts and human-facing docs (README.md, docs/assistant-workflows.md, tool-family-examples.json) — with a corrected limitPerGoal-only example matching the tool's real schema.
+- Ran the exact LOCAL verification gate (`npm ci && npm run build && npx tsc -p tsconfig.test.json --noEmit && RUN_AGDA_INTEGRATION=1 npx vitest run`) against the Plan 10-01/10-02/10-03 merge candidate — the full ~2000-test suite is GREEN under upstream's fail-on-unexpected-`logger.warn` harness with zero failures, so zero new `expectWarning`/`ackWarnings` registrations were needed; a full cross-reference confirms all 9 `logger.warn` call sites in `src/` are either correctly test-registered (6) or genuinely dormant/untested (3), never silently unguarded.
+- Proved the reconciled server (serverVersion 0.6.8) end-to-end: (1) the final combined verify is green (`npm ci && npm run build && npx tsc -p tsconfig.test.json --noEmit && RUN_AGDA_INTEGRATION=1 npx vitest run` — 233 test files / 2038 tests pass, zero failures); (2) a real Codex-headless dogfood session (run `accept02-10-05`) against the merged server, on the pinned CHG corpus, genuinely invoked `agda_goal_candidates` on a real open goal and was judged clean through the oracle-triad wrap-up (finalized:true, 0 captures, 0 errors); (3) a single push to `origin/main` triggered `deploy-ingest.yml`, watched to success with `/healthz` returning ok.
+- Built a 74-tool JSON-RPC-envelope-aware real-usage-evidence table and drafted 2 fully-lockstepped D-02 cut-list candidates (bug-report-bundle tools superseded by agda_capture_session; agda_goal_analysis mergeable into agda_goal_catalog), after tracing — not assuming — that neither candidate removes a Loop② stage entry point or an active security control.
+- Re-verified 26 milestone-audit + 7 CONCERNS.md known-debt findings against 2026-07-06 HEAD (11 resolved, 3 severity-changed, 12 still-present), re-swept all of src/ for file-size pressure (agda-transport.ts now at the exact 500-line ceiling), and drafted a 9-row C-03/C-04-filtered cut list finding 2 truly dead functions plus 7 unused-export-only tidies via a manual Python-assisted cross-reference scan of 478 exported symbols across 439 files.
+- Built the definitive 12-row C-01 regression-lock exclusion list (11 test files, 26 named vitest test cases, dual-method extraction + byte-for-byte existence verification) and independent HEAD-grounded HOW verdicts for RT6/RT7, both confirmed unchanged and orthogonal to Phase 10's load-terminus merge — zero implementation, zero fix-queue.json changes.
+- Merged five Wave-1 audit reports into one CUT-01–CUT-20 severity-graded health report, re-ran the baseline metrics live (catching and reconciling a real 70-vs-74 tool-count discrepancy in the process), and durably appended RT6/RT7's re-evaluation verdicts to fix-queue.json as a verified append-only edit.
+- Extracted the duplicated-and-drifted `assertSafeRunId` guard into `scripts/dogfood/run-id.mjs` and deleted the fully-superseded `scripts/queue/seed-initial-cargo.mjs`, the only two pipeline-category cuts the D-03 sign-off approved.
+- Executed the four D-03-approved docs-residue cuts (deleted 6 stale research docs after repointing their 2 live citations) and ran the final post-deletion doc-surface cross-reference, which came back vacuously clean since this phase deleted zero MCP tools.
+- Re-measured the exact pre-cut baseline metrics against the fully-cut working tree (src/ untouched at 150 files/23,813 LOC, scripts LOC -360, +1 test file, registered MCP tools unchanged at 74), finalized 12-HEALTH-REPORT.md as the phase's closing artifact with a 5-way spot-checked Before/After Diff, and ran the full local verification gate green one final time (2,045 tests passed, 0 failures).
+
+---
+
 ## v1.1 Feed the Loop (Shipped: 2026-07-05)
 
 **Phases completed:** 4 phases, 24 plans, 48 tasks
