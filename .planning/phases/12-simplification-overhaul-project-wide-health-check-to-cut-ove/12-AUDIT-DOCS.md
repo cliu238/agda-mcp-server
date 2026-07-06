@@ -61,3 +61,100 @@ Unlike `docs/release-0.7.0-triage.md`, this doc was never reconciled after its r
 **2. `.agents/skills/upstream-sync/SKILL.md` Section 3 — one stale guarded-file path.**
 
 The "Guarded files" list still names `src/session/load-terminus-tracker.ts`. Confirmed this session (direct filesystem check plus `docs/LOAD-TERMINUS-ADJUDICATION.md`'s own text: "`src/session/load-terminus-tracker.ts` and its unit test remain deleted") that this file was deleted as part of Phase 10's merge — Phase 10 adopted upstream's load-terminus architecture wholesale and this file's heuristic became unnecessary. The other 8 guarded paths in the same list were individually re-verified to still exist. See Cut-List Candidates below.
+
+## Planning-Residue Scan
+
+### `.planning/research/` — 12 files enumerated
+
+All 12 files under `.planning/research/` were read (header + scope note at minimum) and cross-checked for live citations anywhere in the repository outside of other research docs and already-closed `.planning/milestones/*-phases/` archives, per 12-RESEARCH.md Pattern 1 ("re-verify, don't rediscover").
+
+| File | Classification | Live-citation evidence (beyond other research docs / closed phase archives) |
+|---|---|---|
+| `ARCHITECTURE.md` | Milestone-scoped (v1.1 TEAM/CACHE integration surfaces), shipped-and-superseded by `.planning/codebase/ARCHITECTURE.md` (this file's own header says so) | **One live citation:** `Dockerfile:89` cites it by path as provenance for a real build decision. |
+| `FEATURES.md` | Milestone-scoped (v1.1 TEAM/CACHE competitive landscape); CACHE half of its subject was deleted from the product entirely (2026-07-03 consumer audit, per `PROJECT.md` Key Decisions) | None found outside closed `v1.1-phases/07-CONTEXT.md`. |
+| `LEAN-COMPARISON.md` | NOT milestone-scoped — general Agda/Lean design-grounding research, explicitly framed as informing "Loop ② design (and future Loop ①)" | None found outside other research docs + closed `v1.0-phases` archives. **Not flagged as a cut candidate** — Loop ① is explicitly deferred, not cancelled (`PROJECT.md` Out of Scope), so this doc retains forward-looking value; "no live consumer today" is a weaker signal than genuine residue. |
+| `MCP-DESIGN-TRENDS.md` | NOT milestone-scoped | **Live citation, load-bearing:** `.planning/DESIGN-PRINCIPLES.md` — "Derived from the verified MCP design philosophy (see `research/MCP-DESIGN-TRENDS.md`)" and, in its own footer, "Companion to `research/MCP-DESIGN-TRENDS.md`. Apply these when planning any tool or surface." **Protected — do not flag.** |
+| `ORACLE-VALIDITY.md` | NOT milestone-scoped — explicitly self-declared "Load-bearing for Phase 2 (ORCL) and Phase 3 (LOCK)" | **Live citation:** `.planning/PROJECT.md`'s own Context section cites it directly for the ORCL-01 measured targets; also cited by `FUEL-CORPORA.md`, `LEAN-COMPARISON.md`, `PITFALLS.md`, `CHG-REVERIFY.md`, `FEATURES.md`, and a `.planning/quick/` plan. **Protected — do not flag.** |
+| `PITFALLS.md` | Milestone-scoped (v1.1 TEAM/CACHE pitfalls, this file's own header says so); CACHE half now moot | None found outside closed `v1.0-phases`/`v1.1-phases` archives. |
+| `STACK.md` | Milestone-scoped (v1.1 TEAM/CACHE stack — its own header states "Scope Note: covers only the new capabilities for v1.1"); CACHE half now moot | None found outside closed `v1.1-phases` archives. |
+| `SUMMARY.md` | Milestone-scoped (the v1.1 research-summary itself, TEAM/CACHE) | None found outside closed `v1.1-phases` archives. |
+| `CHG-REVERIFY.md` | Milestone-scoped (one-off defect re-verify, 2026-07-02) | **Live citations:** `test/fixtures/fix-queue.json` (multiple `notes` fields cite it by path as defect-evidence provenance, including still-open entries) and `scripts/queue/seed-initial-cargo.mjs` (header comment). |
+| `RT-REVERIFY.md` | Milestone-scoped (RT1-RT8 re-verify, Phase 6) | **Live citations:** `test/fixtures/fix-queue.json` (9 mentions) — specifically underpins the still-open RT6/RT7 entries this milestone's D-04 decision requires a verdict on. |
+| `FUEL-CORPORA.md` | Milestone-wide-scoped (its own header says "whole milestone — not Phase-1-only") but substantially duplicated by a more current source | **Live citation:** `scripts/data/oracle-policy/agda-unimath.json`'s `$comment` field cites it as the source of policy values. Its core factual content (corpus list/access/notes) is now duplicated, more current, in `.agents/skills/agda-dogfooding/SKILL.md` §6. |
+| `UPSTREAM-SYNC.md` | NOT milestone-scoped — explicit next-milestone seed | **Protected per 12-CONTEXT.md's explicit instruction** ("do not flag it") — independently confirmed this session: cited by `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, and both Phase 10's and Phase 11's `CONTEXT.md`/`RESEARCH.md`. |
+
+**Phase 11 protection — explicit confirmation.** Phase 11's artifacts (`11-01-PLAN.md` through `11-05-PLAN.md`, `11-CONTEXT.md`, `11-DISCUSSION-LOG.md`, `11-PATTERNS.md`, `11-RESEARCH.md`, `11-VALIDATION.md` — all 10 files reconfirmed present under `.planning/phases/11-auto-sync-productionization/` this session) were checked and are excluded from every cut-list row in this document, per `12-CONTEXT.md`'s explicit carve-out: "Phase 11's five plans plus its RESEARCH, PATTERNS, VALIDATION, CONTEXT, and DISCUSSION-LOG artifacts are kept intact for zero-rework revival and are NOT planning residue."
+
+### VALIDATION.md-missing debt — resolved out of scope
+
+`milestones/v1.1-MILESTONE-AUDIT.md`'s frontmatter records `nyquist.missing_phases: ["06", "07", "08", "09"]` (4 phases); `v1.0-MILESTONE-AUDIT.md` by contrast is fully compliant (`missing_phases: 0`, 6/6, `overall: COMPLIANT`) — the "4+ phases" figure comes from consulting both audits, not from either one alone. This debt is an **addition** (backfilling a never-generated artifact), not a **subtraction**, and therefore stays **out of this phase's cut list**. No specific instance among the 4 missing phases was found, this session, to represent an over-engineered validation approach that would justify a cut-list row instead — the debt is uniformly "the artifact was never generated," never "the artifact that exists is excessive." Recommend a separate, later `/gsd:validate-phase {06,07,08,09}` backfill pass, tracked as its own follow-up, not folded into this simplification phase.
+
+### `.planning/graphs/` and `graphify-out/` — freshly re-verified gitignore-hygiene gap
+
+A fresh `git status --short` run inside this plan's own execution worktree shows zero untracked files — but this is a worktree-isolation artifact, not evidence the original finding has resolved: git worktrees share committed history but not another checkout's untracked working-tree files, so both directories (untracked in the main checkout) are simply absent from this worktree's filesystem (`ls .planning/graphs graphify-out` both report "No such file or directory" here, confirmed this session). The orchestrator-supplied git-status snapshot at this session's start (captured against the main checkout) shows both as untracked: `?? .planning/graphs/`, `?? graphify-out/`. This session independently re-verified the other half of the original finding directly against `.gitignore` (a tracked file, identical across every worktree): neither `graphs` nor `graphify-out` appears anywhere in it (full file re-read this session). **The stale planning-time note therefore still holds** — both directories remain untracked and ungitignored today, re-confirmed via the freshest available combination of evidence rather than trusted at face value.
+
+### Informational note — NOT a cut-list row
+
+`.claude/skills/agda-mcp-k8s-deploy/` (a 208-line `SKILL.md` plus an adjacent `agda-mcp-k8s-deploy-workspace/` directory) exists only under the gitignored `.claude/skills/` path and has never been git-tracked (confirmed this session: `git ls-files | grep '^\.claude/'` returns zero results) — unlike `agda-dogfooding` and `upstream-sync`, which are real files under tracked `.agents/skills/`, merely symlinked into `.claude/skills/` for discovery. Because git cannot "cut" what it never tracked, this is out of this phase's cut-list scope either way. Whether to promote it into `.agents/skills/` (matching the other two skills' pattern) is a separate decision left to the user, per `12-RESEARCH.md` Open Question 2's own resolution.
+
+## Severity Scale
+
+Defined once here (no repo-wide convention exists — `12-PATTERNS.md` "No Analog Found"). Plan 12-01 independently defines the same 4 tier names in its own concurrently-produced report (no shared file exists between the two same-wave plans to reference at execution time); Plan 12-06 reconciles exact wording during consolidation.
+
+- **critical** — leaving as-is or cutting incorrectly risks a security, correctness, or data-loss regression.
+- **high** — actively misleads an agent/contributor or creates a real, non-trivial maintenance trap if left uncut.
+- **medium** — genuine duplication, drift, or dangling-citation risk exists, but impact is bounded (a comment/pointer needs updating, not a behavior fix).
+- **low** — cosmetic, inert, or the cleanup effort is disproportionate to the benefit.
+
+## Cut-List Candidates
+
+Seven rows below (zero rows would have been an acceptable, explicitly-stated outcome per the plan's own allowance; genuine candidates were found instead).
+
+- **Issue:** Four v1.1-scoped research docs describe TEAM/CACHE feature research for the already-shipped v1.1 milestone. Half their subject (the entire CACHE theme) was deleted from the product by consumer audit (2026-07-03, `PROJECT.md` Key Decisions); the TEAM half shipped and is superseded by `.planning/codebase/*` + the live deployment. No live (non-research, non-archived-phase) file cites any of the four.
+  - Files: `.planning/research/FEATURES.md`, `.planning/research/STACK.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`
+  - Impact: none — zero live citations found outside already-closed `.planning/milestones/v1.1-phases/07-*`/`08-*` archives (unaffected by deleting the source research, since archives are themselves historical snapshots).
+  - Fix approach: delete all four. Preserve nothing separately — the one load-bearing fact any of them carries (the CACHE-deletion rationale) is already durably recorded in `PROJECT.md`'s Key Decisions table and `milestones/v1.1-MILESTONE-AUDIT.md`.
+  - Severity: low
+  - Generated-or-authored: authored
+
+- **Issue:** `.planning/research/ARCHITECTURE.md` is the same kind of shipped-and-superseded v1.1-scoped research doc as the group above, but carries one live citation.
+  - Files: `.planning/research/ARCHITECTURE.md`
+  - Impact: `Dockerfile:89`'s comment cites this file by path as provenance for a real, still-relevant build decision (why `devDependencies` are not trimmed from the deploy image). Deleting without updating the comment leaves a dangling path reference in an actively-relied-upon build artifact.
+  - Fix approach: inline the 2-sentence rationale directly into the `Dockerfile:89` comment (removing the cross-reference), then delete the research file.
+  - Severity: medium
+  - Generated-or-authored: authored
+
+- **Issue:** `.planning/research/FUEL-CORPORA.md`'s core factual content (the 4-corpus key/repo/access table) is now duplicated, more current, in the actively-maintained `.agents/skills/agda-dogfooding/SKILL.md` §6; a live JSON policy file cites the research doc's path as provenance.
+  - Files: `.planning/research/FUEL-CORPORA.md`
+  - Impact: `scripts/data/oracle-policy/agda-unimath.json`'s `$comment` field cites this path as the source of its `sanctionedAxioms`/`requiredFlags` values — a dangling citation if deleted (informational only; the JSON is never read at runtime against the research doc, so this is a human-readability concern, not a functional break).
+  - Fix approach: repoint `scripts/data/oracle-policy/agda-unimath.json`'s `$comment` at `.agents/skills/agda-dogfooding/SKILL.md` §6, then delete the research file.
+  - Severity: medium
+  - Generated-or-authored: authored
+
+- **Issue:** `.planning/research/CHG-REVERIFY.md` and `.planning/research/RT-REVERIFY.md` (one-off historical defect re-verification reports) are cited by path, multiple times, inside `test/fixtures/fix-queue.json`'s `notes` fields as defect-evidence provenance — including for still-open entries. `RT-REVERIFY.md` specifically underpins the still-open RT6 (`ad2b6d31f58f1759`)/RT7 (`b6821f42952c6ff8`) entries this very milestone's D-04 decision requires a definitive verdict on.
+  - Files: `.planning/research/CHG-REVERIFY.md`, `.planning/research/RT-REVERIFY.md`
+  - Impact: deleting now leaves dangling `"Source: .planning/research/....md"` citations inside the tracked, actively-consulted fix-queue SSOT and its seeding script's header comment (`scripts/queue/seed-initial-cargo.mjs`).
+  - Fix approach: do not cut either file in this pass. Re-evaluate after this phase's RT6/RT7 D-04 verdict work completes and every citing `fix-queue.json` `notes` field has been checked to confirm the citation can be safely dropped or should be inlined first.
+  - Severity: low (recorded for completeness/sequencing; not recommended for cutting now)
+  - Generated-or-authored: authored
+
+- **Issue:** `docs/literate-agda-assessment.md`'s "What Does Not Work" table is factually false against current `HEAD` (see Additional Accuracy Findings above) — literate-format extension matching, module discovery, and test coverage are all now comprehensively shipped, beyond what the doc's own Phase 1/2 recommendations even asked for.
+  - Files: `docs/literate-agda-assessment.md`
+  - Impact: an agent or contributor reading this doc today is actively misled into believing literate Agda support has gaps that do not exist, risking wasted re-implementation effort.
+  - Fix approach: either reconcile it (add a "Reconciliation" section confirming Phase 1/2 shipped, mirroring `docs/release-0.7.0-triage.md`'s own precedent) or delete outright, since `src/session/literate/*` plus its 7 dedicated fixtures are self-documenting. If deleted, also drop its one-line mention from `.planning/codebase/STRUCTURE.md` (lines 160, 240) in the same commit.
+  - Severity: high — the only finding in this audit where a doc's *content*, not merely its existence, actively misleads.
+  - Generated-or-authored: authored
+
+- **Issue:** `.agents/skills/upstream-sync/SKILL.md` Section 3's guarded-files list still names `src/session/load-terminus-tracker.ts`, deleted as part of Phase 10's merge (confirmed this session via direct filesystem check and `docs/LOAD-TERMINUS-ADJUDICATION.md`).
+  - Files: `.agents/skills/upstream-sync/SKILL.md`
+  - Impact: none functionally (a merge conflict cannot occur on a nonexistent path, so the stale entry is inert) — but it is inaccurate operational documentation a future sync-escalation reader would trip over. The file's other 8 guarded paths were individually re-verified to still exist and are accurate.
+  - Fix approach: remove the single `src/session/load-terminus-tracker.ts` line from the guarded-files list.
+  - Severity: low
+  - Generated-or-authored: authored
+
+- **Issue:** `.planning/graphs/` and `graphify-out/` are untracked, uncommitted directories with no `.gitignore` entry (re-confirmed fresh this session, see above).
+  - Files: `.gitignore` (the fix target — not a content deletion of the directories themselves)
+  - Impact: none from adding the ignore entries; without them, a future `git add -A`-shaped command risks accidentally staging ~10 MB of generated graph output into a commit.
+  - Fix approach: add `.planning/graphs/` and `graphify-out/` as new `.gitignore` entries. Tagged distinctly from every other row above: this is a gitignore-hygiene fix, not a doc or feature cut.
+  - Severity: low
+  - Generated-or-authored: n/a (not a doc; infrastructure hygiene)
