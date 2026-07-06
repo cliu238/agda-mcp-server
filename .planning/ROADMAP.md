@@ -128,10 +128,46 @@ Plans:
 
 ### Phase 12: Simplification overhaul: project-wide health check to cut over-engineering, reduce maintenance burden and user-facing complexity
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** The project is measurably simpler: an audited, user-approved cut list is executed; redundant pipeline/doc/tool surface is deleted; every regression lock and the full real-Agda suite stay green; RT6/RT7 get a definitive re-evaluation verdict (implementation deferred).
+**Requirements**: None mapped in REQUIREMENTS.md (this phase sits outside the v1.2 MERGE/ADOPT/ACCEPT/SYNC requirement set) — governed instead by `12-CONTEXT.md`'s forced constraints C-01–C-05 and decisions D-01–D-04, each cited by task in every plan below.
 **Depends on:** Phase 10 (Phase 11 deferred — Phase 12 no longer gated on it)
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+
+  1. A single, severity-graded health report and cut list exists, covering the pipeline (`scripts/`), docs and planning-residue, MCP tool surface, and `src/` low-risk-subtraction categories — every item stating what gets cut, what maintenance it saves, and what it breaks. (D-03)
+  2. The user has explicitly approved, rejected, or deferred every cut-list item individually before any cut lands; anything unmentioned is recorded as deferred, never approved by default. (D-03)
+  3. Only approved cuts are executed, batched by category and deploy-relevance; the full local suite (including the real-Agda `RUN_AGDA_INTEGRATION=1` lane) stays green after every batch, and no regression-locked test is ever a cut target. (D-03, C-01)
+  4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
+  5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
+
+**Plans:** 12 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 12 to break down)
+**Wave 1**
+
+- [ ] 12-01-PLAN.md — Audit: pipeline (scripts/) health + cut candidates
+- [ ] 12-02-PLAN.md — Audit: docs + planning-residue health + cut candidates
+- [ ] 12-03-PLAN.md — Audit: MCP tool surface (D-02) health + cut candidates
+- [ ] 12-04-PLAN.md — Audit: src/ low-risk subtraction + known-debt ledger re-verify
+- [ ] 12-05-PLAN.md — Audit: regression-lock exclusion list (C-01) + RT6/RT7 definitive verdict (D-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 12-06-PLAN.md — Consolidate: severity-graded health report + cut list + baseline metrics + RT6/RT7 ledger update
+
+**Wave 3** *(blocked on Wave 2 completion — sign-off checkpoint, autonomous: false)*
+
+- [ ] 12-07-PLAN.md — Sign-off checkpoint: user approves cut-list items individually (D-03)
+
+**Wave 4** *(blocked on Wave 3 sign-off completion)*
+
+- [ ] 12-08-PLAN.md — Execute: approved scripts/ pipeline cuts, batched by deploy-relevance (watched redeploy for oracle/queue-intake/team)
+- [ ] 12-09-PLAN.md — Execute: approved MCP tool deletions (D-02) with full lockstep + new version tag
+- [ ] 12-10-PLAN.md — Execute: approved src/ low-risk subtraction cuts (C-03 convergence + C-04 invariant re-check)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 12-11-PLAN.md — Execute: approved docs + planning-residue cuts, final doc consistency pass
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 12-12-PLAN.md — Finalize: before/after metrics diff + final full-suite phase gate
