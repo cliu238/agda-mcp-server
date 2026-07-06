@@ -139,7 +139,7 @@ Plans:
   4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
   5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
 
-**Plans:** 10/12 plans executed
+**Plans:** 11/12 plans executed
 
 Plans:
 **Wave 1**
@@ -166,7 +166,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 12-11-PLAN.md — Execute: approved docs + planning-residue cuts, final doc consistency pass
+- [x] 12-11-PLAN.md — Execute: approved docs + planning-residue cuts, final doc consistency pass
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
