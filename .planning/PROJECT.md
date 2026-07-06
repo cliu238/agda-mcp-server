@@ -155,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-05 after starting milestone v1.2 Upstream Reconcile (scope: upstream merge + adjudication + auto-sync only; divergence re-measured same day).*
+*Last updated: 2026-07-06 after completing Phase 12 (simplification overhaul). Health-check loop ran end-to-end: 5 audits → consolidated 20-candidate cut list → D-03 sign-off → execute. Per the fork policy above ("do not modify upstream-origin files"), 6 fork-only cuts were approved and executed (dedup `assertSafeRunId`; delete stale one-off script + 6 superseded research docs; repoint 2 citations; drop 1 stale guarded-file line), and all 14 upstream-touching cuts were deferred (genuinely-valuable ones — dead code, a misleading doc — are candidate upstream PRs). Zero `src/` change; tool count unchanged at 74; full real-Agda gate green (2045 tests). Phase 12 was the final executed phase of v1.2 (Phase 11 auto-sync remains deferred to Future); run /gsd-complete-milestone to archive v1.2.*
