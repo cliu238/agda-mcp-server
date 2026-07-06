@@ -1,5 +1,5 @@
 {
-  "$comment": "Interim pre-PROC-02 sanctioned-axiom whitelist + required-flag baseline for the agda-unimath fuel corpus (Phase 2, ORCL-02). Formal policy home + hardened flag-baseline re-check land in Phase 5 (PROC-02) / AUTO-07. Values sourced from .planning/research/FUEL-CORPORA.md.",
+  "$comment": "Interim pre-PROC-02 sanctioned-axiom whitelist + required-flag baseline for the agda-unimath fuel corpus (Phase 2, ORCL-02). Formal policy home + hardened flag-baseline re-check land in Phase 5 (PROC-02) / AUTO-07. Values sourced from .agents/skills/agda-dogfooding/SKILL.md §6.",
   "sanctionedAxioms": ["univalence", "function-extensionality", "replacement"],
   "requiredFlags": [
     "--without-K",
