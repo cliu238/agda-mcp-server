@@ -15,7 +15,6 @@ re-evaluation verdict for RT6 and RT7. It has two independent parts:
    file alone — RESEARCH.md Pitfall 5 confirms the matrix under-counts).
 2. **RT6 / RT7 Verdicts** — independent, HEAD-grounded, definitive re-evaluation
    verdicts per D-04. Implementation is explicitly out of scope for both.
-   (Added by Task 2 — see the plan's Task 2 for that section.)
 
 ---
 
@@ -296,3 +295,226 @@ weakening** in this phase:
 This list is a floor, not a ceiling: a back-half plan that discovers a new
 `locked` fix-queue entry (e.g. a fix that lands mid-phase) must re-derive its
 own lock set the same way, not assume this snapshot is still exhaustive.
+
+---
+
+## RT6 Verdict
+
+**Fingerprint:** `ad2b6d31f58f1759`
+**Current status:** `triaged` (unchanged by this plan, per D-04/this plan's
+own instruction — recording any status change is Plan 12-06's Task 2
+responsibility).
+
+**Original finding:** `agda_load`'s response conflates five states (visible
+goals, hidden metas, constraints, source-hole syntax, file completeness) into
+one signal; two of the five remain genuinely conflated even after Phase 6's
+partial fixes — (1) source-hole syntax has no field of its own (folded into
+the single `hasHoles` boolean, with a gate that misses a hole co-occurring
+with an unrelated hard error), and (2) `constraints` is absent from
+`agda_load`'s own schema entirely (it exists only on `agda_proof_status`,
+cross-referenced via the already-fixed `fdc90bfde12fb938`).
+
+**HEAD re-reproduction check (this session, against current merged HEAD,
+post-Phase-10):**
+
+- `src/agda/session-load-impl.ts` lines 124–129 (`runLoad`) and lines
+  224–226 (`runLoadNoMetas`) both still gate the source-hole scan behind
+  `parsed.success`:
+  `const needsExplicitHoleScan = parsed.success && goals.length === 0 && parsed.invisibleGoalCount === 0;`
+  (`runLoad`'s exact variable name; `runLoadNoMetas` uses
+  `parsed.goalCount === 0` in place of `goals.length === 0`, same shape).
+  This is the exact gate the original finding names as the root cause of the
+  "a hole co-occurring with an unrelated hard error is never scanned for"
+  symptom — **reproduces unchanged, byte-for-byte the same conditional, at
+  current HEAD.**
+- `src/agda/session-load-helpers.ts`'s `classifyLoadResult` (lines 170–183)
+  still only derives a boolean `hasHoles`, `isComplete`, `classification`
+  triple from `sourceHoleCount` — there is no field that surfaces the count
+  itself, and no `constraints` input at all.
+- `src/session/tool-presentation.ts`'s `loadDataSchema` (lines 9–32, the
+  actual Zod schema `agda_load` returns to clients) confirms this
+  client-visible: it exposes `goalCount`, `invisibleGoalCount`, `hasHoles`,
+  `isComplete`, `classification` — **no `sourceHoleCount`, no `constraints`
+  field exists on `agda_load`'s response at current HEAD.**
+
+**Citation into `docs/LOAD-TERMINUS-ADJUDICATION.md` (Phase 10's decision):**
+The adjudication's Decision table has exactly three rows — completion-signal
+detection, fatal-stderr handling, inactivity timeout — all decided **Theirs
+(upstream)**, and its own "Codebase state after this plan" section lists only
+`src/session/agda-transport.ts`, `src/session/command-completion.ts`,
+`src/agda/session-load-impl.ts` (plus the deleted
+`load-terminus-tracker.ts`) as touched. `src/agda/session-load-helpers.ts`
+and `src/session/tool-presentation.ts` — the two files RT6's own gap
+actually lives in — are **not** on that list; they were untouched by the
+merge. The adjudication's own "Scope note" states RT6 was "deliberately out
+of scope for this adjudication even though they touch the same seam ... They
+are re-evaluated only after the whole Phase 10 merge lands" — confirming
+Phase 10 never attempted to resolve RT6, and the trigger firing means the
+architecture RT6 sits downstream of is now stable, not that RT6 itself
+changed.
+
+**Verdict: HOW.** RT6's conflation is real, reproduces unchanged at current
+HEAD, and is orthogonal to everything Phase 10 adjudicated — a future phase
+should implement it. Target-shape sketch (schema addition, no implementation
+here):
+
+1. Add a `sourceHoleCount: number` field to `LoadResult` / `loadDataSchema`
+   (today the count is computed internally by `countExplicitSourceHoles()`
+   but only ever folds into the single `hasHoles` boolean — never surfaced
+   on its own).
+2. Add a `constraints`-shaped field to `agda_load`'s own response schema
+   (today only `agda_proof_status` exposes anything constraint-shaped; RT6's
+   cross-referenced sub-case `fdc90bfde12fb938` fixed `agda_proof_status`'s
+   own mislabeling, but `agda_load` itself still has no constraints field at
+   all).
+3. Broaden the `needsExplicitHoleScan` gate in both `runLoad` and
+   `runLoadNoMetas` (`src/agda/session-load-impl.ts`) so the source-hole scan
+   also runs when `parsed.success` is false but `goals`/`invisibleGoalCount`
+   are both zero — today's `parsed.success &&` term is exactly what hides a
+   hole that co-occurs with an unrelated hard type error elsewhere in the
+   same file.
+4. This is a genuine breaking response-shape change on a widely-consumed
+   schema (`loadDataSchema`), not a mechanical ≤2-file fix — it belongs to
+   its own dedicated future phase, matching the fix-queue's own existing
+   DEFERRED framing for this entry.
+
+**Severity/urgency now that Phase 10 has landed:** unchanged from the
+original filing — `missing-feature`, not a false-green (the file's overall
+`classification` is still correctly `type-error` in the co-occurring-hole
+case, so no incorrect "your proof is done" signal is ever given). Not
+urgent/blocking, but the blind spot can cost an agent a wasted turn
+concluding "nothing to fix here but the type error" when a valid,
+syntactically-present hole is also waiting in the same file. A real,
+mechanically-scoped candidate for a future phase; no change to its priority
+relative to the rest of the backlog is warranted by Phase 10 landing.
+
+---
+
+## RT7 Verdict
+
+**Fingerprint:** `b6821f42952c6ff8`
+**Current status:** `triaged` (unchanged by this plan).
+
+**Original finding:** on a command timeout, `agda_load`'s response collapses
+"timed out while Agda was still alive and mid-flight," "crashed," "never
+started," and "produced no protocol response at all" into one
+`classification: "process-error"` with one hardcoded `nextAction` diagnostic
+("The Agda subprocess crashed or could not be started. Run `agda --version`
+...") — even when the transport's own evidence
+(`responseCount`/`sawStatusDone`/`lastResponseKind`) proves the process was
+alive and actively responding right up to the deadline.
+
+**HEAD re-reproduction check (this session, against current merged HEAD,
+post-Phase-10):**
+
+- `src/session/agda-transport.ts`'s `onTimeout` handler (lines 299–311, part
+  of the upstream-adopted, Phase-10-merged transport) still computes
+  `responseCount`/`responseKinds` at the moment of timeout and embeds them
+  only as free-text inside the rejected `Error`'s `.message`:
+  `` `sendCommand timed out after ${timeoutMs}ms of inactivity (received ${responseCount} responses: ${JSON.stringify(responseKinds)})` ``
+  — this evidence exists and is collected (confirmed also present:
+  `sawStatusDone`, `lastResponseKind` as private fields feeding
+  `waitDiagnostics`/`onDone`), but nothing structured carries it past this
+  point.
+- `src/session/load-tool-shared.ts`'s `processErrorResult` (lines 67–87)
+  still **hardcodes** `classification: "process-error"` and the fixed
+  crash/startup `nextAction` diagnostic text for every call, regardless of
+  what `message` string it receives — **the exact same wording quoted
+  verbatim in this fingerprint's own fix-queue notes is still the exact
+  wording emitted today.**
+- `src/session/register-agda-load.ts`'s catch site (lines 282–291) confirms
+  the call pattern: any thrown error (including the now-detailed timeout
+  `Error`) is funneled through `processErrorResult("agda_load", file,
+  \`Agda load failed: ${err.message}\`)` — the raw message text lands in
+  `data.errors[0]`, but `classification` and the actionable `nextAction` hint
+  stay generic. The same call pattern repeats identically in
+  `register-agda-load-no-metas.ts` and `register-agda-typecheck.ts`.
+- **This reproduces RT7's original finding unchanged, at current HEAD, with
+  the identical misleading `nextAction` text.**
+
+**Citation into `docs/LOAD-TERMINUS-ADJUDICATION.md` (Phase 10's decision):**
+Same reasoning as RT6 — the adjudication's three decided sub-behaviors
+(completion-signal detection, fatal-stderr handling, inactivity timeout)
+concern the *transport's* internal completion/timeout mechanism (when to
+resolve or reject a command), not the *error-translation* layer
+(`src/session/load-tool-shared.ts`'s `processErrorResult`) that turns a
+rejected promise into the client-visible classification/diagnostic.
+`load-tool-shared.ts` is one layer up from every file the adjudication's
+"Codebase state after this plan" section lists as touched, and is absent
+from that list — confirming it was untouched by the merge.
+`src/session/command-completion.ts` (read in full this session) is
+exclusively about idle-timing/terminus-detection math
+(`idleCompletionDelay`, `trailingResponseDelay`, `shouldResolveOnIdle`) and
+contains no classification or diagnostic-text logic whatsoever — further
+confirming RT7's gap is orthogonal to everything Phase 10 touched.
+
+**Verdict: HOW.** RT7's diagnostic-taxonomy gap is real, reproduces unchanged
+(with the identical wording) at current HEAD, and is orthogonal to Phase 10's
+adjudication — a future phase should implement it. Target-shape sketch (no
+implementation here):
+
+1. Add a structured discriminator (e.g. `processState:
+   "timed-out-while-alive" | "crashed" | "never-started" |
+   "no-protocol-response"`) fed from the evidence `agda-transport.ts`'s
+   `onTimeout`/`waitDiagnostics` already collects
+   (`responseCount`/`sawStatusDone`/`lastResponseKind`), instead of
+   collapsing every `session.load()`-family throw into one
+   `"process-error"` classification.
+2. Thread this new field through `processErrorResult`'s single
+   implementation (`src/session/load-tool-shared.ts`) so the fix is
+   centralized once, not duplicated across the three identical call sites in
+   `register-agda-load.ts`, `register-agda-load-no-metas.ts`, and
+   `register-agda-typecheck.ts`.
+3. Make the `nextAction` diagnostic conditional on the new discriminator:
+   keep the existing "crashed or could not be started, run `agda --version`"
+   hint only for the genuine crash/never-started cases; add a distinct,
+   correct hint for the timed-out-while-alive case (e.g. suggesting a larger
+   `AGDA_MCP_COMMAND_TIMEOUT_MS` or splitting the module) instead of
+   misdirecting the agent toward checking an installation that is
+   demonstrably fine.
+4. This is a breaking response-shape change (a new discriminated field
+   alongside `classification`), not a mechanical ≤2-file fix — belongs to
+   its own dedicated future phase, matching the fix-queue's own existing
+   DEFERRED framing.
+
+**Severity/urgency now that Phase 10 has landed:** slightly elevated
+relative to a pure missing-feature framing. The current `nextAction` is not
+merely silent on the distinction — it is **actively wrong** in the
+timed-out-while-alive case, directing the agent to verify an Agda
+installation that is demonstrably present and mid-flight. That directly cuts
+against this project's own documented `nextAction` "self-healing hint"
+convention (`CLAUDE.md` Error Handling: "`nextAction` should point the
+calling agent at the next MCP tool to call to resolve the issue") and its
+dogfooding-agent-ergonomics constraint. Recommend this be scheduled ahead of
+purely-cosmetic backlog items when a future phase picks up the diagnostic-
+taxonomy work — but it remains fully deferred, with zero implementation, per
+D-04 in this plan.
+
+---
+
+## Provenance / Self-Check
+
+- Regression-lock extraction: RESEARCH.md's Python regex snippet, extended to
+  match `Regression evidence:` as well as `Regression lock:`, run live this
+  session against `test/fixtures/fix-queue.json` — confirmed 10 locked
+  entries and extracted 9 matches (all locked; `e6f0c1169032b9d5` is the
+  10th, matrix-driven, non-matching-by-design entry).
+- Every one of the 10 locked entries' full `notes` field, and both matrix
+  entries, were read completely in this session (not sampled).
+- All 11 distinct test files existence-checked via `test -f`; all 26
+  individually-named test-case strings verified byte-for-byte present via
+  `grep -F` against current file contents (except the 2 matrix-generated
+  names, verified against their generating template literal in
+  `test/integration/mcp/capture-regression.test.ts` instead, since they are
+  not literal source text).
+- RT6 HEAD evidence read: `src/agda/session-load-impl.ts` (full),
+  `src/agda/session-load-helpers.ts` (full), `src/session/tool-presentation.ts`
+  (full), `src/agda/types.ts` (`LoadResult`, lines 1–150).
+- RT7 HEAD evidence read: `src/session/agda-transport.ts` (lines 255–335 in
+  detail, full-file `wc -l`/grep sweep otherwise), `src/session/load-tool-shared.ts`
+  (full), `src/session/register-agda-load.ts` (lines 255–294),
+  `src/session/command-completion.ts` (full).
+- `docs/LOAD-TERMINUS-ADJUDICATION.md` read in full for both verdicts'
+  citation.
+- No file under `test/`, `src/`, or `test/fixtures/fix-queue.json` was
+  modified while producing this document.
