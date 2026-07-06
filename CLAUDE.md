@@ -16,6 +16,7 @@ This milestone is about **making the server more complete by establishing Loop �
 - **Invariant**: Exactly one `AgdaSession` per server process (issue #39) — every load-family path routes through the singleton.
 - **Invariant**: All IOTCM command strings built via `src/protocol/command-builder.ts` (SSOT) — no hand-built wire strings.
 - **File size**: Hard 500-line-per-file ceiling in `src/`; oversized modules split into barrel + focused siblings.
+- **Upstream compatibility (fork policy)**: This is a fork of `InvariantHoldings/agda-mcp-server`. To keep future merges clean, **avoid modifying upstream-origin files** (anything that also exists upstream — most of `src/`). Prefer fork-only surfaces instead (`scripts/`, `.planning/`, `.agents/skills/`, fork-authored `docs/`). When touching an upstream file is genuinely necessary, keep the change minimal and **record it (with rationale) for a later upstream PR** so fork-only divergence and merge-conflict surface stay bounded. See the running list in `.planning/UPSTREAM-DEVIATIONS.md`.
 - **Agda compatibility**: `minAgdaVersion 2.6.4.3`, `maxTestedAgdaVersion 2.9.0`.
 - **Dogfooding agents**: Codex and Claude Code are the primary agents driving the loop; their integration ergonomics matter.
 - **Testing**: `vitest` (unit / property / integration / examples); property-based tests via `@fast-check/vitest`.
