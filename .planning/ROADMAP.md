@@ -139,16 +139,16 @@ Plans:
   4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
   5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
 
-**Plans:** 12 plans
+**Plans:** 5/12 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — Audit: pipeline (scripts/) health + cut candidates
-- [ ] 12-02-PLAN.md — Audit: docs + planning-residue health + cut candidates
-- [ ] 12-03-PLAN.md — Audit: MCP tool surface (D-02) health + cut candidates
-- [ ] 12-04-PLAN.md — Audit: src/ low-risk subtraction + known-debt ledger re-verify
-- [ ] 12-05-PLAN.md — Audit: regression-lock exclusion list (C-01) + RT6/RT7 definitive verdict (D-04)
+- [x] 12-01-PLAN.md — Audit: pipeline (scripts/) health + cut candidates
+- [x] 12-02-PLAN.md — Audit: docs + planning-residue health + cut candidates
+- [x] 12-03-PLAN.md — Audit: MCP tool surface (D-02) health + cut candidates
+- [x] 12-04-PLAN.md — Audit: src/ low-risk subtraction + known-debt ledger re-verify
+- [x] 12-05-PLAN.md — Audit: regression-lock exclusion list (C-01) + RT6/RT7 definitive verdict (D-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
