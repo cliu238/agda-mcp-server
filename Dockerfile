@@ -86,8 +86,7 @@ WORKDIR /app
 COPY --chown=2231:2231 package.json package-lock.json ./
 # Intentionally NOT trimming devDependencies here: tsx and typescript are
 # devDependencies that every scripts/*.mjs file needs at runtime, not just
-# at build time (.planning/research/ARCHITECTURE.md §2's explicit Dockerfile
-# note). Skipping them would break scripts/team/*.mjs inside this image.
+# at build time. Skipping them would break scripts/team/*.mjs inside this image.
 # node_modules must end up 2231-owned (not merely readable): the in-pod
 # POLICY-01 vitest acceptance run writes its cache under node_modules as
 # uid 2231 (docs/DEPLOY-OPERATIONS.md).

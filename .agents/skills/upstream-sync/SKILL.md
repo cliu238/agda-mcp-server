@@ -52,7 +52,6 @@ per Section 6:
 - `src/agda/parse-load-responses.ts`
 - `src/session/agda-transport.ts`
 - `src/session/command-completion.ts`
-- `src/session/load-terminus-tracker.ts`
 - `src/session/register-agda-load-no-metas.ts`
 - `src/protocol/command-builder.ts`
 - `src/agda/session-capture/**`
