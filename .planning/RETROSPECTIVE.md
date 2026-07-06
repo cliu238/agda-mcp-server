@@ -92,6 +92,36 @@
 
 ---
 
+## Milestone: v1.2 — Upstream Reconcile
+
+**Shipped:** 2026-07-06
+**Phases:** 2 shipped (10 Upstream Reconcile, 12 Simplification Overhaul) + 1 deferred (11 Auto-Sync) | **Plans:** 17
+
+### What Was Built
+- **Phase 10:** a real `git merge upstream/main` (v0.6.8, 5 commits, head `d4497a2`) with all 6 conflict files resolved; load-terminus semantics adjudicated sub-behavior-by-sub-behavior using our from-RED regression locks as the empirical referee (upstream's whole-file architecture adopted after passing all 3 referee tests); upstream #70 (`agda_goal_candidates`/Mimer) adopted; full acceptance (real-Agda suite + real Codex dogfood session + watched-green cluster deploy).
+- **Phase 12:** a project-wide health-check loop — 5 parallel audits → consolidated 20-candidate severity-graded cut list → D-03 human sign-off → execution. 6 fork-only cuts landed (dedup a drifting guard, delete a dead script + 6 superseded research docs, repoint 2 citations, drop 1 stale line); 14 upstream-touching cuts deferred; zero `src/` change; full suite green.
+
+### What Worked
+- The **audit → sign-off → execute** shape kept a destructive "simplification" phase safe: nothing was cut until each item was individually approved, fail-closed on anything unmentioned. Two categories (tools, src) landed zero approvals and became clean documented no-ops.
+- Using our own **from-RED regression locks as the empirical referee** for the upstream merge turned an ambiguous ours/theirs load-terminus decision into a test-driven one.
+- **Deferring Phase 11 on measured evidence** (upstream velocity collapsed to ~0 new commits) rather than building automation nobody needed yet.
+
+### What Was Inefficient
+- The Phase 12 audits computed "upstream-overlap" too narrowly (guarded-file union only), flagging just 1 of 14 upstream-touching cuts; the user caught the rest at sign-off. The broader fork policy (already in PROJECT.md) should have been the classifier from the start.
+- v1.2's scope kept counting Phase 11's SYNC requirements even after the phase was deferred; the scope-vs-requirements bookkeeping only got reconciled at milestone close (the audit surfaced it).
+
+### Patterns Established
+- **Fork-vs-upstream pre-classification:** before proposing any edit/deletion, test `git cat-file -e upstream/main:<path>`; default upstream-origin changes to deferred / candidate upstream PR (now a saved memory + a PROJECT.md constraint).
+- **No-op-by-design plans:** a back-half plan whose category got zero approvals writes a documented no-op SUMMARY rather than being skipped — keeps the fail-closed sign-off auditable end-to-end.
+
+### Key Lessons
+- A "simplification" phase in a fork is mostly a **scoping** problem, not a **cutting** problem: the hard part is deciding what you're allowed to touch. Classify by ownership first, then propose cuts.
+- **Run the milestone audit before archiving** even when every phase is individually verified — it caught the SYNC scope/requirements drift that per-phase verification structurally couldn't see.
+
+### Cost Observations
+- Model mix: Opus orchestrator + Sonnet executors/verifier (config `quality` profile).
+- Phase 12 ran 6 waves with worktree-isolated parallel executors; the Wave-1 fan-out (5 concurrent audits) was the biggest parallel burst.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
