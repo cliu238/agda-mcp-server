@@ -326,7 +326,7 @@
   <p>(One north-star, deliberately deferred idea sometimes mentioned alongside this loop is "Loop 1" — turn-based proof guidance from the server itself, e.g. "you have 3 goals, suggested next: case-split on n." It is out of scope here; it's only worth recognizing the name if you see it elsewhere.)</p>
 
   <h3>5. FILE</h3>
-  <p>Judged, non-flaky defects land in a zod-validated flat-file fix queue, with priority ordering and fingerprint-based deduplication so the same underlying bug is never filed twice under different names. The current state of the queue is visible at <a href="FIX-QUEUE-DASHBOARD.md">docs/FIX-QUEUE-DASHBOARD.md</a>. As of the v1.1 close, the queue held 18 entries: 10 locked, 6 triaged, and 1 rejected.</p>
+  <p>Judged, non-flaky defects land in a zod-validated flat-file fix queue, with priority ordering and fingerprint-based deduplication so the same underlying bug is never filed twice under different names. The current state of the queue is visible at <a href="FIX-QUEUE-DASHBOARD.md">docs/FIX-QUEUE-DASHBOARD.md</a>. As of the v1.1 close, the queue held 18 entries: 10 locked, 7 triaged, and 1 rejected.</p>
 
   <h3>6. FIX+LOCK</h3>
   <p>Each fix in the queue lands with a from-RED regression test: the test is written first, against the bug, and proven red (failing) before any fix code is written — only then does the fix turn it green. This ordering is deliberate: the loop never golden-masters a false-green, meaning it never writes a test that just encodes the buggy behavior as if it were correct. A regression test always represents the intended, correct behavior, not whatever the server happened to do before the fix.</p>
