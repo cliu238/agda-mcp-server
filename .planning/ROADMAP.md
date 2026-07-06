@@ -139,7 +139,7 @@ Plans:
   4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
   5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
 
-**Plans:** 5/12 plans executed
+**Plans:** 6/12 plans executed
 
 Plans:
 **Wave 1**
@@ -152,7 +152,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 12-06-PLAN.md — Consolidate: severity-graded health report + cut list + baseline metrics + RT6/RT7 ledger update
+- [x] 12-06-PLAN.md — Consolidate: severity-graded health report + cut list + baseline metrics + RT6/RT7 ledger update
 
 **Wave 3** *(blocked on Wave 2 completion — sign-off checkpoint, autonomous: false)*
 
