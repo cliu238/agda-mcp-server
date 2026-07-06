@@ -99,6 +99,13 @@ None - no external service configuration required. This plan is a pure read-only
 - The single most consequential forward-looking fact for later phases: `src/session/agda-transport.ts` is now at the exact 500-line ceiling with zero headroom — any future change to this file (including one landing outside Phase 12) must be preceded by a barrel-extraction split, not a patch.
 - No blockers for Plan 12-05 (regression-lock exclusion list + RT6/RT7 verdict) or Plan 12-06 (consolidation) — this plan's output is self-contained and required no cross-plan coordination during execution.
 
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-AUDIT-SRC-DEBT.md`
+- FOUND: `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-04-SUMMARY.md`
+- FOUND: commit `88ef955` (audit doc)
+- FOUND: commit `ef9aeb2` (this summary)
+
 ---
 *Phase: 12-simplification-overhaul-project-wide-health-check-to-cut-ove*
 *Completed: 2026-07-06*
