@@ -139,7 +139,7 @@ Plans:
   4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
   5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
 
-**Plans:** 7/12 plans executed
+**Plans:** 9/12 plans executed
 
 Plans:
 **Wave 1**
@@ -161,8 +161,8 @@ Plans:
 **Wave 4** *(blocked on Wave 3 sign-off completion)*
 
 - [ ] 12-08-PLAN.md — Execute: approved scripts/ pipeline cuts, batched by deploy-relevance (watched redeploy for oracle/queue-intake/team)
-- [ ] 12-09-PLAN.md — Execute: approved MCP tool deletions (D-02) with full lockstep + new version tag
-- [ ] 12-10-PLAN.md — Execute: approved src/ low-risk subtraction cuts (C-03 convergence + C-04 invariant re-check)
+- [x] 12-09-PLAN.md — Execute: approved MCP tool deletions (D-02) with full lockstep + new version tag
+- [x] 12-10-PLAN.md — Execute: approved src/ low-risk subtraction cuts (C-03 convergence + C-04 invariant re-check)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
