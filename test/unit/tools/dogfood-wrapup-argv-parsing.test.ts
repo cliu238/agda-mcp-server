@@ -20,11 +20,11 @@ import { parseWrapupArgv } from "../../../scripts/dogfood/dogfood-wrapup.mjs";
 // ── IN-01: parseWrapupArgv rejects a flag-shaped/path-traversing run-id ──
 
 test("parseWrapupArgv throws when the positional run-id is flag-shaped (no run-id given, --rerun-n lands in its slot)", () => {
-  expect(() => parseWrapupArgv(["--rerun-n", "3"])).toThrow(/invalid run-id/);
+  expect(() => parseWrapupArgv(["--rerun-n", "3"])).toThrow(/invalid --run-id value/);
 });
 
 test("parseWrapupArgv throws when the positional run-id could escape the runs root via path traversal", () => {
-  expect(() => parseWrapupArgv([".."])).toThrow(/invalid run-id/);
+  expect(() => parseWrapupArgv([".."])).toThrow(/invalid --run-id value/);
 });
 
 test("parseWrapupArgv accepts a normal positional run-id value unchanged", () => {

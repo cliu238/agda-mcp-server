@@ -119,8 +119,7 @@ agda-mcp-server/
 │   │   ├── intake.mjs               # readQueueFile/upsertQueueEntry — the ONLY writer of the SSOT
 │   │   ├── priority.mjs             # QUEUE-02 forced ordering (false-green > crash > wrong-result > ...)
 │   │   ├── dashboard.mjs            # Derived, regenerated Markdown view (docs/FIX-QUEUE-DASHBOARD.md)
-│   │   ├── mirror-github.mjs        # Optional, one-way, dry-run-by-default GitHub Issues publisher
-│   │   └── seed-initial-cargo.mjs   # One-off seeding of the v1.0 flagship + CHG backlog entries
+│   │   └── mirror-github.mjs        # Optional, one-way, dry-run-by-default GitHub Issues publisher
 │   ├── team/                        # v1.1 team feedback channel (TEAM-01..04)
 │   │   ├── issue-key.mjs            # TEAM-01: mint/rotate/revoke/verify Bearer keys, consent statement
 │   │   ├── ingest-server.mjs        # TEAM-03: node:http endpoint, Bearer auth, streamed size cap
@@ -214,7 +213,7 @@ agda-mcp-server/
 
 **`scripts/queue/`:**
 - Purpose: The Phase-4 fix queue — the single tracked SSOT every stage of Loop ② eventually writes into.
-- Contains: `intake.mjs` (the only writer), `priority.mjs` (ordering), `dashboard.mjs` (a regenerated, never-hand-edited Markdown view), `mirror-github.mjs` (optional one-way visibility publisher), `seed-initial-cargo.mjs` (one-off historical seeding script).
+- Contains: `intake.mjs` (the only writer), `priority.mjs` (ordering), `dashboard.mjs` (a regenerated, never-hand-edited Markdown view), `mirror-github.mjs` (optional one-way visibility publisher).
 - Key files: `intake.mjs`.
 
 **`scripts/team/`:**

@@ -46,6 +46,7 @@ import { isMainModule } from "../test-with-sentinel.mjs";
 import { runOracle } from "../oracle/run-oracle.mjs";
 import { upsertQueueEntry } from "../queue/intake.mjs";
 import { classifyFlakiness } from "./flake-classify.mjs";
+import { assertSafeRunId } from "./run-id.mjs";
 import { resolveRunsRoot } from "./transcript-writer.mjs";
 import { loadTaskManifest } from "./task-manifest.mjs";
 
@@ -420,23 +421,6 @@ export function checkReportFinalized(report, runId) {
     return false;
   }
   return true;
-}
-
-/**
- * IN-01: a positional run-id value is joined unvalidated into a
- * filesystem path (`join(resolveRunsRoot(), runId)` below, and again
- * in dogfood-run.mjs) — reject anything that looks like an
- * accidentally-swallowed flag token (e.g. running this CLI with only
- * `--rerun-n 3` and no runId at all lets "--rerun-n" itself land in
- * the positional runId slot) or that could escape the runs root once
- * joined (a leading "..", or an embedded "/"/"\\" path separator).
- */
-function assertSafeRunId(runId) {
-  if (runId.startsWith("--") || runId.includes("/") || runId.includes("\\") || runId === "." || runId === "..") {
-    throw new Error(
-      `invalid run-id "${runId}": must not start with "--" or contain a path separator`,
-    );
-  }
 }
 
 /** Extracts `--rerun-n <N>` / `--queue-path <path>` / `--policy <key>`
