@@ -33,8 +33,6 @@ upstream-origin — treat those as protected.
 
 ## Deviations
 
-_None yet. Add a row the moment an upstream-origin file is modified._
-
 | Date | File(s) | What changed | Why it was necessary | Upstream-PR status |
 |------|---------|--------------|----------------------|--------------------|
-| — | — | — | — | — |
+| 2026-07-06 | `.gitignore` | Appended 2 lines — `graphify-out/` and `.planning/graphs/` (fork-local knowledge-graph tooling output). | ~30 MB of regenerable `/graphify` + `/gsd-graphify` output (311 untracked files) cluttered `git status` and risked accidental commit; owner instruction (2026-07-06) to gitignore. Matches Phase 12 audit item CUT-09 (deferred at D-03 sign-off, now authorized). | **N/A — not upstreamable.** Both paths are fork-only (upstream has no graphify/GSD tooling), so these additive lines cannot conflict with upstream's `.gitignore` and represent zero real merge-conflict surface. Kept for completeness, not as a PR candidate. |

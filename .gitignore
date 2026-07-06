@@ -57,3 +57,8 @@ local-only/
 # compiled things
 *.o
 *.agdai
+
+# Generated knowledge-graph output — fork-local tooling (/graphify, /gsd-graphify).
+# Regenerable, ~30 MB (311 files), never committed. See .planning/UPSTREAM-DEVIATIONS.md.
+graphify-out/
+.planning/graphs/
