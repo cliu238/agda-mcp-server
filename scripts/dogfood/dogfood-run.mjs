@@ -30,6 +30,7 @@ import { createInterface } from "node:readline";
 import { SERVER_REPO_ROOT } from "../../src/repo-root.js";
 import { buildHarnessServerParameters } from "../../test/helpers/mcp-harness.js";
 import { isMainModule } from "../test-with-sentinel.mjs";
+import { assertSafeRunId } from "./run-id.mjs";
 import { loadTaskManifest } from "./task-manifest.mjs";
 import { createRunRecorder, resolveRunsRoot, writeRunReport } from "./transcript-writer.mjs";
 
@@ -96,23 +97,6 @@ export function buildDogfoodChildOptions({ corpusRoot, extraEnv = {} }) {
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
   };
-}
-
-/**
- * IN-01: a `--run-id`/positional run-id value is joined unvalidated
- * into a filesystem path (`join(resolveRunsRoot(), runId)` below, and
- * again in dogfood-wrapup.mjs) — reject anything that looks like an
- * accidentally-swallowed flag token (a missing value silently
- * consuming the NEXT flag, e.g. `--run-id --corpus-root`) or that
- * could escape the runs root once joined (a leading "..", or an
- * embedded "/"/"\\" path separator).
- */
-function assertSafeRunId(runId) {
-  if (runId.startsWith("--") || runId.includes("/") || runId.includes("\\") || runId === "." || runId === "..") {
-    throw new Error(
-      `invalid --run-id value "${runId}": must not start with "--" or contain a path separator`,
-    );
-  }
 }
 
 /** Extracts `--manifest <path>`, `--corpus-root <path>`, and an
