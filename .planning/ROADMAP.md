@@ -139,7 +139,7 @@ Plans:
   4. RT6 and RT7 each receive a definitive re-evaluation verdict (do it, do not, or how) with implementation explicitly deferred to a future phase. (D-04)
   5. The health report is finalized with a before-and-after metrics diff (file/line/tool/script counts) proving the project is measurably simpler, alongside a final green full-suite run.
 
-**Plans:** 6/12 plans executed
+**Plans:** 7/12 plans executed
 
 Plans:
 **Wave 1**
@@ -156,7 +156,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion — sign-off checkpoint, autonomous: false)*
 
-- [ ] 12-07-PLAN.md — Sign-off checkpoint: user approves cut-list items individually (D-03)
+- [x] 12-07-PLAN.md — Sign-off checkpoint: user approves cut-list items individually (D-03)
 
 **Wave 4** *(blocked on Wave 3 sign-off completion)*
 
