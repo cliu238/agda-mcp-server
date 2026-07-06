@@ -2,7 +2,9 @@
 phase: 12-simplification-overhaul-project-wide-health-check-to-cut-ove
 document: 12-HEALTH-REPORT.md
 audited: 2026-07-06
-status: cut-list-pending-signoff
+status: cut-list-executed
+closed: 2026-07-06
+closed_by: Plan 12-12 (After Metrics + Before/After Diff finalized; see those sections below)
 severity_scale:
   critical: "Actively produces an incorrect result, a security exposure, or violates C-01/C-02/C-04 if left unaddressed; would block the phase gate."
   high: "A confirmed, reproducible defect or duplication that has already caused (not merely risked) a real incident, or sits on a deploy-relevant path where a mishandled cut would break production."
@@ -833,6 +835,122 @@ Written this session as a sibling artifact to this report: `.planning/phases/12-
 
 ---
 
+## After Metrics (post-cut)
+
+Produced by re-running the exact same command block from this report's own "Baseline Metrics (pre-cut)" section above, live, this session (2026-07-06), against the current, fully-cut working tree — after Waves 4 and 5 (Plans 12-08 through 12-11) landed all 6 D-03-approved cuts. This is Plan 12-12's own required re-measurement, run fresh rather than inferred from any individual plan's SUMMARY.md.
+
+### Commands run and live output (2026-07-06, post-cut)
+
+```bash
+find src -name "*.ts" | wc -l
+```
+→ **150 files** — unchanged from baseline.
+
+```bash
+find src -name "*.ts" -exec cat {} + | wc -l
+```
+→ **23,813 LOC** — unchanged from baseline.
+
+```bash
+find scripts -name "*.mjs" | wc -l
+```
+→ **32 files** — unchanged count, but composition changed: `scripts/queue/seed-initial-cargo.mjs` (CUT-02) was deleted and `scripts/dogfood/run-id.mjs` (CUT-01) was added, netting to the same file count.
+
+```bash
+find scripts -name "*.mjs" -exec cat {} + | wc -l
+```
+→ **9,531 LOC** — down 360 lines from baseline's 9,891.
+
+```bash
+find test -name "*.ts" | wc -l
+```
+→ **257 files** — up 1 from baseline's 256 (`test/unit/tools/dogfood-run-id.test.ts`, new from CUT-01).
+
+These deltas (0 files / 0 LOC / 0-net-files / −360 LOC / +1 file) are exactly what the phase's approved scope predicts: zero `src-subtraction` or `tools` candidates were approved (all 11 of those deferred), and the only file-inventory movement traces to the two approved `pipeline` cuts (CUT-01, CUT-02).
+
+### Tool count: re-verified live, same reconciliation as baseline
+
+```bash
+grep -c "name: \"agda_" src/tools/**/*.ts src/session/{load,process}-tool-registration.ts 2>/dev/null
+```
+Live sum: **70** — byte-identical to the pre-cut raw grep count (expected: zero `src/tools/**` or `src/session/{load,process}-tool-registration.ts` files changed this phase). The same +4 reconciliation applies unchanged: `agda_load`, `agda_load_no_metas`, `agda_typecheck`, `agda_apply_edit` still live in their four dedicated `src/session/register-agda-*.ts` files (re-confirmed via direct grep: each file's own `name: "agda_...` count is still exactly 1), outside this command's glob. **Authoritative count: 74**, unchanged.
+
+Two independent live re-confirmations, same methodology as the baseline session:
+1. `test/fixtures/e2e/mcp-tool-coverage.json` parsed directly (Node one-liner) — **74 entries**. A freshly-regenerated sorted tool-name list from this file, diffed byte-for-byte against `12-BASELINE-TOOLS.txt`, returns **zero lines of difference** — no tool added, none removed, none renamed.
+2. `npx vitest run test/unit/tools/mcp-e2e-coverage.test.ts` run live under Node 24 — **2 passed**, confirming the same mechanically-enforced bidirectional set-equality (live manifest ⇔ coverage matrix) holds today exactly as at baseline.
+
+**Conclusion: the registered MCP tool count is unchanged at 74.** This is the expected, not merely hoped-for, result — `12-APPROVED-CUTS.md`'s D-03 sign-off deferred both `tools`-category candidates (CUT-10, CUT-11) in full, per the user's "尽量不要动 upstream" (avoid touching upstream-inherited files) directive, since both touch upstream-inherited `src/tools/*`/`src/session/*` files.
+
+---
+
+## Before/After Diff
+
+**Scope note:** the core table below uses the exact same commands as the "Baseline Metrics (pre-cut)" section above, re-run against the fully-cut tree — this is the literal before/after comparison Plan 12-12 exists to produce. A supplementary, separately-labeled subsection covers real simplification this phase achieved outside those three measured trees (the six deleted `.planning/research/*.md` docs), since the original baseline command block never instrumented `.planning/`.
+
+### Core metrics (identical commands, both ends)
+
+| Metric | Pre-cut (baseline, 2026-07-06) | Post-cut (after, 2026-07-06) | Delta |
+|---|---|---|---|
+| `src/*.ts` files | 150 | 150 | **0** |
+| `src/*.ts` LOC | 23,813 | 23,813 | **0** |
+| `scripts/*.mjs` files | 32 | 32 | **0 net** (1 removed, 1 added — see spot-check 2 below) |
+| `scripts/*.mjs` LOC | 9,891 | 9,531 | **−360** |
+| `test/*.ts` files | 256 | 257 | **+1** |
+| Registered MCP tools (authoritative) | 74 | 74 | **0** |
+
+"Files removed" / "scripts removed" taken literally (gross, not net): **1 script removed** (`scripts/queue/seed-initial-cargo.mjs`, CUT-02), **1 script added** (`scripts/dogfood/run-id.mjs`, CUT-01), **1 test file added** (`test/unit/tools/dogfood-run-id.test.ts`), **0 test files removed**, **0 src files removed**, **0 tools removed**. "Lines removed" (gross deletions across the touched `scripts/`/`test/` trees, per the numstat in spot-check 1 below): 389 lines deleted (355 from the deleted script + 17 + 17 from the two CLIs' now-shared-out validation logic), offset by 29 lines added (27 new `run-id.mjs` + 1 + 1 import lines), netting to the −360 tabulated above.
+
+### CUT-NN tally (transcribed from `12-APPROVED-CUTS.md`'s frontmatter `counts:` block)
+
+| Decision | Count |
+|---|---|
+| approved | 6 |
+| rejected | 0 |
+| deferred | 14 |
+| unmapped | 0 |
+| **total** | **20** |
+
+### Category-by-category breakdown (every category named, per the acceptance criteria — zero-delta categories included, not omitted)
+
+| Category | Candidates | Approved | Deferred | Rejected | Executed by | Delta contribution |
+|---|---|---|---|---|---|---|
+| `pipeline` | 2 (CUT-01, CUT-02) | 2 | 0 | 0 | Plan 12-08, commit `af8f706` | scripts LOC −360, scripts file churn (−1/+1), +1 test file |
+| `docs-residue` | 7 (CUT-03–CUT-09) | 4 (CUT-03/04/05/08) | 3 (CUT-06/07/09) | 0 | Plan 12-11, commit `8100bff` | **0** to the 3 measured trees (`.planning/research/` isn't scanned by the baseline commands) — see Supplementary subsection below for its real, separately-tracked impact (7 files touched, 1,390 lines removed there) |
+| `tools` | 2 (CUT-10, CUT-11) | 0 | 2 (both) | 0 | Plan 12-09 — no-op (0 approved rows to execute) | **0** — tool count unchanged at 74, confirmed above |
+| `src-subtraction` | 9 (CUT-12–CUT-20) | 0 | 9 (all) | 0 | Plan 12-10 — no-op (0 approved rows to execute) | **0** — `src/` file count and LOC both unchanged, confirmed above |
+| **Total** | **20** | **6** | **14** | **0** | | |
+
+### Supplementary: docs-residue impact outside the 3 measured trees
+
+The baseline command block never instrumented `.planning/research/` (only `src/`, `scripts/`, `test/`), so the 4 approved docs-residue cuts (CUT-03/04/05/08) contribute **0** to the Core Metrics table above by construction, not because nothing happened. What Plan 12-11 (commit `8100bff`) actually removed, spot-checked via `git show --numstat 8100bff`:
+
+| File | Cut | Lines removed |
+|---|---|---|
+| `.planning/research/FEATURES.md` | CUT-03 | 208 |
+| `.planning/research/STACK.md` | CUT-03 | 212 |
+| `.planning/research/PITFALLS.md` | CUT-03 | 353 |
+| `.planning/research/SUMMARY.md` | CUT-03 | 184 |
+| `.planning/research/ARCHITECTURE.md` | CUT-04 | 402 |
+| `.planning/research/FUEL-CORPORA.md` | CUT-05 | 30 |
+| `.agents/skills/upstream-sync/SKILL.md` (1 stale guarded-file line) | CUT-08 | 1 |
+| **Total deleted content** | | **1,390** |
+
+(Plus 2 small, content-preserving repoint edits, not counted as "removed": `Dockerfile` −2/+1 lines for CUT-04's inlined rationale; `scripts/data/oracle-policy/agda-unimath.json` −1/+1 lines for CUT-05's citation repoint.) Commit `8100bff`'s own full stat confirms the total: **9 files changed, 2 insertions(+), 1,393 deletions(-)** (1,393 = 1,390 deleted-file content + 3 deletion-lines inside the 2 repoint edits, net of their 2 insertion-lines).
+
+### Spot-checks against real git diff stat (≥2 required by the acceptance criteria; 5 provided)
+
+1. **`scripts/*.mjs` LOC delta (−360), commit `af8f706`:** `git show --numstat af8f706` gives `dogfood-run.mjs +1/−17`, `dogfood-wrapup.mjs +1/−17`, `run-id.mjs +27/−0`, `seed-initial-cargo.mjs +0/−355`. Net: (1−17)+(1−17)+(27−0)+(0−355) = **−360**, exactly matching the measured delta.
+2. **`scripts/*.mjs` file-count churn (net 0), commit `af8f706`:** the same commit's file list shows exactly one `scripts/*.mjs` deletion (`seed-initial-cargo.mjs`) and exactly one addition (`run-id.mjs`) — matching CUT-02's own audit claim ("355 lines, sole file to remove") and CUT-01's fix approach ("extract to `scripts/dogfood/run-id.mjs`") verbatim, and Plan 12-08's own SUMMARY.md ("Files modified: 7 (2 created, 1 deleted, 4 modified)").
+3. **`test/*.ts` file-count delta (+1), commit `af8f706`:** the same commit adds exactly one new test file (`test/unit/tools/dogfood-run-id.test.ts`, `+49/−0`) and modifies exactly one existing test file with a net-zero, 2-line change (`dogfood-wrapup-argv-parsing.test.ts`, `+2/−2`) — matching Plan 12-08's own SUMMARY.md claim ("two now-broken assertions were updated in the same commit").
+4. **`src/*.ts` files/LOC delta (0), whole-phase range check:** `git diff --stat 4788754..HEAD -- src/` (from `4788754`, the health-report-consolidation commit that captured the pre-cut baseline, through the current `HEAD`) returns **zero output lines** — confirming no commit in Waves 4–5 touched any `src/` file at all, exactly as `12-APPROVED-CUTS.md` predicts (every `src-subtraction` and `tools` candidate was deferred).
+5. **Registered tool count (0), direct-diff check:** a freshly-regenerated, sorted tool-name list from the live `test/fixtures/e2e/mcp-tool-coverage.json`, diffed against `12-BASELINE-TOOLS.txt`, returns **zero lines of difference** (no commit exists that could have changed it — Plan 12-09's own SUMMARY.md records its outcome as `no-op`).
+
+### Honest framing (T-12-23 mitigation: no false-green phase close)
+
+The measurable simplification this phase actually delivered is real but modest by scope, not by omission: **1,750 lines removed** in total (360 from the pipeline dedup+deletion in the measured trees, 1,390 from the six stale research docs outside them), **1 cross-CLI duplication eliminated at its source**, **1 stale doc line + 1 stale citation repointed**, **zero regressions** (the full local gate is green one final time — see Task 2 below). It does **not** touch `src/` at all, and does **not** reduce the registered-tool surface (74 → 74) — both would-be-larger simplifications (CUT-10/11's tool merge/deletions, CUT-12–20's dead-code/unused-export removal) were explicitly deferred by the D-03 sign-off's "尽量不要动 upstream" directive, not silently dropped or forgotten. `12-APPROVED-CUTS.md`'s own Governing Decision section already frames these 14 deferred items as upstream-PR candidates for a future contribution; this report reiterates that framing rather than re-litigating it.
+
+---
+
 ## Sources
 
 - `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-AUDIT-PIPELINE.md` (Plan 12-01) — pipeline candidates CUT-01, CUT-02.
@@ -843,3 +961,5 @@ Written this session as a sibling artifact to this report: `.planning/phases/12-
 - `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-RESEARCH.md` — Baseline Metrics snapshot commands (Code Examples section), re-run live this session.
 - `test/fixtures/e2e/mcp-tool-coverage.json`, `test/unit/tools/mcp-e2e-coverage.test.ts` — live tool-count reconciliation (74, re-confirmed this session via direct JSON read + a live `npx vitest run` pass).
 - `test/fixtures/fix-queue.json` — RT6 (`ad2b6d31f58f1759`)/RT7 (`b6821f42952c6ff8`) current entries, read prior to Task 2's append (see `12-06-SUMMARY.md` for the append itself).
+- `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-APPROVED-CUTS.md` (Plan 12-07) — the D-03 sign-off's normalized approved/rejected/deferred/unmapped tally, transcribed into the After Metrics/Before-After Diff sections below.
+- `.planning/phases/12-simplification-overhaul-project-wide-health-check-to-cut-ove/12-08-SUMMARY.md` through `12-11-SUMMARY.md` (Plans 12-08–12-11) — Wave 4/5 execution outcomes (2 executed commits `af8f706`/`8100bff`, 2 documented no-ops), spot-checked against live `git show --numstat`/`git diff --stat` in the After Metrics/Before-After Diff sections below (Plan 12-12).
